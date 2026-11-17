@@ -102,6 +102,28 @@ export function valueProblem(field: FieldSchema, value: CellValue, settings: Val
 	return readInput(field, describeValue(value), settings).problem
 }
 
+/**
+ * A value in the form the grid writes, as a backend is sent it: "1.234,56" a host loaded into a
+ * money column goes as "1234.56", the value `valueProblem` accepted it as. Text the grid could not
+ * read goes as it stands, for the backend to refuse as the grid did.
+ */
+export function canonicalValue(field: FieldSchema, value: CellValue, settings: ValueSettings): CellValue {
+	if (value === null || isFieldValue(field, value)) {
+		return value
+	}
+
+	const text = describeValue(value)
+	const result = readInput(field, text, settings)
+
+	if (result.problem === null) {
+		return result.value
+	}
+
+	// "12,5" in an integer column was read, only not as a whole number: sent as 12.5, the backend
+	// refuses it for the same reason the grid did, rather than as text it cannot read.
+	return result.problem.code === "not_an_integer" ? (readNumber(text, settings) ?? value) : value
+}
+
 /** Whether a value is already in the form a cell of this field holds. */
 export function isFieldValue(field: FieldSchema, value: CellValue): boolean {
 	switch (field.type) {

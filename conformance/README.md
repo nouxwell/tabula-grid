@@ -18,6 +18,21 @@ php conformance/php/check.php /path/to/tabula
 A case marked `"php": false` uses something only this side has: percentages, lookups, and fields
 that hold several options.
 
+## Rows
+
+The `checks` cases are whole rows, checked by `SheetValidator` here and by `Tabula::checkRows()`
+on the server, which is sent them. Both must find the same issues: the row, the field, the code,
+the other rows an issue points at, and the params a case lists.
+
+The server is sent values in the form the grid writes them, never in the user's own writing: a
+number as decimal text with a point, a date as ISO 8601, a yes/no as a boolean, a lookup as its
+id. Text a host loaded, such as "1.234,56" in a money column, goes as what the grid reads it to,
+and the grid holds it to the rules as that value. Text the grid could not read goes as it stands,
+so the server refuses it for the same reason. A case's `sent` lists the values that go in another
+form than the grid holds them, and the test here fails if one is missing.
+
+The PHP runner skips these cases against a nouxwell/tabula checkout without `RowChecker`.
+
 ## Dates
 
 Both sides read a date the same way, in this order: the field's pattern, an Excel serial number

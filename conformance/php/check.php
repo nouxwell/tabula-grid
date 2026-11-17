@@ -10,12 +10,20 @@ declare(strict_types=1);
  * The checkout needs its Composer dependencies installed. Every case @nouxwell/tabula-core passes
  * should pass here too; a case that does not is a place where the two sides would disagree about
  * the same cell. Exit code 0 when every case passes.
+ *
+ * The "checks" cases are rows as the grid sends them, run through Tabula's RowChecker (what
+ * Tabula::checkRows() runs); a checkout from before it skips them.
  */
 
 use Nouxwell\Tabula\Exception\ParseException;
 use Nouxwell\Tabula\Format;
+use Nouxwell\Tabula\Grid\GridIssue;
+use Nouxwell\Tabula\Grid\GridSchema;
+use Nouxwell\Tabula\Grid\RowChecker;
+use Nouxwell\Tabula\Grid\Rule;
 use Nouxwell\Tabula\Port\PassthroughTranslator;
 use Nouxwell\Tabula\Schema\Field;
+use Nouxwell\Tabula\Schema\Schema;
 use Nouxwell\Tabula\Settings\DateSettings;
 use Nouxwell\Tabula\Settings\NumberSettings;
 use Nouxwell\Tabula\Settings\SymbolPosition;
@@ -51,18 +59,19 @@ function settings(array $given): TabulaSettings
     );
 }
 
-function field(array $given): Field
+function field(array $given, string $key = 'f'): Field
 {
     $field = match ($given['type']) {
-        'string' => Field::string('f'),
-        'integer' => Field::integer('f'),
-        'decimal' => Field::decimal('f'),
-        'quantity' => Field::quantity('f'),
-        'money' => Field::money('f')->currency($given['currency'] ?? null),
-        'bool' => Field::bool('f'),
-        'date' => Field::date('f'),
-        'datetime' => Field::dateTime('f'),
-        'options' => Field::options('f', array_combine(
+        'string' => Field::string($key),
+        // A lookup's own type does not matter: GridSchema::lookup() makes the field a record's id.
+        'integer', 'lookup' => Field::integer($key),
+        'decimal' => Field::decimal($key),
+        'quantity' => Field::quantity($key),
+        'money' => Field::money($key)->currency($given['currency'] ?? null),
+        'bool' => Field::bool($key),
+        'date' => Field::date($key),
+        'datetime' => Field::dateTime($key),
+        'options' => Field::options($key, array_combine(
             array_map(static fn (array $option) => $option['value'], $given['options']),
             array_map(static fn (array $option) => $option['label'], $given['options']),
         )),
@@ -76,7 +85,88 @@ function field(array $given): Field
         $field = $field->pattern($given['pattern']);
     }
 
+    if ($given['required'] ?? false) {
+        $field = $field->required();
+    }
+
     return $field;
+}
+
+/** The grid's fields as a GridSchema says them: lookups, rules, what is read-only and not sent. */
+function grid(array $fields): GridSchema
+{
+    $grid = GridSchema::of(Schema::make('conformance')->fields(...array_map(
+        static fn (array $given): Field => field($given, $given['key']),
+        $fields,
+    )), 1);
+
+    foreach ($fields as $given) {
+        if (isset($given['lookup'])) {
+            $grid = $grid->lookup($given['key'], $given['lookup']);
+        }
+
+        if (isset($given['rules'])) {
+            $grid = $grid->rules($given['key'], ...array_map(static fn (array $rule): Rule => match ($rule['rule']) {
+                'min' => Rule::min($rule['value']),
+                'max' => Rule::max($rule['value']),
+                'minLength' => Rule::minLength($rule['value']),
+                'maxLength' => Rule::maxLength($rule['value']),
+                'unique' => Rule::unique(),
+            }, $given['rules']));
+        }
+
+        if (false === ($given['editable'] ?? true)) {
+            $grid = $grid->readOnly($given['key']);
+        }
+
+        if (false === ($given['submit'] ?? true)) {
+            $grid = $grid->notSubmitted($given['key']);
+        }
+    }
+
+    return $grid;
+}
+
+/**
+ * The rows as the grid sends them: a value from "sent" where the case gives one, and a lookup as
+ * its id, or as {label} when it holds text never matched to a record (SheetSession's lookupPayload).
+ */
+function sentRows(array $fields, array $case): array
+{
+    $lookups = array_column(array_filter($fields, static fn (array $given): bool => 'lookup' === $given['type']), 'key');
+    $sent = array_column($case['sent'] ?? [], 'values', 'rowId');
+
+    return array_map(static function (array $row) use ($lookups, $sent): array {
+        $values = [...$row['values'], ...($sent[$row['rowId']] ?? [])];
+
+        foreach ($lookups as $key) {
+            if (isset($values[$key])) {
+                $values[$key] = is_array($values[$key]) ? $values[$key]['id'] : ['label' => $values[$key]];
+            }
+        }
+
+        return ['rowId' => $row['rowId'], 'values' => $values];
+    }, $case['rows']);
+}
+
+/** An issue as far as a case says what it should be: the params it lists, the message if it gives one. */
+function asExpected(array $issue, ?array $expected): array
+{
+    $shape = ['rowId' => $issue['rowId'], 'field' => $issue['field'], 'code' => $issue['code'], 'targets' => $issue['targets'] ?? []];
+
+    if (isset($expected['params'])) {
+        $shape['params'] = [];
+
+        foreach (array_keys($expected['params']) as $key) {
+            $shape['params'][$key] = $issue['params'][$key] ?? null;
+        }
+    }
+
+    if (isset($expected['message'])) {
+        $shape['message'] = $issue['message'];
+    }
+
+    return $shape;
 }
 
 /** A parsed value written the way the JSON writes it: numbers as decimal text, dates as ISO. */
@@ -153,6 +243,34 @@ foreach ($cases['format'] as $case) {
             json_encode($case['text'], JSON_UNESCAPED_UNICODE),
             json_encode($text, JSON_UNESCAPED_UNICODE),
         );
+    }
+}
+
+if (!class_exists(RowChecker::class)) {
+    echo "checks skipped: this checkout has no RowChecker\n";
+} else {
+    $grid = grid($cases['checks']['fields']);
+
+    foreach ($cases['checks']['cases'] as $case) {
+        ++$checked;
+        $issues = (new RowChecker())->check($grid, sentRows($cases['checks']['fields'], $case));
+        $got = [];
+
+        foreach ($issues as $index => $issue) {
+            $got[] = asExpected($issue->toArray(), $case['issues'][$index] ?? null);
+        }
+
+        $want = array_map(static fn (array $issue): array => asExpected($issue, $issue), $case['issues']);
+
+        if ($got !== $want) {
+            ++$failures;
+            printf(
+                "check  %s\n       expected %s\n       got      %s\n",
+                $case['about'],
+                json_encode($want, JSON_UNESCAPED_UNICODE),
+                json_encode($got, JSON_UNESCAPED_UNICODE),
+            );
+        }
     }
 }
 

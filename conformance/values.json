@@ -328,5 +328,345 @@
 			"value": "closed",
 			"text": "Kapalı"
 		}
-	]
+	],
+	"checks": {
+		"about": "Rows as the grid holds them, checked by SheetValidator in the browser and by Tabula::checkRows() on the server, which is sent them. A lookup goes as its id, or as { label } when it was never matched; \"sent\" gives any other value the grid sends in another form than it holds. Both sides must find the same issues: row, field, code, targets, and the params listed.",
+		"settings": "tr",
+		"fields": [
+			{
+				"key": "product",
+				"type": "lookup",
+				"lookup": "product",
+				"required": true,
+				"rules": [{ "rule": "unique" }]
+			},
+			{ "key": "sku", "type": "string", "editable": false, "submit": false },
+			{ "key": "rank", "type": "integer", "rules": [{ "rule": "unique" }] },
+			{ "key": "quantity", "type": "integer" },
+			{
+				"key": "price",
+				"type": "money",
+				"currency": "TRY",
+				"required": true,
+				"rules": [
+					{ "rule": "min", "value": "0" },
+					{ "rule": "max", "value": "1000" }
+				]
+			},
+			{
+				"key": "currency",
+				"type": "options",
+				"options": [
+					{ "value": "TRY", "label": "Türk lirası" },
+					{ "value": "EUR", "label": "Avro" }
+				]
+			},
+			{ "key": "validFrom", "type": "date" },
+			{ "key": "publishAt", "type": "datetime" },
+			{ "key": "active", "type": "bool" },
+			{
+				"key": "note",
+				"type": "string",
+				"rules": [
+					{ "rule": "minLength", "value": 3 },
+					{ "rule": "maxLength", "value": 5 }
+				]
+			},
+			{
+				"key": "code",
+				"type": "string",
+				"rules": [{ "rule": "maxLength", "value": 4 }, { "rule": "unique" }]
+			}
+		],
+		"cases": [
+			{
+				"about": "a row that keeps every rule",
+				"rows": [
+					{
+						"rowId": "r1",
+						"values": {
+							"product": { "id": 7, "label": "Termos" },
+							"sku": "TRM-1",
+							"rank": 1,
+							"quantity": 12,
+							"price": "999.99",
+							"currency": "EUR",
+							"validFrom": "2026-12-31",
+							"publishAt": "2026-12-31T09:30:00",
+							"active": false,
+							"note": "📦📦📦",
+							"code": "AB"
+						}
+					}
+				],
+				"issues": []
+			},
+			{
+				"about": "empty required fields",
+				"rows": [{ "rowId": "r1", "values": { "quantity": 3 } }],
+				"issues": [
+					{
+						"rowId": "r1",
+						"field": "product",
+						"code": "required",
+						"params": { "field": "product", "type": "lookup" },
+						"message": "This field is required and cannot be left empty."
+					},
+					{
+						"rowId": "r1",
+						"field": "price",
+						"code": "required",
+						"params": { "field": "price", "type": "money" }
+					}
+				]
+			},
+			{
+				"about": "text the grid could not read, sent as it stands",
+				"rows": [
+					{
+						"rowId": "r1",
+						"values": {
+							"product": "Termos",
+							"quantity": "iki",
+							"price": "on iki",
+							"currency": "GBP",
+							"validFrom": "31.02.2026",
+							"publishAt": "2026-12-31T24:00:00",
+							"active": "belki"
+						}
+					}
+				],
+				"issues": [
+					{
+						"rowId": "r1",
+						"field": "product",
+						"code": "not_matched",
+						"params": { "value": "Termos" },
+						"message": "\"Termos\" is not matched to a record; pick one from the list."
+					},
+					{
+						"rowId": "r1",
+						"field": "quantity",
+						"code": "not_a_number",
+						"params": { "field": "quantity", "type": "integer", "value": "iki" },
+						"message": "\"iki\" could not be read as a number."
+					},
+					{ "rowId": "r1", "field": "price", "code": "not_a_number", "params": { "value": "on iki" } },
+					{
+						"rowId": "r1",
+						"field": "currency",
+						"code": "not_an_option",
+						"params": { "value": "GBP" }
+					},
+					{ "rowId": "r1", "field": "validFrom", "code": "not_a_date", "params": { "value": "31.02.2026" } },
+					{
+						"rowId": "r1",
+						"field": "publishAt",
+						"code": "not_a_date",
+						"params": { "value": "2026-12-31T24:00:00" }
+					},
+					{ "rowId": "r1", "field": "active", "code": "not_a_boolean", "params": { "value": "belki" } }
+				]
+			},
+			{
+				"about": "a number the grid read, only not as a whole one, sent as that number",
+				"rows": [
+					{
+						"rowId": "r1",
+						"values": { "product": { "id": 1, "label": "A" }, "price": "1", "quantity": "12,5" }
+					},
+					{
+						"rowId": "r2",
+						"values": { "product": { "id": 2, "label": "B" }, "price": "1", "quantity": "1.5" }
+					},
+					{
+						"rowId": "r3",
+						"values": {
+							"product": { "id": 3, "label": "C" },
+							"price": "1",
+							"quantity": "99999999999999999999"
+						}
+					}
+				],
+				"sent": [{ "rowId": "r1", "values": { "quantity": "12.5" } }],
+				"issues": [
+					{ "rowId": "r1", "field": "quantity", "code": "not_an_integer" },
+					{ "rowId": "r2", "field": "quantity", "code": "not_an_integer", "params": { "value": "1.5" } },
+					{ "rowId": "r3", "field": "quantity", "code": "not_an_integer" }
+				]
+			},
+			{
+				"about": "text a host loaded in the user's own writing, sent as what it reads to, rules and all",
+				"rows": [
+					{
+						"rowId": "r1",
+						"values": {
+							"product": { "id": 1, "label": "A" },
+							"price": "999,5",
+							"quantity": "1.234",
+							"validFrom": "31.12.2026",
+							"publishAt": "31.12.2026 09:30",
+							"active": "Evet"
+						}
+					},
+					{ "rowId": "r2", "values": { "product": { "id": 2, "label": "B" }, "price": "1.234,5" } }
+				],
+				"sent": [
+					{
+						"rowId": "r1",
+						"values": {
+							"price": "999.5",
+							"quantity": "1234",
+							"validFrom": "2026-12-31",
+							"publishAt": "2026-12-31T09:30:00",
+							"active": true
+						}
+					},
+					{ "rowId": "r2", "values": { "price": "1234.5" } }
+				],
+				"issues": [
+					{
+						"rowId": "r2",
+						"field": "price",
+						"code": "max_value",
+						"params": { "field": "price", "type": "money", "value": "1234.5", "max": "1000" },
+						"message": "1234.5 is above the maximum of 1000."
+					}
+				]
+			},
+			{
+				"about": "the rules, numbers compared as decimals and lengths in characters a reader counts",
+				"rows": [
+					{ "rowId": "r1", "values": { "product": { "id": 1, "label": "A" }, "price": "-0.01" } },
+					{ "rowId": "r2", "values": { "product": { "id": 2, "label": "B" }, "price": "1000.000001" } },
+					{
+						"rowId": "r3",
+						"values": { "product": { "id": 3, "label": "C" }, "price": "1000", "note": "ab" }
+					},
+					{
+						"rowId": "r4",
+						"values": { "product": { "id": 4, "label": "D" }, "price": "0", "note": "📦📦📦📦📦📦" }
+					}
+				],
+				"issues": [
+					{
+						"rowId": "r1",
+						"field": "price",
+						"code": "min_value",
+						"params": { "field": "price", "type": "money", "value": "-0.01", "min": "0" },
+						"message": "-0.01 is below the minimum of 0."
+					},
+					{
+						"rowId": "r2",
+						"field": "price",
+						"code": "max_value",
+						"params": { "value": "1000.000001", "max": "1000" }
+					},
+					{
+						"rowId": "r3",
+						"field": "note",
+						"code": "min_length",
+						"params": { "field": "note", "type": "string", "value": "ab", "min": "3", "length": "2" },
+						"message": "\"ab\" is shorter than 3 characters."
+					},
+					{
+						"rowId": "r4",
+						"field": "note",
+						"code": "max_length",
+						"params": { "value": "📦📦📦📦📦📦", "max": "5", "length": "6" }
+					}
+				]
+			},
+			{
+				"about": "one record on two rows, told apart by its id and the id's kind",
+				"rows": [
+					{ "rowId": "a", "values": { "product": { "id": 7, "label": "Termos" }, "price": "1" } },
+					{ "rowId": "b", "values": { "product": { "id": 8, "label": "Kupa" }, "price": "1" } },
+					{ "rowId": "c", "values": { "product": { "id": 7, "label": "Termos" }, "price": "1" } },
+					{ "rowId": "d", "values": { "product": { "id": "7", "label": "Termos" }, "price": "1" } }
+				],
+				"issues": [
+					{
+						"rowId": "a",
+						"field": "product",
+						"code": "not_unique",
+						"targets": [{ "rowId": "c", "field": "product" }],
+						"params": { "field": "product", "count": "2" }
+					},
+					{
+						"rowId": "c",
+						"field": "product",
+						"code": "not_unique",
+						"targets": [{ "rowId": "a", "field": "product" }],
+						"params": { "count": "2" }
+					}
+				]
+			},
+			{
+				"about": "a number on two rows however it is written; a value with something else wrong takes no part",
+				"rows": [
+					{
+						"rowId": "a",
+						"values": { "product": { "id": 1, "label": "A" }, "price": "1", "rank": "12", "code": "ABCDEF" }
+					},
+					{
+						"rowId": "b",
+						"values": { "product": { "id": 2, "label": "B" }, "price": "1", "rank": 12, "code": "ABCDEF" }
+					},
+					{
+						"rowId": "c",
+						"values": { "product": { "id": 3, "label": "C" }, "price": "1", "rank": "1.234", "code": "AB" }
+					},
+					{
+						"rowId": "d",
+						"values": { "product": { "id": 4, "label": "D" }, "price": "1", "rank": "1234", "code": "AB" }
+					}
+				],
+				"sent": [{ "rowId": "c", "values": { "rank": "1234" } }],
+				"issues": [
+					{
+						"rowId": "a",
+						"field": "rank",
+						"code": "not_unique",
+						"targets": [{ "rowId": "b", "field": "rank" }],
+						"params": { "value": "12", "count": "2" },
+						"message": "\"12\" appears 2 times in this column; it may appear once."
+					},
+					{ "rowId": "a", "field": "code", "code": "max_length" },
+					{
+						"rowId": "b",
+						"field": "rank",
+						"code": "not_unique",
+						"targets": [{ "rowId": "a", "field": "rank" }]
+					},
+					{ "rowId": "b", "field": "code", "code": "max_length" },
+					{
+						"rowId": "c",
+						"field": "rank",
+						"code": "not_unique",
+						"targets": [{ "rowId": "d", "field": "rank" }]
+					},
+					{
+						"rowId": "c",
+						"field": "code",
+						"code": "not_unique",
+						"targets": [{ "rowId": "d", "field": "code" }],
+						"params": { "value": "AB", "count": "2" }
+					},
+					{
+						"rowId": "d",
+						"field": "rank",
+						"code": "not_unique",
+						"targets": [{ "rowId": "c", "field": "rank" }]
+					},
+					{
+						"rowId": "d",
+						"field": "code",
+						"code": "not_unique",
+						"targets": [{ "rowId": "c", "field": "code" }]
+					}
+				]
+			}
+		]
+	}
 }

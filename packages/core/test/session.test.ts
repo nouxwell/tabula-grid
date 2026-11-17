@@ -123,6 +123,19 @@ describe("SheetSession", () => {
 			expect(session.state).toMatchObject({ phase: "idle", check: { requestId: "req_1", outcome: "valid" } })
 		})
 
+		it("sends a host's text as the value it reads to, and unread text as it stands", () => {
+			const { store, session, preflight } = setup({ rows: 1 })
+
+			// Loaded by the host in the user's own writing: the grid accepts it, so it sends what it read.
+			store.setCell("row_1", "price", "1.234,5")
+			store.appendRows([{ values: { product: { id: 2, label: "Ürün 2" }, price: "on iki" } }])
+
+			void session.check()
+
+			expect(session.issues.issuesAt("row_1", "price")).toEqual([])
+			expect(at(preflight.calls, 0).request.rows.map(row => row.values.price)).toEqual(["1234.5", "on iki"])
+		})
+
 		it("shows the backend's issues beside the local ones, on cells, rows and the sheet", async () => {
 			const { store, session, preflight } = setup()
 

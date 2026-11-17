@@ -132,3 +132,9 @@ The three packages are versioned together.
 - **`DraftSaver`** saves a sheet a moment after the user stops changing it, and when asked, one
   save at a time, under an id made in the browser so a save repeated is the same draft. A failed
   save leaves the sheet as it is and says so. New error code `invalid_draft`.
+- **Rows a server checks the same way.** A pre-flight check or a run sends each value in the form
+  the grid writes it. Text a host loaded, such as "1.234,56" in a money column, goes as
+  "1234.56", and the grid holds it to its rules and to uniqueness as that value; "12,5" in an
+  integer column goes as 12.5, for the server to refuse for the same reason. `SheetValidator`
+  gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
+  which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.

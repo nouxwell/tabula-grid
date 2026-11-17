@@ -15,9 +15,11 @@ import type { CellValue } from "./value"
 export interface PayloadRow {
 	readonly rowId: RowId
 	/**
-	 * Every field of the schema that is submitted (`submit`), empty ones as null. A lookup is sent as
-	 * its id; one holding text never matched to a record is sent as `{ label }`, for the backend to
-	 * match or refuse.
+	 * Every field of the schema that is submitted (`submit`), empty ones as null, in the form the grid
+	 * writes: a number as decimal text with a point, a date as ISO 8601, a yes/no as a boolean, an
+	 * option as its value. Text a host loaded, such as "1.234,56", goes as what it reads to; text the
+	 * grid could not read goes as it stands. A lookup is sent as its id; one holding text never
+	 * matched to a record is sent as `{ label }`, for the backend to match or refuse.
 	 */
 	readonly values: Readonly<Record<string, CellValue>>
 }

@@ -22,7 +22,7 @@ import type { RowId, RowStore, StoreChange } from "./rows"
 import type { ModuleSchema } from "./schema"
 import { SheetValidator, type Issue, type IssueScope, type IssueSet, type IssueSummary } from "./validation"
 import type { CellValue } from "./value"
-import { isLookupValue } from "./values/read"
+import { canonicalValue, isLookupValue } from "./values/read"
 import type { ValueSettings } from "./values/settings"
 
 export interface SheetSessionOptions {
@@ -709,7 +709,7 @@ export class SheetSession {
 					? null
 					: field.type === "lookup"
 						? lookupPayload(value)
-						: value
+						: canonicalValue(field, value, this.validator.settings)
 			}
 		}
 

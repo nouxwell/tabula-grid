@@ -5,7 +5,7 @@ import type { RowId, RowStore, StoreChange } from "./rows"
 import type { FieldRule, FieldSchema, ModuleSchema } from "./schema"
 import type { CellValue } from "./value"
 import { decimalText } from "./values/number"
-import { isLookupValue, valueProblem, type ValueProblemCode } from "./values/read"
+import { canonicalValue, isLookupValue, valueProblem, type ValueProblemCode } from "./values/read"
 import { VALUE_SETTINGS, type ValueSettings } from "./values/settings"
 
 /**
@@ -240,6 +240,11 @@ export class SheetValidator implements IssueSet {
 		return false
 	}
 
+	/** The settings text is read with: a backend is sent what they read a host's text as. */
+	get settings(): ValueSettings {
+		return this.#settings
+	}
+
 	/** Settings decide which text reads as a value, so changing them checks every cell again. */
 	setSettings(settings: ValueSettings): void {
 		if (settings === this.#settings) {
@@ -339,8 +344,13 @@ export class SheetValidator implements IssueSet {
 
 		if (this.#groups.has(field.key)) {
 			// A value with a problem of its own takes no part in uniqueness: "abc" in a number column is
-			// not the same number as anything.
-			this.#regroup(rowId, field.key, issues.length === 0 ? uniqueKey(value) : null)
+			// not the same number as anything. The rest are compared as the backend is sent them, so a
+			// host's "1.234" is the same number as 1234.
+			this.#regroup(
+				rowId,
+				field.key,
+				issues.length === 0 ? uniqueKey(canonicalValue(field, value, this.#settings)) : null
+			)
 		}
 	}
 
@@ -450,9 +460,11 @@ export function checkValue(rowId: RowId, field: FieldSchema, value: CellValue, s
 	}
 
 	const issues: Issue[] = []
+	// The rules hold for the value the backend is sent: a host's "1.234,5" is 1234.5 against a maximum.
+	const sent = canonicalValue(field, value, settings)
 
 	for (const rule of field.rules) {
-		const issue = checkRule(rowId, field, rule, value)
+		const issue = checkRule(rowId, field, rule, sent)
 
 		if (issue) {
 			issues.push(issue)
