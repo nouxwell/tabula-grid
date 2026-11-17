@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ModuleSchema, RowStore, SheetValidator, VALUE_SETTINGS, type Issue } from "@nouxwell/tabula-core"
+import { ModuleSchema, RowStore, SheetValidator, UndoHistory, VALUE_SETTINGS, type Issue } from "@nouxwell/tabula-core"
 import { TabulaGrid, TabulaIssues, type GridTheme } from "@nouxwell/tabula-vue"
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
 import { priceUpdate, sampleRows } from "./sample"
@@ -19,7 +19,23 @@ const valueSettings = computed(() => VALUE_SETTINGS[language.value])
 const validator = new SheetValidator(schema, store, valueSettings.value)
 
 watch(valueSettings, settings => validator.setSettings(settings))
-onBeforeUnmount(() => validator.dispose())
+
+// The playground's own history, so its buttons know when there is something to undo or redo.
+const history = new UndoHistory(store)
+const historyVersion = shallowRef(history.version)
+const canUndo = computed(() => historyVersion.value >= 0 && history.canUndo)
+const canRedo = computed(() => historyVersion.value >= 0 && history.canRedo)
+
+history.subscribe(() => (historyVersion.value = history.version))
+
+const undoLabels = computed(() =>
+	language.value === "en" ? { undo: "Undo", redo: "Redo" } : { undo: "Geri al", redo: "Yinele" }
+)
+
+onBeforeUnmount(() => {
+	validator.dispose()
+	history.dispose()
+})
 
 const widths = ref<Readonly<Record<string, number>>>({})
 const grid = ref<InstanceType<typeof TabulaGrid> | null>(null)
@@ -56,7 +72,7 @@ onMounted(() => {
 	selection.subscribe(describe)
 	describe()
 
-	window.__playground = { schema, store, selection, validator, widths: () => widths.value }
+	window.__playground = { schema, store, selection, validator, history, widths: () => widths.value }
 	grid.value?.focus()
 })
 </script>
@@ -65,6 +81,14 @@ onMounted(() => {
 	<div class="playground" :class="{ 'is-dark': dark }">
 		<header class="playground-bar">
 			<strong>{{ schema.title }}</strong>
+			<span class="playground-buttons">
+				<button type="button" class="playground-undo" :disabled="!canUndo" title="Ctrl+Z" @click="grid?.undo()">
+					{{ undoLabels.undo }}
+				</button>
+				<button type="button" class="playground-redo" :disabled="!canRedo" title="Ctrl+Y" @click="grid?.redo()">
+					{{ undoLabels.redo }}
+				</button>
+			</span>
 			<span>{{ size.toLocaleString("tr-TR") }} satır</span>
 			<span>Seçim {{ position }}</span>
 			<span>Sürüm {{ revision }}</span>
@@ -92,6 +116,7 @@ onMounted(() => {
 				:schema="schema"
 				:store="store"
 				:validator="validator"
+				:history="history"
 				:theme="theme"
 				:locale="language"
 				:value-settings="valueSettings"
@@ -144,6 +169,11 @@ body {
 	gap: 6px 18px;
 	align-items: center;
 	font-size: 13px;
+}
+
+.playground-buttons {
+	display: inline-flex;
+	gap: 6px;
 }
 
 .playground-main {

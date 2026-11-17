@@ -1,6 +1,12 @@
 /** What went wrong, in a form code can branch on. */
 export type TabulaErrorCode =
-	"invalid_schema" | "unknown_field" | "unknown_row" | "duplicate_row" | "invalid_argument" | "invalid_value"
+	| "invalid_schema"
+	| "unknown_field"
+	| "unknown_row"
+	| "duplicate_row"
+	| "invalid_argument"
+	| "invalid_value"
+	| "conflict"
 
 /**
  * The one error class this package throws.

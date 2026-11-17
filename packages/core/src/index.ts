@@ -46,6 +46,9 @@ export type {
 	TransactOptions
 } from "./rows"
 
+export { REDO_ORIGIN, UNDO_ORIGIN, UndoHistory } from "./history"
+export type { UndoHistoryOptions } from "./history"
+
 export { Selection } from "./selection"
 export type { CellPosition, CellRange, Direction, IsBlank, MoveOptions } from "./selection"
 

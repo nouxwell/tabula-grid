@@ -320,6 +320,42 @@ export class RowStore {
 		})
 	}
 
+	// ---------------------------------------------------------------- taking back
+
+	/**
+	 * Takes a change back: its operations undone, the last first, as one new change with a revision
+	 * of its own. Rows come back under the ids they had, to the places they stood.
+	 *
+	 * The sheet must be as the change left it: nothing changed since, or every later change taken
+	 * back first. Otherwise nothing is written and a `conflict` is thrown, rather than mixing the
+	 * change into a sheet it never saw.
+	 *
+	 * @returns the change that took it back
+	 */
+	revert(change: StoreChange, options: TransactOptions = {}): StoreChange | null {
+		return this.#standalone("revert", options, () => {
+			const operations = change.operations
+
+			for (let index = operations.length - 1; index >= 0; index--) {
+				this.#undo(operations[index] as StoreOperation)
+			}
+		})
+	}
+
+	/**
+	 * Makes a change again once `revert()` has taken it back, with the same row ids. The sheet must be
+	 * as it was before the change, or a `conflict` is thrown and nothing is written.
+	 *
+	 * @returns the change that made it again
+	 */
+	replay(change: StoreChange, options: TransactOptions = {}): StoreChange | null {
+		return this.#standalone("replay", options, () => {
+			for (const operation of change.operations) {
+				this.#redo(operation)
+			}
+		})
+	}
+
 	// ---------------------------------------------------------------- internals
 
 	#write(fn: () => void): void {
@@ -404,6 +440,132 @@ export class RowStore {
 		}
 
 		this.#positions = null
+	}
+
+	/** A transaction that must be a change of its own, never part of an outer one. */
+	#standalone(name: string, options: TransactOptions, fn: () => void): StoreChange | null {
+		if (this.#log !== null) {
+			throw new TabulaError(
+				"invalid_argument",
+				`${name}() makes a change of its own and cannot run inside a transaction.`
+			)
+		}
+
+		return this.transact(fn, options)
+	}
+
+	#undo(operation: StoreOperation): void {
+		switch (operation.kind) {
+			case "set":
+				this.#swap(operation.rowId, operation.field, operation.after, operation.before)
+				break
+			case "insert":
+				this.#expectRows(operation.rows, true)
+				this.removeRows(operation.rows.map(entry => entry.rowId))
+				break
+			case "remove":
+				this.#putBack(operation.rows)
+				break
+		}
+	}
+
+	#redo(operation: StoreOperation): void {
+		switch (operation.kind) {
+			case "set":
+				this.#swap(operation.rowId, operation.field, operation.before, operation.after)
+				break
+			case "insert":
+				this.#expectRows(operation.rows, false)
+
+				if (operation.index > this.#order.length) {
+					throw new TabulaError(
+						"conflict",
+						`Rows went in at ${operation.index}, past the end of this sheet of ${this.#order.length} rows.`
+					)
+				}
+
+				this.insertRows(operation.index, operation.rows)
+				break
+			case "remove":
+				this.#expectRows(operation.rows, true)
+				this.removeRows(operation.rows.map(entry => entry.rowId))
+				break
+		}
+	}
+
+	/** Writes `to` into a cell that must hold `from`. */
+	#swap(rowId: RowId, field: string, from: CellValue, to: CellValue): void {
+		const row = this.#rows.get(rowId)
+
+		if (!row) {
+			throw new TabulaError("conflict", `There is no row "${rowId}" in this sheet any more.`)
+		}
+
+		if (!sameValue(row[field] ?? null, from)) {
+			throw new TabulaError("conflict", `The cell "${field}" in row "${rowId}" has changed since.`)
+		}
+
+		assign(row, field, to)
+		this.#record({ kind: "set", rowId, field, before: from, after: to })
+	}
+
+	#expectRows(entries: readonly RowEntry[], present: boolean): void {
+		for (const { rowId } of entries) {
+			if (this.#rows.has(rowId) !== present) {
+				throw new TabulaError(
+					"conflict",
+					present
+						? `There is no row "${rowId}" in this sheet any more.`
+						: `There is a row "${rowId}" in this sheet already.`
+				)
+			}
+		}
+	}
+
+	/**
+	 * Puts removed rows back where they stood, in one pass, and records it as one insert for each run
+	 * of rows that stood together: replaying those inserts in order puts every row back in its place.
+	 */
+	#putBack(entries: readonly RemovedRow[]): void {
+		this.#expectRows(entries, false)
+
+		const total = this.#order.length + entries.length
+		let previous = -1
+
+		for (const entry of entries) {
+			if (!Number.isInteger(entry.index) || entry.index <= previous || entry.index >= total) {
+				throw new TabulaError(
+					"conflict",
+					`Row "${entry.rowId}" stood at ${entry.index}, which is not a place in this sheet of ${total} rows.`
+				)
+			}
+
+			previous = entry.index
+		}
+
+		if (entries.length === 0) {
+			return
+		}
+
+		this.#restore(entries)
+		this.#positions = null
+
+		let start = 0
+
+		for (let end = 1; end <= entries.length; end++) {
+			const next = entries[end]
+
+			if (next === undefined || next.index !== (entries[end - 1] as RemovedRow).index + 1) {
+				const run = entries.slice(start, end)
+
+				this.#record({
+					kind: "insert",
+					index: (run[0] as RemovedRow).index,
+					rows: Object.freeze(run.map(({ rowId, values }) => Object.freeze({ rowId, values })))
+				})
+				start = end
+			}
+		}
 	}
 
 	/** Puts removed rows back where they stood, in one pass. */

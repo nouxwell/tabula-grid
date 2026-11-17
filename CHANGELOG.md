@@ -53,3 +53,13 @@ The three packages are versioned together.
 - **`TabulaIssues`** lists a sheet's issues with counts, Previous and Next, and emits the one
   chosen. `TabulaGrid` marks errors and warnings on their cells with Turkish or English tooltips
   (`locale`), takes a shared `validator`, and goes to a cell with `goTo(rowId, field)`.
+- **`UndoHistory`** makes each transaction on a store one step to take back and make again, 100
+  by default. A step taken back is a change of its own with the origin `"undo"` (`"redo"` the
+  other way), and rows come back under the ids they had. A listener writing in answer to an undo
+  ends the way forward rather than tangling the order.
+- **`RowStore.revert` and `replay`** take a change back and make it again as one new change.
+  Removed rows go back to their places in one pass, however scattered. A sheet that has moved on
+  is refused with the new error code `conflict`, and nothing is written.
+- **`TabulaGrid`** undoes with Ctrl+Z and redoes with Ctrl+Y or Ctrl+Shift+Z, selecting and
+  scrolling to what changed, whoever asked for the step. It keeps a history of its own or takes
+  one as `history`, and exposes `undo()` and `redo()`.

@@ -6,9 +6,9 @@ the PHP library that defines a column once and uses that one definition to expor
 templates and to import.
 
 > **Status: early.** A sheet can be drawn, navigated, typed into, copied from and pasted into;
-> what is typed is read the way nouxwell/tabula reads it, and checked against the schema's rules
-> as the user types. Undo and the backend adapters come next. No release has been made and none
-> of the three packages is on npm; each is marked `private` until its first release.
+> what is typed is read the way nouxwell/tabula reads it, checked against the schema's rules as
+> the user types, and taken back with undo. The backend adapters come next. No release has been
+> made and none of the three packages is on npm; each is marked `private` until its first release.
 
 ## Packages
 
@@ -131,6 +131,8 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
 - **Issues.** A cell breaking a rule, or holding text it could not read, gets a red corner and
   says why in its tooltip, in Turkish or English (`locale`). `goTo(rowId, field)` selects a cell
   and scrolls it into view, which is what an issue's ids are for.
+- **Undo.** Ctrl+Z takes a step back, Ctrl+Y or Ctrl+Shift+Z makes it again, and either selects
+  what it changed. While a cell is being edited, Ctrl+Z belongs to the editor.
 - **Themes.** `light`, `dark` or `auto`, and every colour is a `--tabula-*` CSS variable.
 
 With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>` is available everywhere,
@@ -167,6 +169,34 @@ const grid = ref<InstanceType<typeof TabulaGrid>>()
 
 These are the browser's checks, for the user's sake. Passing them promises nothing: the backend
 checks everything again before it writes.
+
+## Undo
+
+`UndoHistory` makes every change to a store a step, whoever made it: one transaction is one step,
+so a paste of 500 rows goes back in one go, with the rows it added. Rows that come back keep the
+ids they had, and their issues come back with them. Taking a step back is a change of its own,
+with a new revision and `"undo"` as its origin, so a backend answer about the sheet before it is
+out of date after it.
+
+The grid keeps a history of its own. Pass one in to drive buttons from it:
+
+```vue
+<script setup lang="ts">
+const history = new UndoHistory(store) // 100 steps; { limit } for another number
+const version = shallowRef(0)
+history.subscribe(() => version.value++)
+const canUndo = computed(() => version.value >= 0 && history.canUndo)
+</script>
+
+<template>
+  <button :disabled="!canUndo" @click="grid?.undo()">Geri al</button>
+  <TabulaGrid ref="grid" :schema="schema" :store="store" :history="history" />
+</template>
+```
+
+Under it, `RowStore.revert(change)` and `replay(change)` take any change back and make it again.
+Both refuse, with a `conflict` and without writing anything, a sheet that is no longer as the
+change left it or found it.
 
 ## Where the line is drawn
 

@@ -644,6 +644,128 @@ describe("TabulaGrid", () => {
 		})
 	})
 
+	describe("undo and redo", () => {
+		const button = (page: Page, name: "undo" | "redo"): Locator => page.locator(`.playground-${name}`)
+
+		it("takes an edit back with Ctrl+Z and makes it again with Ctrl+Y, selecting the cell each time", async () => {
+			await withPage(20, async page => {
+				const original = await valueAt(page, 1, "newPrice")
+				const before = await revision(page)
+
+				await cell(page, 1, 3).click()
+				await page.keyboard.type("12")
+				await press(page, "Enter")
+				await expect.poll(() => valueAt(page, 1, "newPrice")).toBe("12")
+
+				await press(page, "Control+Z")
+				await expect.poll(() => valueAt(page, 1, "newPrice")).toBe(original)
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 1, col: 3 } })
+				// Taking a step back is a change of its own: a backend answer about "12" is out of date.
+				await expect(revision(page)).resolves.toBe(before + 2)
+
+				await press(page, "ArrowDown", 3)
+				await press(page, "Control+Y")
+				await expect.poll(() => valueAt(page, 1, "newPrice")).toBe("12")
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 1, col: 3 } })
+
+				await press(page, "Control+Z")
+				await press(page, "Control+Shift+Z")
+				await expect.poll(() => valueAt(page, 1, "newPrice")).toBe("12")
+			})
+		})
+
+		it("takes a paste back in one step, the rows it added included, and puts them back under the same ids", async () => {
+			await withPage(5, async page => {
+				const original = await valueAt(page, 3, "productId")
+				const ids = (): Promise<string[]> => page.evaluate(() => window.__playground!.store.rowIds())
+
+				await cell(page, 3, 0).click()
+				await clipboard(page, "A\tB\tC\tD\r\nE\tF\tG\tH\r\nI\tJ\tK\tL\r\n")
+				await press(page, "Control+V")
+				await expect.poll(() => page.evaluate(() => window.__playground!.store.size)).toBe(6)
+
+				const pasted = await ids()
+
+				await press(page, "Control+Z")
+				await expect.poll(() => page.evaluate(() => window.__playground!.store.size)).toBe(5)
+				await expect(valueAt(page, 3, "productId")).resolves.toEqual(original)
+				await expect(selected(page)).resolves.toMatchObject({ range: { top: 3, left: 0, bottom: 4, right: 3 } })
+
+				await press(page, "Control+Y")
+				await expect.poll(ids).toEqual(pasted)
+				await expect(valueAt(page, 5, "productId")).resolves.toBe("I")
+				await expect(selected(page)).resolves.toMatchObject({ range: { top: 3, left: 0, bottom: 5, right: 3 } })
+			})
+		})
+
+		it("brings back the issues of what it brings back", async () => {
+			await withPage(20, async page => {
+				await cell(page, 2, 3).click()
+				await press(page, "Delete")
+				await expect.poll(() => cell(page, 2, 3).getAttribute("class")).toContain("is-error")
+
+				await press(page, "Control+Z")
+				await expect.poll(() => cell(page, 2, 3).getAttribute("class")).not.toContain("is-error")
+				await expect(page.locator(".tabula-issues-none").innerText()).resolves.toBe("Sorun yok.")
+
+				await press(page, "Control+Y")
+				await expect.poll(() => cell(page, 2, 3).getAttribute("class")).toContain("is-error")
+			})
+		})
+
+		it("scrolls back to a change that has gone out of view", async () => {
+			await withPage(2000, async page => {
+				await cell(page, 0, 3).click()
+				await page.keyboard.type("5")
+				await press(page, "Enter")
+				await press(page, "Control+End")
+				await expect.poll(() => cell(page, 0, 3).count()).toBe(0)
+
+				await press(page, "Control+Z")
+				await expect.poll(() => cell(page, 0, 3).isVisible()).toBe(true)
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 0, col: 3 } })
+			})
+		})
+
+		it("leaves Ctrl+Z to the editor while a cell is being edited", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 3).click()
+				await press(page, "F2")
+				await page.keyboard.type("9")
+
+				const before = await revision(page)
+
+				await press(page, "Control+Z")
+
+				await expect(page.locator(".tabula-grid-input.is-editing").count()).resolves.toBe(1)
+				await expect(revision(page)).resolves.toBe(before)
+			})
+		})
+
+		it("keeps the buttons of a shared history in step, and undoes from them", async () => {
+			await withPage(20, async page => {
+				await expect(button(page, "undo").isDisabled()).resolves.toBe(true)
+				await expect(button(page, "redo").isDisabled()).resolves.toBe(true)
+
+				const original = await valueAt(page, 0, "note")
+
+				await cell(page, 0, 8).click()
+				await page.keyboard.type("not")
+				await press(page, "Enter")
+				await expect.poll(() => button(page, "undo").isDisabled()).toBe(false)
+
+				await button(page, "undo").click()
+				await expect.poll(() => valueAt(page, 0, "note")).toEqual(original)
+				await expect(button(page, "undo").isDisabled()).resolves.toBe(true)
+				await expect(button(page, "redo").isDisabled()).resolves.toBe(false)
+
+				// The button handed the keyboard back to the grid.
+				await press(page, "Control+Y")
+				await expect.poll(() => valueAt(page, 0, "note")).toBe("not")
+			})
+		})
+	})
+
 	describe("selecting from the edges", () => {
 		it("selects a column from its header, a row from its number and everything from the corner", async () => {
 			await withPage(20, async page => {

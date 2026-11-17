@@ -7,10 +7,14 @@ import {
 	headerDisplayText,
 	parseTsv,
 	readInput,
+	REDO_ORIGIN,
 	resolveColumnSizing,
 	Selection,
 	SheetValidator,
+	TabulaError,
 	toTsv,
+	UNDO_ORIGIN,
+	UndoHistory,
 	VALUE_SETTINGS,
 	type CellPosition,
 	type CellRange,
@@ -20,6 +24,7 @@ import {
 	type ModuleSchema,
 	type RowStore,
 	type Issue,
+	type StoreChange,
 	type ValueSettings
 } from "@nouxwell/tabula-core"
 import {
@@ -64,6 +69,11 @@ const props = defineProps({
 	 * the host: the grid neither changes its settings nor disposes of it.
 	 */
 	validator: { type: Object as PropType<SheetValidator>, default: undefined },
+	/**
+	 * Undo and redo for the store. Pass one to show its state elsewhere, such as on toolbar buttons;
+	 * left out, the grid keeps its own. One passed in belongs to the host, which disposes of it.
+	 */
+	history: { type: Object as PropType<UndoHistory>, default: undefined },
 	/** The language of the grid's own words: issue messages and labels. */
 	locale: { type: String as PropType<GridLocale>, default: "tr" }
 })
@@ -317,10 +327,9 @@ function updateWindow(): void {
 	lastCol.value = cols === 0 ? -1 : Math.min(cols - 1, columnAt(left + width) + OVERSCAN_COLS)
 }
 
-/** Scrolls just far enough for the moving end of the selection to be fully in view. */
-function reveal(): void {
+/** Scrolls just far enough for a cell, the moving end of the selection by default, to be fully in view. */
+function reveal(target: CellPosition | null = selection.head): void {
 	const element = scroller.value
-	const target = selection.head
 
 	if (!element || !target) {
 		return
@@ -665,6 +674,15 @@ function onKeydown(event: KeyboardEvent): void {
 	const from = (extend ? selection.head : selection.active) ?? { row: 0, col: 0 }
 	const page = Math.max(1, Math.floor(bodySize().height / props.rowHeight) - 1)
 	const direction = ARROWS[event.key]
+	const undo = undoKeyOf(event)
+
+	if (undo !== null) {
+		// Not followed by reveal(): the step shows what it changed, from its top left.
+		event.preventDefault()
+		step(undo)
+
+		return
+	}
 
 	if (direction !== undefined) {
 		if (mod) {
@@ -756,6 +774,94 @@ function handleShortcut(event: KeyboardEvent, mod: boolean): boolean {
 	}
 
 	return false
+}
+
+/**
+ * Ctrl+Z is undo; Ctrl+Y and Ctrl+Shift+Z are redo. Null for any other key. While a cell is being
+ * edited these never get here: they belong to the editor, and undo what was typed into it.
+ */
+function undoKeyOf(event: KeyboardEvent): "undo" | "redo" | null {
+	const key = event.key.toLowerCase()
+
+	if (!(event.ctrlKey || event.metaKey) || event.altKey || (key !== "z" && key !== "y")) {
+		return null
+	}
+
+	return key === "y" || event.shiftKey ? "redo" : "undo"
+}
+
+// ---------------------------------------------------------------- undo
+
+/** Undoes or redoes a step. False when there was none to take, or the grid is read-only. */
+function step(direction: "undo" | "redo"): boolean {
+	if (props.readonly) {
+		return false
+	}
+
+	commitEdit(false)
+
+	try {
+		return (direction === "undo" ? undoHistory.value.undo() : undoHistory.value.redo()) !== null
+	} catch (error) {
+		// The history no longer matched the sheet and has cleared itself; the sheet is untouched.
+		if (error instanceof TabulaError && error.code === "conflict") {
+			return false
+		}
+
+		throw error
+	}
+}
+
+/**
+ * After an undo or a redo, whoever asked for it, selects the cells it changed and brings them into
+ * view, as Excel does: what the user cannot see changing back, they cannot trust changed back.
+ */
+function showChange(change: StoreChange): void {
+	const rows = store.value
+	const columns = new Map(fields.value.map((field, index) => [field.key, index]))
+	const cells = { top: Infinity, left: Infinity, bottom: -1, right: -1 }
+	const added = { top: Infinity, bottom: -1 }
+	let removedAt = Infinity
+
+	for (const operation of change.operations) {
+		if (operation.kind === "set") {
+			const row = rows.indexOf(operation.rowId)
+			const col = columns.get(operation.field)
+
+			if (row >= 0 && col !== undefined) {
+				cells.top = Math.min(cells.top, row)
+				cells.bottom = Math.max(cells.bottom, row)
+				cells.left = Math.min(cells.left, col)
+				cells.right = Math.max(cells.right, col)
+			}
+		} else if (operation.kind === "insert") {
+			for (const entry of operation.rows) {
+				const row = rows.indexOf(entry.rowId)
+
+				if (row >= 0) {
+					added.top = Math.min(added.top, row)
+					added.bottom = Math.max(added.bottom, row)
+				}
+			}
+		} else {
+			removedAt = Math.min(removedAt, operation.rows[0]?.index ?? Infinity)
+		}
+	}
+
+	// A cell being edited would write its text over what came back.
+	editing.value = null
+	draft.value = ""
+
+	if (cells.bottom >= 0) {
+		selection.moveTo(cells.top, cells.left)
+		selection.moveTo(cells.bottom, cells.right, { extend: true })
+	} else if (added.bottom >= 0) {
+		selection.selectRows(added.top, added.bottom)
+	} else if (removedAt !== Infinity) {
+		selection.moveTo(removedAt, selection.active?.col ?? 0)
+	}
+
+	reveal(selection.active)
 }
 
 // ---------------------------------------------------------------- clipboard
@@ -1047,16 +1153,34 @@ watch(
 		dataVersion.value++
 
 		onCleanup(
-			next.subscribe(() => {
+			next.subscribe(change => {
 				dataVersion.value++
 
 				if (next.size !== rowCount.value) {
 					syncSize()
 				}
+
+				if (change.origin === UNDO_ORIGIN || change.origin === REDO_ORIGIN) {
+					showChange(change)
+				}
 			})
 		)
 	},
 	{ immediate: true }
+)
+
+// The undo history: the host's when given, otherwise one of the grid's own for the store, made again
+// when the store is replaced.
+let ownHistory: UndoHistory | null = null
+const undoHistory = shallowRef<UndoHistory>(toRaw(props.history) ?? (ownHistory = new UndoHistory(store.value)))
+
+watch(
+	() => [toRaw(props.history), store.value] as const,
+	([given, nextStore]) => {
+		ownHistory?.dispose()
+		ownHistory = given ? null : new UndoHistory(nextStore)
+		undoHistory.value = given ?? (ownHistory as UndoHistory)
+	}
 )
 
 watch(
@@ -1127,6 +1251,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
 	ownValidator?.dispose()
+	ownHistory?.dispose()
 	resizeObserver?.disconnect()
 	stopDrag?.()
 	stopSelection()
@@ -1161,7 +1286,19 @@ defineExpose({
 	goTo,
 	focus: focusInput,
 	/** Fits a column to its header and contents, as a double click on its edge does. */
-	autoFit
+	autoFit,
+	/** Takes the last step back, as Ctrl+Z does, and gives the grid the keyboard. False when there was none. */
+	undo: (): boolean => {
+		focusInput()
+
+		return step("undo")
+	},
+	/** Makes the last step taken back again, as Ctrl+Y does. False when there was none. */
+	redo: (): boolean => {
+		focusInput()
+
+		return step("redo")
+	}
 })
 </script>
 
