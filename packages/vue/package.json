@@ -26,7 +26,8 @@
 	],
 	"scripts": {
 		"build": "vite build && vue-tsc -p tsconfig.build.json",
-		"typecheck": "vue-tsc -p tsconfig.json"
+		"typecheck": "vue-tsc -p tsconfig.json",
+		"test": "vitest run"
 	},
 	"dependencies": {
 		"@nouxwell/tabula-core": "workspace:*"

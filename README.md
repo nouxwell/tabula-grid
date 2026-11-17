@@ -5,9 +5,10 @@ for Vue and Nuxt. It is the browser side of [nouxwell/tabula](https://github.com
 the PHP library that defines a column once and uses that one definition to export, to build
 templates and to import.
 
-> **Status: early.** The core holds a sheet's schema, rows and selection; nothing draws them yet. No
-> release has been made and none of the three packages is on npm; each is marked `private` until
-> its first release.
+> **Status: early.** A sheet can be drawn, navigated, typed into, copied from and pasted into.
+> Values are kept as typed: reading them as numbers and dates, validation, undo and the adapters
+> come next. No release has been made and none of the three packages is on npm; each is marked
+> `private` until its first release.
 
 ## Packages
 
@@ -57,6 +58,53 @@ const selection = new Selection(rows.size, schema.fields.length)
 selection.move(1, 0, { extend: true })
 ```
 
+The core also holds the two rules the grid needs from a spreadsheet: `parseTsv` and `toTsv` read
+and write clipboard text the way Excel and Google Sheets do, and `resolveColumnSizing` with its
+helpers decides how wide a column may be.
+
+## The grid
+
+`TabulaGrid` in `@nouxwell/tabula-vue` draws a schema and a row store:
+
+```vue
+<script setup lang="ts">
+import { ModuleSchema, RowStore } from "@nouxwell/tabula-core"
+import { TabulaGrid } from "@nouxwell/tabula-vue"
+import "@nouxwell/tabula-vue/style.css"
+import { ref } from "vue"
+
+const schema = ModuleSchema.from(json)
+const store = new RowStore({ rows })
+const widths = ref({}) // keep it, and the user's column widths come back next time
+</script>
+
+<template>
+  <TabulaGrid v-model:column-widths="widths" :schema="schema" :store="store" theme="auto" />
+</template>
+```
+
+Give it a height through its parent; it fills it. Pass the store and schema as they are, not
+wrapped in `ref()`: the grid subscribes to the store rather than watching it.
+
+- **Drawing.** Only the rows and columns on screen exist in the page, so 50,000 rows draw like 50.
+  The header and the row numbers stay in place while the sheet scrolls under them.
+- **Keyboard, as in Excel.** Arrows, Shift to extend, Ctrl and an arrow to jump, Home, End,
+  Ctrl+Home, Page Up and Down, Ctrl+A, Shift+Space and Ctrl+Space. Typing replaces a cell, F2 edits
+  it, Enter and Tab commit and move, Escape cancels. Text from an input method or dictation works
+  like typed text. At the last column Tab leaves the grid.
+- **Clipboard.** Copy gives text a spreadsheet reads. A pasted block lands at the top left of the
+  selection, one pasted value fills the whole selection, and a paste that runs past the last row
+  adds the rows it needs. A read-only column is passed over and keeps its values.
+- **Columns.** Each column starts as wide as its header, from 100 to 320 pixels. A header past 100
+  characters is cut with "…", and every header is whole in its tooltip. Dragging a column's edge
+  goes up to 1,000 pixels and is never undone by measuring; double-clicking it fits the column to
+  its contents within the automatic limits. All five numbers can be set for the module and for
+  each column.
+- **Themes.** `light`, `dark` or `auto`, and every colour is a `--tabula-*` CSS variable.
+
+With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>` is available everywhere,
+drawn in the browser only.
+
 ## Where the line is drawn
 
 The packages never talk to a database and never choose an HTTP client. The application that embeds
@@ -76,7 +124,12 @@ corepack pnpm -r test
 corepack pnpm lint
 corepack pnpm format:check
 corepack pnpm --filter playground dev  # the playground
+corepack pnpm --filter playground test:browser
 ```
+
+The browser tests build the playground and drive it with the keyboard, the mouse and the
+clipboard. They use the installed Microsoft Edge; set `TABULA_BROWSER` to `chrome` for Chrome, or
+to `chromium` after `corepack pnpm --filter playground exec playwright-core install chromium`.
 
 With pnpm installed globally, drop the `corepack` in front. The recursive commands are spelled out
 rather than wrapped in root scripts on purpose: a script that calls `pnpm` again only works where

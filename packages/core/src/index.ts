@@ -48,3 +48,14 @@ export type {
 
 export { Selection } from "./selection"
 export type { CellPosition, CellRange, Direction, IsBlank, MoveOptions } from "./selection"
+
+export { parseTsv, toTsv } from "./clipboard"
+
+export {
+	autoColumnWidth,
+	clampColumnWidth,
+	DEFAULT_COLUMN_SIZING,
+	headerDisplayText,
+	resolveColumnSizing
+} from "./columns"
+export type { ColumnSizing } from "./columns"

@@ -1,0 +1,76 @@
+import { describe, expect, it } from "vitest"
+import {
+	autoColumnWidth,
+	clampColumnWidth,
+	DEFAULT_COLUMN_SIZING,
+	headerDisplayText,
+	resolveColumnSizing,
+	TabulaError
+} from "../src/index"
+
+describe("column sizing", () => {
+	it("starts from 100 to 320 pixels for automatic widths and 100 characters of header", () => {
+		expect(DEFAULT_COLUMN_SIZING).toEqual({
+			minWidth: 100,
+			maxAutoWidth: 320,
+			maxWidth: 1000,
+			headerDisplayMaxLength: 100,
+			resizable: true
+		})
+	})
+
+	it("lays the module's settings and then the column's own over the defaults", () => {
+		const sizing = resolveColumnSizing({ maxAutoWidth: 400, resizable: false }, { minWidth: 60 }, undefined)
+
+		expect(sizing).toEqual({
+			minWidth: 60,
+			maxAutoWidth: 400,
+			maxWidth: 1000,
+			headerDisplayMaxLength: 100,
+			resizable: false
+		})
+		expect(Object.isFrozen(sizing)).toBe(true)
+	})
+
+	it("refuses limits that cannot all hold", () => {
+		expect(() => resolveColumnSizing({ minWidth: 400 })).toThrowError(
+			new TabulaError("invalid_argument", "Column sizing minWidth 400 is above maxAutoWidth 320.")
+		)
+		expect(() => resolveColumnSizing({ maxWidth: 50 })).toThrow(/minWidth 100 is above maxWidth 50/)
+		expect(() => resolveColumnSizing({ headerDisplayMaxLength: 0 })).toThrow(TabulaError)
+		expect(() => resolveColumnSizing({ minWidth: Number.NaN })).toThrow(TabulaError)
+	})
+
+	it("sizes a column from its content between the minimum and the automatic maximum", () => {
+		const sizing = resolveColumnSizing()
+
+		expect(autoColumnWidth(42, sizing)).toBe(100)
+		expect(autoColumnWidth(180.2, sizing)).toBe(181)
+		expect(autoColumnWidth(900, sizing)).toBe(320)
+		expect(autoColumnWidth(900, resolveColumnSizing({ maxAutoWidth: 600, maxWidth: 500 }))).toBe(500)
+	})
+
+	it("lets the user go past the automatic maximum, up to maxWidth", () => {
+		const sizing = resolveColumnSizing()
+
+		expect(clampColumnWidth(640, sizing)).toBe(640)
+		expect(clampColumnWidth(5000, sizing)).toBe(1000)
+		expect(clampColumnWidth(20, sizing)).toBe(100)
+	})
+})
+
+describe("headerDisplayText", () => {
+	it("keeps a header within the limit whole", () => {
+		expect(headerDisplayText("Yeni fiyat", 100)).toBe("Yeni fiyat")
+		expect(headerDisplayText("x".repeat(100), 100)).toBe("x".repeat(100))
+	})
+
+	it("cuts a longer one and ends it with an ellipsis", () => {
+		expect(headerDisplayText("x".repeat(101), 100)).toBe(`${"x".repeat(100)}…`)
+		expect(headerDisplayText("Geçerlilik başlangıç tarihi", 10)).toBe("Geçerlilik…")
+	})
+
+	it("counts characters, so a cut never splits one", () => {
+		expect(headerDisplayText("📦📦📦", 2)).toBe("📦📦…")
+	})
+})

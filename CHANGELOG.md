@@ -21,3 +21,16 @@ The three packages are versioned together.
   they throw.
 - **`Selection`** keeps the active cell, the selected range and the corner Shift moves, the way
   Excel does, including Ctrl and an arrow.
+- **`parseTsv` and `toTsv`** read and write clipboard text as spreadsheets do, quoted cells with
+  line breaks included. A line break inside a cell is always `\n`, though the Windows clipboard
+  turns it into `\r\n` on the way through.
+- **Column sizing**: `resolveColumnSizing`, `autoColumnWidth`, `clampColumnWidth` and
+  `headerDisplayText`, with a 100 to 320 pixel automatic width, a separate 1,000 pixel limit for
+  dragging, and headers cut at 100 characters.
+- **`TabulaGrid`** in `@nouxwell/tabula-vue`, replacing the empty `TabulaWorkspace`: draws only what
+  is on screen, moves and edits as Excel does, copies and pastes blocks, sizes columns from their
+  headers and lets the user drag or fit them, and comes in light, dark and system themes. Text that
+  arrives without a key press, from an input method or dictation, starts an edit like typing does.
+- **`@nouxwell/tabula-nuxt`** registers `TabulaGrid`, drawn in the browser only.
+- **Browser tests** that build the playground and drive the grid with a real keyboard, mouse and
+  clipboard, on CI as well.

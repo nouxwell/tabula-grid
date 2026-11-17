@@ -5,11 +5,16 @@
 	"scripts": {
 		"dev": "vite",
 		"bundle": "vite build",
-		"typecheck": "vue-tsc -p tsconfig.json"
+		"typecheck": "vue-tsc -p tsconfig.json && vue-tsc -p tsconfig.test.json",
+		"test:browser": "vitest run"
 	},
 	"dependencies": {
 		"@nouxwell/tabula-core": "workspace:*",
 		"@nouxwell/tabula-vue": "workspace:*",
 		"vue": "^3.5.45"
+	},
+	"devDependencies": {
+		"@types/node": "^24.19.0",
+		"playwright-core": "^1.65.1"
 	}
 }

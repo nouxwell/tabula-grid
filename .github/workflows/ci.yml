@@ -50,6 +50,31 @@ jobs:
       - name: Tests
         run: pnpm -r test
 
+  # The grid driven in a real browser: keyboard, mouse, clipboard, widths. Chromium is downloaded
+  # here; on a developer's machine the tests use the Edge that is already installed.
+  browser:
+    name: Browser tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter playground exec playwright-core install --with-deps chromium
+
+      - name: Browser tests
+        run: pnpm --filter playground test:browser
+
   # Lint and formatting read the same source on every Node version, so they run once.
   static:
     name: Lint and formatting
