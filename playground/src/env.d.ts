@@ -1,5 +1,6 @@
 import type {
 	DraftSaver,
+	LookupResolver,
 	ModuleSchema,
 	RowStore,
 	Selection,
@@ -20,6 +21,7 @@ export interface PlaygroundHandle {
 	readonly backend: FakeBackend
 	/** Null while a stored draft waits to be reviewed. */
 	readonly saver: DraftSaver | null
+	readonly lookups: LookupResolver
 	readonly widths: () => Readonly<Record<string, number>>
 }
 

@@ -1,10 +1,16 @@
 import { TabulaError } from "./errors"
 import { Listeners } from "./listeners"
+import { LOOKUP_ORIGIN } from "./lookup"
 import type { RowStore, StoreChange } from "./rows"
 
 export interface UndoHistoryOptions {
 	/** How many steps can be taken back; the oldest is forgotten past that. 100 by default. */
 	readonly limit?: number
+	/**
+	 * Whether a change belongs to the step before it rather than being a step of its own. By default,
+	 * a lookup matching the names an edit put in (`"lookup"`): one Ctrl+Z takes back both.
+	 */
+	readonly joins?: (change: StoreChange) => boolean
 }
 
 /** The origin of the change that takes a step back, as `StoreChange.origin` gives it. */
@@ -14,12 +20,17 @@ export const REDO_ORIGIN = "redo"
 
 const DEFAULT_LIMIT = 100
 
+/** One step: a change, and any that joined it, in the order they were made. */
+type Step = StoreChange[]
+
 /**
  * Undo and redo for a sheet: every change to the store is a step, whoever made it.
  *
  * A step is one transaction, so a paste of 500 rows goes back in one go, the rows it added included.
- * Taking a step back is itself a change, with a revision of its own and `"undo"` as its origin: an
- * answer from the backend about the sheet before the undo is out of date after it, as it should be.
+ * A change that follows from the one before, such as a lookup matching the names a paste put in,
+ * joins that step rather than making one of its own. Taking a step back is itself a change, with a
+ * revision of its own and `"undo"` as its origin: an answer from the backend about the sheet before
+ * the undo is out of date after it, as it should be.
  *
  * Steps are taken back strictly last first. Any new change, including one a listener makes in answer
  * to an undo, ends the way forward: what was taken back can no longer be made again on top of it.
@@ -27,8 +38,9 @@ const DEFAULT_LIMIT = 100
 export class UndoHistory {
 	readonly #store: RowStore
 	readonly #limit: number
-	readonly #undo: StoreChange[] = []
-	#redo: StoreChange[] = []
+	readonly #joins: (change: StoreChange) => boolean
+	readonly #undo: Step[] = []
+	#redo: Step[] = []
 	/** The revision of the change an undo or a redo is making, which is not a step of its own. */
 	#making = -1
 	/** Changes recorded so far, to tell whether a listener wrote while a step was being taken. */
@@ -49,6 +61,7 @@ export class UndoHistory {
 
 		this.#store = store
 		this.#limit = limit
+		this.#joins = options.joins ?? (change => change.origin === LOOKUP_ORIGIN)
 		this.#stop = store.subscribe(change => this.#record(change))
 	}
 
@@ -65,14 +78,17 @@ export class UndoHistory {
 		return this.#redo.length > 0
 	}
 
-	/** The change `undo()` would take back, such as one whose origin is `"paste"`. Null when there is none. */
+	/**
+	 * The change that began the step `undo()` would take back, such as one whose origin is `"paste"`.
+	 * Null when there is none.
+	 */
 	get nextUndo(): StoreChange | null {
-		return this.#undo[this.#undo.length - 1] ?? null
+		return this.#undo[this.#undo.length - 1]?.[0] ?? null
 	}
 
-	/** The change `redo()` would make again. Null when there is none. */
+	/** The change that began the step `redo()` would make again. Null when there is none. */
 	get nextRedo(): StoreChange | null {
-		return this.#redo[this.#redo.length - 1] ?? null
+		return this.#redo[this.#redo.length - 1]?.[0] ?? null
 	}
 
 	/**
@@ -152,7 +168,7 @@ export class UndoHistory {
 	}
 
 	/** Runs an undo or a redo; on failure puts the step back, or clears everything on a conflict. */
-	#take(step: StoreChange, from: StoreChange[], fn: () => StoreChange | null): StoreChange | null {
+	#take(step: Step, from: Step[], fn: () => StoreChange | null): StoreChange | null {
 		this.#making = this.#store.revision + 1
 
 		try {
@@ -178,9 +194,19 @@ export class UndoHistory {
 		}
 
 		this.#recorded++
-		this.#undo.push(change)
+
+		const last = this.#undo[this.#undo.length - 1]
+
+		// Never while a step is being taken: what a listener writes then comes after that step, not
+		// inside the one below it.
+		if (last && this.#making === -1 && this.#joins(change)) {
+			last.push(change)
+		} else {
+			this.#undo.push([change])
+			this.#trim()
+		}
+
 		this.#redo = []
-		this.#trim()
 		this.#changed()
 	}
 

@@ -285,7 +285,8 @@
 			"php": false,
 			"field": { "type": "lookup", "lookup": "product" },
 			"input": " Çelik ",
-			"value": "Çelik"
+			"value": "Çelik",
+			"problem": "not_matched"
 		}
 	],
 	"format": [

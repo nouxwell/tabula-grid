@@ -20,9 +20,11 @@ import {
 	type CellRange,
 	type ColumnSizing,
 	type Direction,
+	type CellValue,
 	type FieldSchema,
 	type Issue,
 	type IssueSet,
+	type LookupSearch,
 	type ModuleSchema,
 	type RowResults,
 	type RowStore,
@@ -77,6 +79,11 @@ const props = defineProps({
 	 * number, and a row it locks cannot be changed.
 	 */
 	results: { type: Object as PropType<RowResults>, default: undefined },
+	/**
+	 * Searches a lookup's records as the user types into one, such as a `LookupResolver`: the editor
+	 * then lists them to pick from. Left out, a lookup takes only names, matched to records elsewhere.
+	 */
+	lookups: { type: Object as PropType<LookupSearch>, default: undefined },
 	/**
 	 * Undo and redo for the store. Pass one to show its state elsewhere, such as on toolbar buttons;
 	 * left out, the grid keeps its own. One passed in belongs to the host, which disposes of it.
@@ -333,6 +340,11 @@ function updateWindow(): void {
 	lastRow.value = Math.min(rows - 1, Math.floor((top + height) / props.rowHeight) + OVERSCAN_ROWS)
 	firstCol.value = cols === 0 ? 0 : Math.max(0, columnAt(left) - OVERSCAN_COLS)
 	lastCol.value = cols === 0 ? -1 : Math.min(cols - 1, columnAt(left + width) + OVERSCAN_COLS)
+
+	// The list under the editor moves with the cell it belongs to.
+	if (listOpen.value) {
+		placeList()
+	}
 }
 
 /** Scrolls just far enough for a cell, the moving end of the selection by default, to be fully in view. */
@@ -717,10 +729,282 @@ function cancelEdit(): void {
 	focusInput()
 }
 
+// ---------------------------------------------------------------- suggestions
+
+/** One entry in the list under the editor: an option, or a lookup's record. */
+interface Suggestion {
+	readonly key: string
+	readonly label: string
+	readonly description: string | null
+	readonly disabled: boolean
+	readonly value: CellValue
+}
+
+/** How many records the list shows for a lookup; the user types on to narrow it. */
+const SUGGESTION_LIMIT = 8
+/** Milliseconds typing has to pause before a lookup is searched. */
+const SEARCH_DELAY = 150
+
+const suggestions = shallowRef<readonly Suggestion[]>([])
+const highlighted = shallowRef(-1)
+/** A line under the entries: searching, found nothing, found more than shown, or could not search. */
+const listNote = shallowRef<"searching" | "none" | "more" | "unavailable" | null>(null)
+const listPlace = shallowRef<{ left: number; top: number; width: number } | null>(null)
+const listId = `${id}-list`
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+let searchController: AbortController | null = null
+
+const listOpen = computed(() => editing.value !== null && (suggestions.value.length > 0 || listNote.value !== null))
+
+/** The field being edited, when it offers a list: a single-choice options field, or a lookup with a search. */
+const listField = computed<FieldSchema | null>(() => {
+	const field = editing.value ? fields.value[editing.value.col] : undefined
+
+	if (field?.type === "options" && !field.multiple) {
+		return field
+	}
+
+	return field?.type === "lookup" && props.lookups ? field : null
+})
+
+/** Compared the way the user reads: in their language, so "İ" is "i" in Turkish. */
+function lower(text: string): string {
+	return text.trim().toLocaleLowerCase(props.locale)
+}
+
+function stopSearch(): void {
+	if (searchTimer !== null) {
+		clearTimeout(searchTimer)
+		searchTimer = null
+	}
+
+	searchController?.abort()
+	searchController = null
+}
+
+function closeList(): void {
+	stopSearch()
+	suggestions.value = []
+	highlighted.value = -1
+	listNote.value = null
+}
+
+/**
+ * The entry Enter picks: the only one named exactly as typed, or the only one there is. None
+ * otherwise, so Enter never puts a record the user did not mean in place of what they typed: two
+ * records both named "Termos" are for the user to tell apart.
+ */
+function preferred(list: readonly Suggestion[], query: string): number {
+	const needle = lower(query)
+	const open = list.filter(item => !item.disabled)
+	const exact = open.filter(item => lower(item.label) === needle)
+	const only = exact.length === 1 ? exact[0] : exact.length === 0 && open.length === 1 ? open[0] : undefined
+
+	return only ? list.indexOf(only) : -1
+}
+
+function showSuggestions(list: readonly Suggestion[], query: string, note: (typeof listNote)["value"]): void {
+	suggestions.value = list
+	highlighted.value = preferred(list, query)
+	listNote.value = note
+	void nextTick(placeList)
+}
+
+/** Fills the list for what is typed: options at once, a lookup's records once typing pauses. */
+function suggest(): void {
+	const field = listField.value
+	const query = draft.value
+
+	stopSearch()
+
+	if (field?.type === "options") {
+		const needle = lower(query)
+		const list = field.options
+			.filter(
+				option =>
+					needle === "" || lower(option.label).includes(needle) || lower(String(option.value)) === needle
+			)
+			.map(option => ({
+				key: String(option.value),
+				label: option.label,
+				description: null,
+				disabled: false,
+				value: option.value
+			}))
+
+		if (list.length > 0) {
+			showSuggestions(list, query, null)
+		} else {
+			closeList()
+		}
+
+		return
+	}
+
+	if (field?.type !== "lookup" || query.trim() === "") {
+		closeList()
+
+		return
+	}
+
+	listNote.value = "searching"
+	void nextTick(placeList)
+	searchTimer = setTimeout(() => void search(field.key, query), SEARCH_DELAY)
+}
+
+async function search(field: string, query: string): Promise<void> {
+	const lookups = props.lookups
+	const controller = new AbortController()
+
+	searchTimer = null
+	searchController = controller
+
+	try {
+		const response = await lookups?.search(field, query, controller.signal, SUGGESTION_LIMIT)
+
+		if (searchController !== controller || !response) {
+			return
+		}
+
+		const list = response.items.map(item => ({
+			key: String(item.id),
+			label: item.label,
+			description: item.description ?? null,
+			disabled: item.disabled === true,
+			value: Object.freeze({ id: item.id, label: item.label })
+		}))
+
+		showSuggestions(list, query, list.length === 0 ? "none" : response.more ? "more" : null)
+	} catch {
+		if (searchController === controller) {
+			showSuggestions([], query, "unavailable")
+		}
+	} finally {
+		if (searchController === controller) {
+			searchController = null
+		}
+	}
+}
+
+watch([editing, draft], () => suggest())
+
+/** Moves the highlight to the next entry that can be picked, wrapping round. */
+function moveHighlight(by: 1 | -1): void {
+	const list = suggestions.value
+
+	for (let step = 1; step <= list.length; step++) {
+		const index = (highlighted.value + by * step + list.length * 2) % list.length
+
+		if (!list[index]?.disabled) {
+			highlighted.value = index
+
+			return
+		}
+	}
+}
+
+/** Puts the entry in the cell being edited, and ends the edit. */
+function pick(index: number): boolean {
+	const item = suggestions.value[index]
+	const state = editing.value
+
+	if (!item || item.disabled || !state) {
+		return false
+	}
+
+	const rowId = store.value.rowIdAt(state.row)
+	const field = fields.value[state.col]
+
+	editing.value = null
+	draft.value = ""
+	closeList()
+
+	if (rowId !== undefined && field) {
+		store.value.setCell(rowId, field.key, item.value)
+	}
+
+	focusInput()
+
+	return true
+}
+
+/** Places the list under the editor, or over it when there is more room above. */
+function placeList(): void {
+	const input = editor.value
+	const frame = root.value
+	const list = frame?.querySelector<HTMLElement>(".tabula-grid-list")
+
+	if (!input || !frame || !listOpen.value) {
+		listPlace.value = null
+
+		return
+	}
+
+	const cell = input.getBoundingClientRect()
+	const box = frame.getBoundingClientRect()
+	const height = list?.offsetHeight ?? 0
+	const below = box.bottom - cell.bottom
+	const above = height > below && cell.top - box.top > below
+
+	listPlace.value = {
+		left: cell.left - box.left,
+		top: above ? cell.top - box.top - height : cell.bottom - box.top,
+		width: cell.width
+	}
+}
+
+/** The keys a list under the editor takes. False when the key is not the list's. */
+function onListKeydown(event: KeyboardEvent): boolean {
+	if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+		moveHighlight(event.key === "ArrowDown" ? 1 : -1)
+
+		return true
+	}
+
+	if (event.key === "Escape") {
+		closeList()
+
+		return true
+	}
+
+	if ((event.key === "Enter" || event.key === "Tab") && highlighted.value >= 0 && pick(highlighted.value)) {
+		if (event.key === "Enter") {
+			move(event.shiftKey ? -1 : 1, 0)
+		} else {
+			move(0, event.shiftKey ? -1 : 1)
+		}
+
+		return true
+	}
+
+	return false
+}
+
+/** Alt+Down on an options cell: an edit that starts with every option listed. */
+function openList(): boolean {
+	const cell = selection.active
+	const field = cell ? fields.value[cell.col] : undefined
+
+	if (field?.type !== "options" || field.multiple || !beginEdit("edit")) {
+		return false
+	}
+
+	draft.value = ""
+	void nextTick(() => editor.value?.focus({ preventScroll: true }))
+
+	return true
+}
+
 function onEditorKeydown(event: KeyboardEvent): void {
 	const state = editing.value
 
 	if (!state) {
+		return
+	}
+
+	if (listOpen.value && onListKeydown(event)) {
+		event.preventDefault()
+
 		return
 	}
 
@@ -763,6 +1047,12 @@ function onKeydown(event: KeyboardEvent): void {
 		// Not followed by reveal(): the step shows what it changed, from its top left.
 		event.preventDefault()
 		step(undo)
+
+		return
+	}
+
+	if (event.altKey && event.key === "ArrowDown" && openList()) {
+		event.preventDefault()
 
 		return
 	}
@@ -1350,6 +1640,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+	stopSearch()
 	ownValidator?.dispose()
 	ownHistory?.dispose()
 	resizeObserver?.disconnect()
@@ -1522,6 +1813,11 @@ defineExpose({
 						:class="editing ? ['is-editing', cellClasses[editing.col]] : undefined"
 						:style="editing ? editorStyle : activeStyle"
 						:aria-label="inputLabel"
+						:role="listField ? 'combobox' : undefined"
+						:aria-autocomplete="listField ? 'list' : undefined"
+						:aria-expanded="listField ? listOpen : undefined"
+						:aria-controls="listField ? listId : undefined"
+						:aria-activedescendant="listOpen && highlighted >= 0 ? `${listId}-${highlighted}` : undefined"
 						autocomplete="off"
 						spellcheck="false"
 						@keydown="onInputKeydown"
@@ -1533,6 +1829,34 @@ defineExpose({
 				</div>
 			</div>
 		</div>
+		<ul
+			v-if="listOpen"
+			:id="listId"
+			class="tabula-grid-list"
+			role="listbox"
+			:style="
+				listPlace
+					? { left: `${listPlace.left}px`, top: `${listPlace.top}px`, minWidth: `${listPlace.width}px` }
+					: { visibility: 'hidden' }
+			"
+		>
+			<li
+				v-for="(item, index) in suggestions"
+				:id="`${listId}-${index}`"
+				:key="item.key"
+				class="tabula-grid-option"
+				:class="{ 'is-highlighted': index === highlighted, 'is-disabled': item.disabled }"
+				role="option"
+				:aria-selected="index === highlighted"
+				:aria-disabled="item.disabled || undefined"
+				@mousedown.prevent="pick(index)"
+				@mousemove="item.disabled || (highlighted = index)"
+			>
+				<span class="tabula-grid-option-label">{{ item.label }}</span>
+				<span v-if="item.description" class="tabula-grid-option-description">{{ item.description }}</span>
+			</li>
+			<li v-if="listNote" class="tabula-grid-list-note" role="presentation">{{ GRID_TEXT[locale][listNote] }}</li>
+		</ul>
 		<div ref="headerProbe" class="tabula-grid-th tabula-grid-probe" aria-hidden="true" />
 		<div ref="cellProbe" class="tabula-grid-cell tabula-grid-probe" aria-hidden="true" />
 	</div>
@@ -1892,6 +2216,59 @@ defineExpose({
 
 .tabula-grid-input.is-right {
 	text-align: right;
+}
+
+/* The list under the editor: options, or a lookup's records. */
+.tabula-grid-list {
+	position: absolute;
+	z-index: 5;
+	box-sizing: border-box;
+	max-width: 420px;
+	max-height: 280px;
+	margin: 0;
+	padding: 2px 0;
+	overflow: auto;
+	border: 1px solid var(--tabula-head-line);
+	border-radius: 0 0 4px 4px;
+	background: var(--tabula-bg);
+	box-shadow: 0 6px 18px rgb(0 0 0 / 14%);
+	list-style: none;
+	user-select: none;
+}
+
+.tabula-grid-option {
+	display: flex;
+	gap: 10px;
+	align-items: baseline;
+	justify-content: space-between;
+	padding: 5px 10px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.tabula-grid-option.is-highlighted {
+	background: var(--tabula-range-bg);
+	box-shadow: inset 2px 0 0 var(--tabula-accent);
+}
+
+.tabula-grid-option.is-disabled {
+	color: var(--tabula-muted);
+	cursor: default;
+}
+
+.tabula-grid-option-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.tabula-grid-option-description,
+.tabula-grid-list-note {
+	color: var(--tabula-muted);
+	font-size: 0.92em;
+}
+
+.tabula-grid-list-note {
+	padding: 5px 10px;
 }
 
 .tabula-grid-probe {

@@ -12,6 +12,7 @@ import {
 	type SheetRequest,
 	type StatusQuery
 } from "./contract"
+import { neverAborted, raced, wait } from "./async"
 import { TabulaError } from "./errors"
 import type { UndoHistory } from "./history"
 import { randomPart, sequence } from "./ids"
@@ -458,7 +459,7 @@ export class SheetSession {
 
 		if (run.operationId !== null && stop) {
 			try {
-				await stop(this.#query(), { signal: new AbortController().signal, requestId: run.requestId })
+				await stop(this.#query(), { signal: neverAborted(), requestId: run.requestId })
 			} catch (error) {
 				this.#setState({ failure: failure("cancel", error) })
 			}
@@ -1165,41 +1166,4 @@ function push<K>(map: Map<K, Issue[]>, key: K, issue: Issue): void {
 	} else {
 		map.set(key, [issue])
 	}
-}
-
-/** Settles as the promise does, or rejects once the signal aborts, whichever comes first. */
-function raced<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-	return new Promise<T>((resolve, reject) => {
-		const abort = (): void => reject(abortError())
-
-		if (signal.aborted) {
-			abort()
-
-			return
-		}
-
-		signal.addEventListener("abort", abort, { once: true })
-		promise.then(
-			value => {
-				signal.removeEventListener("abort", abort)
-				resolve(value)
-			},
-			(error: unknown) => {
-				signal.removeEventListener("abort", abort)
-				reject(error instanceof Error ? error : new Error(String(error)))
-			}
-		)
-	})
-}
-
-function wait(ms: number, signal: AbortSignal): Promise<void> {
-	return raced(new Promise<void>(resolve => setTimeout(resolve, ms)), signal)
-}
-
-function abortError(): Error {
-	const error = new Error("The request was cancelled.")
-
-	error.name = "AbortError"
-
-	return error
 }

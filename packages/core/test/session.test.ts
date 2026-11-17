@@ -542,7 +542,7 @@ describe("SheetSession", () => {
 		})
 
 		it("says when it cannot do what is asked", async () => {
-			const store = new RowStore({ rows: [{ values: { product: "x", price: "1" } }] })
+			const store = new RowStore({ rows: [{ values: { product: { id: 1, label: "x" }, price: "1" } }] })
 			const bare = new SheetSession({ schema, store, adapters: {} })
 
 			await expect(bare.check()).resolves.toMatchObject({ status: "unavailable" })
@@ -556,7 +556,7 @@ describe("SheetSession", () => {
 		})
 
 		it("goes unknown when a pending run has no processStatus adapter to follow it", async () => {
-			const store = new RowStore({ rows: [{ values: { product: "x", price: "1" } }] })
+			const store = new RowStore({ rows: [{ values: { product: { id: 1, label: "x" }, price: "1" } }] })
 			const process = adapter<ProcessRequest, ProcessResponse>()
 			const session = new SheetSession({ schema, store, adapters: { process: process.fn } })
 			const running = session.process()

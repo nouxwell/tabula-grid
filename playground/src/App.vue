@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
 	DraftSaver,
+	LookupResolver,
 	ModuleSchema,
 	openDraft,
 	readDraft,
@@ -80,6 +81,14 @@ const session = new SheetSession({
 	pollInterval: 300,
 	...(opened ? { restore: opened.session } : {})
 })
+
+// Names typed or pasted into the product column become products, many in one request; the editor
+// lists the catalog as the user types.
+const lookups = new LookupResolver({ schema, store, adapters: backend.lookups })
+
+if (opened) {
+	void lookups.resolveAll()
+}
 
 const widths = ref<Readonly<Record<string, number>>>(opened?.view.columnWidths ?? {})
 
@@ -337,6 +346,7 @@ async function ask(): Promise<void> {
 onBeforeUnmount(() => {
 	window.removeEventListener("pagehide", flush)
 	saver?.dispose()
+	lookups.dispose()
 	session.dispose()
 	validator.dispose()
 	history.dispose()
@@ -385,6 +395,7 @@ onMounted(() => {
 		session,
 		backend,
 		saver,
+		lookups,
 		widths: () => widths.value
 	}
 	grid.value?.focus()
@@ -482,6 +493,7 @@ onMounted(() => {
 				:issues="session.issues"
 				:results="session.results"
 				:history="history"
+				:lookups="lookups"
 				:theme="theme"
 				:locale="language"
 				:value-settings="valueSettings"

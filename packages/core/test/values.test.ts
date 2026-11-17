@@ -193,7 +193,8 @@ describe("valueProblem", () => {
 		expect(valueProblem(field("price"), 1234.56, tr)).toBeNull()
 		expect(valueProblem(field("count"), 12, tr)).toBeNull()
 		expect(valueProblem(field("product"), { id: 1, label: "x" }, tr)).toBeNull()
-		expect(valueProblem(field("product"), "not yet found", tr)).toBeNull()
+		// A name is not a record: until one is matched, the backend has no id to take.
+		expect(valueProblem(field("product"), "not yet found", tr)?.code).toBe("not_matched")
 		expect(isFieldValue(field("day"), "2026-12-31")).toBe(true)
 	})
 

@@ -1,5 +1,7 @@
 import type {
 	IssueInput,
+	LookupAdapters,
+	LookupItem,
 	PayloadRow,
 	ProcessRequest,
 	ProcessResponse,
@@ -31,6 +33,8 @@ export class FakeBackend {
 	loseNextAnswer = false
 	/** How many times each run was done, by key: a resend under the same key is answered, not done again. */
 	readonly done = new Map<string, number>()
+	/** Every lookup request, as `search:query` or `resolve:name|name`, for the tests to count. */
+	readonly lookupCalls: string[] = []
 	readonly #runs = new Map<string, Run>()
 	#operations = 0
 	#lines = 50_000
@@ -101,6 +105,61 @@ export class FakeBackend {
 
 			if (run) {
 				run.cancelled = true
+			}
+		}
+	}
+
+	/**
+	 * The product catalog: "Ürün 000001" to "Ürün 050000" as the sample rows name them, the inactive
+	 * ones (an id that divides by 9) shown but not picked, and a few named by hand, two of them alike.
+	 */
+	readonly catalog: readonly LookupItem[] = [
+		...Array.from({ length: 50_000 }, (_, index) => {
+			const number = String(index + 1).padStart(6, "0")
+			const id = 1000 + index
+
+			return id % 9 === 0
+				? { id, label: `Ürün ${number}`, description: `SKU-${number} · pasif`, disabled: true }
+				: { id, label: `Ürün ${number}`, description: `SKU-${number}` }
+		}),
+		{ id: 90_001, label: "Çelik Termos 500 ml", description: "TRM-500" },
+		{ id: 90_002, label: "Termos", description: "TRM-750" },
+		{ id: 90_003, label: "Termos", description: "TRM-1000" },
+		{ id: 90_004, label: "Kupa", description: "KUP-300" }
+	]
+
+	/** Searches and matches the catalog, in Turkish, by name or by code. */
+	readonly lookups: LookupAdapters = {
+		search: async (request, { signal }) => {
+			this.lookupCalls.push(`search:${request.query}`)
+			await this.#wait(signal)
+
+			const needle = request.query.trim().toLocaleLowerCase("tr")
+			const found = this.catalog.filter(
+				item =>
+					item.label.toLocaleLowerCase("tr").includes(needle) ||
+					(item.description ?? "").toLocaleLowerCase("tr").includes(needle)
+			)
+
+			return { items: found.slice(0, request.limit), more: found.length > request.limit }
+		},
+		resolve: async (request, { signal }) => {
+			this.lookupCalls.push(`resolve:${request.labels.join("|")}`)
+			await this.#wait(signal)
+
+			return {
+				matches: request.labels.map(label => {
+					const needle = label.trim().toLocaleLowerCase("tr")
+
+					return {
+						label,
+						items: this.catalog.filter(
+							item =>
+								item.label.toLocaleLowerCase("tr") === needle ||
+								(item.description ?? "").split(" · ")[0]?.toLocaleLowerCase("tr") === needle
+						)
+					}
+				})
 			}
 		}
 	}

@@ -498,8 +498,9 @@ describe("TabulaGrid", () => {
 
 		it("marks every row holding the same product, and clears them all when one changes", async () => {
 			await withPage(20, async page => {
+				// The same product's name twice: both become that product, which is then in the column twice.
 				await cell(page, 1, 0).click()
-				await clipboard(page, "Kopya ürün")
+				await clipboard(page, "Kupa")
 				await press(page, "Control+V")
 				await cell(page, 4, 0).click()
 				await press(page, "Control+V")
@@ -828,7 +829,8 @@ describe("TabulaGrid", () => {
 				await page.locator(".playground-check").click()
 				await expect.poll(() => status(page)).toBe("Ön kontrol sorun buldu.")
 
-				await type(page, 8, 0, "Ürün 999999")
+				// Another product, by its name: matched to it, and the backend's word on the old one goes stale.
+				await type(page, 8, 0, "Ürün 000500")
 
 				await expect.poll(() => cell(page, 8, 0).getAttribute("class")).toContain("is-stale")
 				await expect(cell(page, 8, 0).getAttribute("title")).resolves.toBe(
@@ -839,11 +841,10 @@ describe("TabulaGrid", () => {
 				)
 				await expect(page.locator(".tabula-issues-count.is-error").innerText()).resolves.toBe("1 hata")
 
-				// Checked again, the text is no product at all.
+				// Checked again: the product it holds now is active.
 				await page.locator(".playground-check").click()
-				await expect
-					.poll(() => cell(page, 8, 0).getAttribute("title"))
-					.toBe("“Ürün 999999” adında bir ürün bulunamadı.")
+				await expect.poll(() => cell(page, 8, 0).getAttribute("title")).toBeNull()
+				await expect(valueAt(page, 8, "productId")).resolves.toEqual({ id: 1499, label: "Ürün 000500" })
 			})
 		})
 
@@ -935,6 +936,128 @@ describe("TabulaGrid", () => {
 				await expect.poll(() => status(page), { timeout: 5000 }).toBe("4 başarılı, 0 başarısız, 4 işlenmedi.")
 				await expect(gutter(page, 0).getAttribute("class")).resolves.toContain("is-succeeded")
 				await expect(gutter(page, 7).getAttribute("class")).resolves.toContain("is-skipped")
+			})
+		})
+	})
+
+	describe("lookups and lists", () => {
+		const list = (page: Page): Locator => page.locator(".tabula-grid-list")
+		const options = (page: Page): Locator => list(page).locator(".tabula-grid-option")
+		const editor = (page: Page): Locator => page.locator(".tabula-grid-input")
+		const calls = (page: Page): Promise<string[]> =>
+			page.evaluate(() => [...window.__playground!.backend.lookupCalls])
+
+		it("lists a lookup's records as the user types, and picks one with the keyboard", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 0).click()
+				await page.keyboard.type("termos")
+
+				await expect.poll(() => options(page).count()).toBe(3)
+				await expect(options(page).allInnerTexts()).resolves.toEqual([
+					"Çelik Termos 500 ml\nTRM-500",
+					"Termos\nTRM-750",
+					"Termos\nTRM-1000"
+				])
+				await expect(editor(page).getAttribute("role")).resolves.toBe("combobox")
+				await expect(editor(page).getAttribute("aria-expanded")).resolves.toBe("true")
+				// Two records are named "Termos": none is chosen for the user.
+				await expect(list(page).locator(".is-highlighted").count()).resolves.toBe(0)
+
+				await press(page, "ArrowDown", 3)
+				await expect(editor(page).getAttribute("aria-activedescendant")).resolves.toMatch(/-list-2$/)
+				await press(page, "Enter")
+
+				await expect.poll(() => valueAt(page, 0, "productId")).toEqual({ id: 90_003, label: "Termos" })
+				await expect(list(page).count()).resolves.toBe(0)
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 1, col: 0 } })
+			})
+		})
+
+		it("picks with a click, and shows but never picks a record that cannot be", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 0).click()
+				await page.keyboard.type("Ürün 000009")
+
+				await expect.poll(() => options(page).count()).toBe(1)
+				await expect(options(page).first().getAttribute("aria-disabled")).resolves.toBe("true")
+
+				// Forced: a browser automation tool itself will not click what says it is disabled.
+				await options(page).first().click({ force: true })
+				await expect(list(page).count()).resolves.toBe(1)
+
+				// Kept as typed, and marked: an inactive product is no record to hold.
+				await press(page, "Enter")
+				await expect
+					.poll(() => cell(page, 0, 0).getAttribute("title"))
+					.toBe("“Ürün 000009” bir kayıtla eşleşmedi; listeden seçin.")
+
+				await cell(page, 1, 0).click()
+				await page.keyboard.type("kupa")
+				await expect.poll(() => options(page).count()).toBe(1)
+				await options(page).first().click()
+
+				await expect.poll(() => valueAt(page, 1, "productId")).toEqual({ id: 90_004, label: "Kupa" })
+			})
+		})
+
+		it("matches pasted names in one request, and takes back the paste and its matches in one undo", async () => {
+			await withPage(20, async page => {
+				const original = await valueAt(page, 0, "productId")
+
+				await cell(page, 0, 0).click()
+				await clipboard(page, "Kupa\r\nÇelik Termos 500 ml\r\nYok böyle bir ürün\r\n")
+				await press(page, "Control+V")
+
+				await expect.poll(() => valueAt(page, 0, "productId")).toEqual({ id: 90_004, label: "Kupa" })
+				await expect(valueAt(page, 1, "productId")).resolves.toEqual({
+					id: 90_001,
+					label: "Çelik Termos 500 ml"
+				})
+				await expect(valueAt(page, 2, "productId")).resolves.toBe("Yok böyle bir ürün")
+				await expect(calls(page)).resolves.toEqual(["resolve:Kupa|Çelik Termos 500 ml|Yok böyle bir ürün"])
+
+				await press(page, "Control+Z")
+
+				await expect.poll(() => valueAt(page, 0, "productId")).toEqual(original)
+				await expect(page.locator(".playground-undo").isDisabled()).resolves.toBe(true)
+			})
+		})
+
+		it("lists an options field's choices, all of them with Alt+Down", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 5).click()
+				await press(page, "Alt+ArrowDown")
+
+				await expect.poll(() => options(page).allInnerTexts()).toEqual(["TRY", "USD", "EUR"])
+
+				await press(page, "ArrowDown", 2)
+				await press(page, "Enter")
+				await expect.poll(() => valueAt(page, 0, "currency")).toBe("USD")
+
+				// Narrowed to one by what is typed, it is the one Enter picks.
+				await cell(page, 1, 5).click()
+				await page.keyboard.type("eu")
+				await expect.poll(() => options(page).count()).toBe(1)
+				await press(page, "Enter")
+				await expect.poll(() => valueAt(page, 1, "currency")).toBe("EUR")
+			})
+		})
+
+		it("closes the list with Escape, and the edit with a second one", async () => {
+			await withPage(20, async page => {
+				const original = await valueAt(page, 0, "productId")
+
+				await cell(page, 0, 0).click()
+				await page.keyboard.type("ter")
+				await expect.poll(() => options(page).count()).toBeGreaterThan(0)
+
+				await press(page, "Escape")
+				await expect(list(page).count()).resolves.toBe(0)
+				await expect(page.locator(".tabula-grid-input.is-editing").count()).resolves.toBe(1)
+
+				await press(page, "Escape")
+				await expect(page.locator(".tabula-grid-input.is-editing").count()).resolves.toBe(0)
+				await expect(valueAt(page, 0, "productId")).resolves.toEqual(original)
 			})
 		})
 	})

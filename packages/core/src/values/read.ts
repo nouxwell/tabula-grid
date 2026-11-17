@@ -14,7 +14,12 @@ import { clean, fold } from "./text"
  * `RowErrorCode`: an application that words the import's errors already words these.
  */
 
-export type ValueProblemCode = "not_a_number" | "not_an_integer" | "not_a_date" | "not_a_boolean" | "not_an_option"
+/**
+ * `not_matched` is this package's own, for a lookup holding text no record was matched to; the rest
+ * are nouxwell/tabula's.
+ */
+export type ValueProblemCode =
+	"not_a_number" | "not_an_integer" | "not_a_date" | "not_a_boolean" | "not_an_option" | "not_matched"
 
 export interface ValueProblem {
 	readonly code: ValueProblemCode
@@ -49,9 +54,11 @@ export function readInput(field: FieldSchema, input: string, settings: ValueSett
 
 	switch (field.type) {
 		case "string":
-		case "lookup":
-			// A lookup's text becomes an id when the application's lookup finds it; until then it is text.
 			return { value: text, problem: null }
+		case "lookup":
+			// Text is a record's name, not the record: a `LookupResolver` matches it to one, and until
+			// then the backend has no id to take.
+			return refused(field, text, "not_matched")
 		case "integer": {
 			const number = readNumber(input, settings)
 
@@ -121,7 +128,7 @@ export function isFieldValue(field: FieldSchema, value: CellValue): boolean {
 				? Array.isArray(value) && value.every(item => isOptionValue(field, item))
 				: isOptionValue(field, value)
 		case "lookup":
-			return typeof value === "string" || isLookupValue(value)
+			return isLookupValue(value)
 	}
 }
 
@@ -262,6 +269,8 @@ function messageFor(code: ValueProblemCode, params: Readonly<Record<string, stri
 			return `"${value}" is not a Yes/No value. Accepted: ${params.accepted ?? ""}`
 		case "not_an_option":
 			return `"${value}" is not in the list. Options: ${params.options || "(no options defined)"}`
+		case "not_matched":
+			return `"${value}" is not matched to a record; pick one from the list.`
 	}
 }
 

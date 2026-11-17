@@ -85,6 +85,17 @@ The three packages are versioned together.
   retyped and renamed, and opens it only with `accept`. `SheetSession` takes what a draft kept as
   `restore` and gives it with `persisted()`: a processed row opens locked, a run with no answer
   opens `unknown`.
+- **`LookupResolver`** matches the names typed or pasted into lookup cells to records, through the
+  application's `resolve` adapter: all the names of a paste in one request per lookup, in batches
+  of 200, with answers kept for a minute. A name that means exactly one record becomes it; others
+  stay as typed. It also serves the editor's `search`.
+- **A lookup holding text is now an error**, `not_matched`: only a record has an id to send.
+- **`TabulaGrid` lists a lookup's records under the editor** as the user types (`lookups`), and
+  an options field's choices, Alt+Down for all of them. Arrows, Enter, Tab, Escape and the mouse
+  work the list; Enter picks on its own only the one record that fits, and a disabled record is
+  never picked.
+- **`UndoHistory`** keeps a lookup's matches in the step of the edit they came from (`joins`), and
+  `RowStore.revert` and `replay` take several changes as one.
 - **`DraftSaver`** saves a sheet a moment after the user stops changing it, and when asked, one
   save at a time, under an id made in the browser so a save repeated is the same draft. A failed
   save leaves the sheet as it is and says so. New error code `invalid_draft`.

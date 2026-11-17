@@ -19,6 +19,7 @@ const ISSUES: Readonly<Record<GridLocale, Readonly<Record<string, Wording>>>> = 
 		not_a_date: p => `“${p.value}” tarih olarak okunamadı. Örnek: ${dateExample(p.format)}`,
 		not_a_boolean: p => `“${p.value}” Evet/Hayır değeri değil. Kabul edilenler: ${p.accepted}`,
 		not_an_option: p => `“${p.value}” listede yok. Seçenekler: ${p.options || "(seçenek yok)"}`,
+		not_matched: p => `“${p.value}” bir kayıtla eşleşmedi; listeden seçin.`,
 		min_value: (p, s) => `En az ${number(p.min, s)} olmalı.`,
 		max_value: (p, s) => `En fazla ${number(p.max, s)} olabilir.`,
 		min_length: p => `En az ${p.min} karakter olmalı; ${p.length} karakter.`,
@@ -32,6 +33,7 @@ const ISSUES: Readonly<Record<GridLocale, Readonly<Record<string, Wording>>>> = 
 		not_a_date: p => `“${p.value}” could not be read as a date. For example: ${dateExample(p.format)}`,
 		not_a_boolean: p => `“${p.value}” is not a Yes/No value. Accepted: ${p.accepted}`,
 		not_an_option: p => `“${p.value}” is not in the list. Options: ${p.options || "(no options)"}`,
+		not_matched: p => `“${p.value}” is not matched to a record; pick one from the list.`,
 		min_value: (p, s) => `Must be at least ${number(p.min, s)}.`,
 		max_value: (p, s) => `Must be at most ${number(p.max, s)}.`,
 		min_length: p => `Must be at least ${p.min} characters; it is ${p.length}.`,
@@ -79,14 +81,22 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		failed: "İşlenemedi",
 		skipped: "İşlenmedi",
 		sending: "Gönderiliyor",
-		recheck: "Değişti, yeniden kontrol edilmeli"
+		recheck: "Değişti, yeniden kontrol edilmeli",
+		searching: "Aranıyor…",
+		none: "Eşleşen kayıt yok",
+		more: "Daha fazlası var; aramayı daraltın",
+		unavailable: "Arama yapılamadı"
 	},
 	en: {
 		succeeded: "Processed",
 		failed: "Failed",
 		skipped: "Not processed",
 		sending: "Being sent",
-		recheck: "Changed, to be checked again"
+		recheck: "Changed, to be checked again",
+		searching: "Searching…",
+		none: "No matching records",
+		more: "There are more; narrow the search",
+		unavailable: "The search could not be made"
 	}
 }
 

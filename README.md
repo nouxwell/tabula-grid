@@ -8,8 +8,8 @@ templates and to import.
 > **Status: early.** A sheet can be drawn, navigated, typed into, copied from and pasted into;
 > what is typed is read the way nouxwell/tabula reads it, checked against the schema's rules as
 > the user types, taken back with undo, checked by a backend, sent to it to be processed, and kept
-> as a draft to go on with later. Lookup search comes next. No release has been made and none of
-> the three packages is on npm; each is marked `private` until its first release.
+> as a draft to go on with later; a lookup is picked from a searched list. No release has been made
+> and none of the three packages is on npm; each is marked `private` until its first release.
 
 ## Packages
 
@@ -244,6 +244,41 @@ an issue for a deleted row is dropped, one for an unknown field is kept as the r
 
 Give the grid `:issues="session.issues"` and `:results="session.results"`, and the panel the same
 issues. Each row's number then shows its result, and a processed row can no longer be changed.
+
+## Lookups
+
+A lookup holds a record as `{ id, label }`: the user sees the label, the backend receives the id.
+A name typed or pasted into one is text until a record is matched to it, and text in a lookup is
+an error (`not_matched`), since there is no id to send.
+
+`LookupResolver` does the matching, through two adapters of the application's:
+
+```ts
+const lookups = new LookupResolver({
+  schema,
+  store,
+  adapters: {
+    search: ({ lookup, query, limit }, { signal }) => api.get(`/lookups/${lookup}`, { query, limit }, { signal }),
+    resolve: ({ lookup, labels }) => api.post(`/lookups/${lookup}/resolve`, { labels })
+  }
+})
+```
+
+- **Typing.** Give the grid `:lookups="lookups"` and typing in a lookup cell lists the matching
+  records under the editor, with a line such as a product code, as typing pauses. The arrows move
+  through the list, Enter or a click picks, Escape closes it. Enter picks on its own only when one
+  record alone fits what is typed; two records named alike are for the user to tell apart. A record
+  marked `disabled`, such as an inactive product, is listed but cannot be picked.
+- **Pasting.** Every name that lands in a lookup cell is gathered, and all of them go to `resolve`
+  as one request per lookup (or a few, for thousands), never one per cell. A name the backend
+  answers with exactly one record becomes that record; none or several, and it stays as typed,
+  marked. Matching is the backend's, in the user's language: the browser sends the names as they
+  were written. An answer is used again for a minute.
+- **Undo.** The change that puts matched records in place joins the paste it came from: one
+  Ctrl+Z takes back both, and nothing is asked again on the way back or forward.
+
+An options field lists its choices the same way, filtered as the user types; Alt+Down opens the
+whole list.
 
 ## Drafts
 

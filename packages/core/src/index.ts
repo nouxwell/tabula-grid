@@ -49,6 +49,18 @@ export type {
 export { REDO_ORIGIN, UNDO_ORIGIN, UndoHistory } from "./history"
 export type { UndoHistoryOptions } from "./history"
 
+export { LOOKUP_ORIGIN, LookupResolver } from "./lookup"
+export type {
+	LookupAdapters,
+	LookupItem,
+	LookupResolveRequest,
+	LookupResolveResponse,
+	LookupResolverOptions,
+	LookupSearch,
+	LookupSearchRequest,
+	LookupSearchResponse
+} from "./lookup"
+
 export { Selection } from "./selection"
 export type { CellPosition, CellRange, Direction, IsBlank, MoveOptions } from "./selection"
 

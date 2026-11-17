@@ -324,8 +324,9 @@ export class RowStore {
 	// ---------------------------------------------------------------- taking back
 
 	/**
-	 * Takes a change back: its operations undone, the last first, as one new change with a revision
-	 * of its own. Rows come back under the ids they had, to the places they stood.
+	 * Takes a change back, or several made one after another: their operations undone, the last
+	 * first, as one new change with a revision of its own. Rows come back under the ids they had, to
+	 * the places they stood.
 	 *
 	 * The sheet must be as the change left it: nothing changed since, or every later change taken
 	 * back first. Otherwise nothing is written and a `conflict` is thrown, rather than mixing the
@@ -333,26 +334,35 @@ export class RowStore {
 	 *
 	 * @returns the change that took it back
 	 */
-	revert(change: StoreChange, options: TransactOptions = {}): StoreChange | null {
-		return this.#standalone("revert", options, () => {
-			const operations = change.operations
+	revert(change: StoreChange | readonly StoreChange[], options: TransactOptions = {}): StoreChange | null {
+		const changes = listOf(change)
 
-			for (let index = operations.length - 1; index >= 0; index--) {
-				this.#undo(operations[index] as StoreOperation)
+		return this.#standalone("revert", options, () => {
+			for (let at = changes.length - 1; at >= 0; at--) {
+				const operations = (changes[at] as StoreChange).operations
+
+				for (let index = operations.length - 1; index >= 0; index--) {
+					this.#undo(operations[index] as StoreOperation)
+				}
 			}
 		})
 	}
 
 	/**
-	 * Makes a change again once `revert()` has taken it back, with the same row ids. The sheet must be
-	 * as it was before the change, or a `conflict` is thrown and nothing is written.
+	 * Makes a change again once `revert()` has taken it back, with the same row ids; several, in the
+	 * order they were made. The sheet must be as it was before them, or a `conflict` is thrown and
+	 * nothing is written.
 	 *
 	 * @returns the change that made it again
 	 */
-	replay(change: StoreChange, options: TransactOptions = {}): StoreChange | null {
+	replay(change: StoreChange | readonly StoreChange[], options: TransactOptions = {}): StoreChange | null {
+		const changes = listOf(change)
+
 		return this.#standalone("replay", options, () => {
-			for (const operation of change.operations) {
-				this.#redo(operation)
+			for (const each of changes) {
+				for (const operation of each.operations) {
+					this.#redo(operation)
+				}
 			}
 		})
 	}
@@ -590,6 +600,10 @@ export class RowStore {
 
 		this.#order = order
 	}
+}
+
+function listOf(change: StoreChange | readonly StoreChange[]): readonly StoreChange[] {
+	return "operations" in change ? [change] : change
 }
 
 function assign(row: MutableRow, field: string, value: CellValue): void {
