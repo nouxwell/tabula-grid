@@ -40,6 +40,24 @@ export interface SheetSessionOptions {
 	readonly createRequestId?: () => string
 	/** Milliseconds between status questions while a run answers `pending`. 1,000 by default. */
 	readonly pollInterval?: number
+	/** What a draft kept of an earlier session over the same rows, to go on from where it stood. */
+	readonly restore?: PersistedSession
+}
+
+/**
+ * What a session hands to a draft: enough that opening the draft again neither unlocks a processed
+ * row nor forgets a run that never answered.
+ */
+export interface PersistedSession {
+	/** Each row's result, for the rows still in the sheet. */
+	readonly results: readonly RowResult[]
+	/** A run with no final answer, to be sent again under its key, or asked about. */
+	readonly pending: PendingRun | null
+}
+
+export interface PendingRun {
+	readonly request: ProcessRequest
+	readonly operationId: string | null
 }
 
 /**
@@ -190,6 +208,33 @@ export class SheetSession {
 		this.issues = this.#merged
 		this.results = this.#results
 		this.#stop = this.store.subscribe(change => this.#onChange(change))
+
+		if (options.restore) {
+			this.#restore(options.restore)
+		}
+	}
+
+	/**
+	 * What a draft keeps of this session: each row's result, and a run with no final answer. A run
+	 * still going is kept as one with no answer: opened again, it is sent again under its key, or
+	 * asked about, and never run twice.
+	 */
+	persisted(): PersistedSession {
+		const results: RowResult[] = []
+
+		for (const rowId of this.store.rowIds()) {
+			const result = this.#results.resultOf(rowId)
+
+			if (result) {
+				results.push(result)
+			}
+		}
+
+		const pending = this.#pending
+			? Object.freeze({ request: this.#pending, operationId: this.#state.run?.operationId ?? null })
+			: null
+
+		return Object.freeze({ results: Object.freeze(results), pending })
 	}
 
 	/** Moves on every change of `state`. */
@@ -806,6 +851,34 @@ export class SheetSession {
 	}
 
 	// ---------------------------------------------------------------- state
+
+	/** Takes up where a draft left off: results back on their rows, a run with no answer still unknown. */
+	#restore(saved: PersistedSession): void {
+		this.#results.record(saved.results.filter(result => this.store.has(result.rowId)))
+
+		const pending = saved.pending
+
+		if (!pending) {
+			return
+		}
+
+		const request = pending.request
+
+		this.#pending = request
+		this.#results.setInFlight(new Set(request.rows.map(row => row.rowId)))
+		this.#setState({
+			phase: "unknown",
+			run: Object.freeze({
+				requestId: request.requestId,
+				idempotencyKey: request.idempotencyKey,
+				operationId: pending.operationId,
+				revision: request.revision,
+				rows: request.rows.length,
+				status: "unknown",
+				progress: null
+			})
+		})
+	}
 
 	#setState(patch: Partial<SessionState>): void {
 		if (this.#disposed) {

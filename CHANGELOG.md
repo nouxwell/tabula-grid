@@ -79,3 +79,12 @@ The three packages are versioned together.
   `results`: each row's number shows its result, an issue about a whole row is shown there, and a
   processed row cannot be changed. A stale issue has a grey corner, and the panel lists it apart.
 - New error code `invalid_response`, for an answer that is not in the contract's shape.
+- **Drafts**: `createDraft`, `readDraft` and `openDraft`. A draft holds the rows under their ids,
+  each row's result, a run with no answer, the column widths and the schema version. `openDraft`
+  sends a draft of another schema version back for review, with the fields added, removed,
+  retyped and renamed, and opens it only with `accept`. `SheetSession` takes what a draft kept as
+  `restore` and gives it with `persisted()`: a processed row opens locked, a run with no answer
+  opens `unknown`.
+- **`DraftSaver`** saves a sheet a moment after the user stops changing it, and when asked, one
+  save at a time, under an id made in the browser so a save repeated is the same draft. A failed
+  save leaves the sheet as it is and says so. New error code `invalid_draft`.

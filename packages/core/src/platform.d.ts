@@ -23,3 +23,4 @@ declare const AbortController: {
 }
 
 declare function setTimeout(handler: () => void, timeout?: number): unknown
+declare function clearTimeout(timer: unknown): void

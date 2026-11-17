@@ -939,6 +939,125 @@ describe("TabulaGrid", () => {
 		})
 	})
 
+	describe("drafts", () => {
+		const KEY = "tabula-grid.playground.draft"
+		const draftStatus = (page: Page): Promise<string> => page.locator(".playground-draft").innerText()
+		const status = (page: Page): Promise<string> => page.locator(".playground-status").innerText()
+		const gutter = (page: Page, row: number): Locator => page.locator(".tabula-grid-rh").nth(row)
+		const stored = (page: Page) =>
+			page.evaluate(key => JSON.parse(localStorage.getItem(key) ?? "null") as Record<string, unknown> | null, KEY)
+
+		async function type(page: Page, row: number, col: number, text: string): Promise<void> {
+			await cell(page, row, col).click()
+			await page.keyboard.type(text)
+			await press(page, "Enter")
+		}
+
+		/** Runs `action`, which loads the page again, and waits for the playground to be back. */
+		async function reloading(page: Page, action: () => Promise<unknown>): Promise<void> {
+			await Promise.all([page.waitForEvent("load"), action()])
+			await page.waitForFunction(() => window.__playground !== undefined)
+		}
+
+		it("keeps the sheet as a draft a moment after a change, and opens it again, rows under the same ids", async () => {
+			await withPage(20, async page => {
+				const ids = await page.evaluate(() => window.__playground!.store.rowIds())
+
+				await type(page, 1, 3, "77")
+				await expect
+					.poll(() => draftStatus(page), { timeout: 5000 })
+					.toMatch(/^Taslak kaydedildi · \d\d:\d\d:\d\d$/)
+
+				await reloading(page, () => page.reload())
+
+				await expect(valueAt(page, 1, "newPrice")).resolves.toBe("77")
+				await expect(page.evaluate(() => window.__playground!.store.rowIds())).resolves.toEqual(ids)
+			})
+		})
+
+		it("opens a run that never answered still unknown, and processed rows locked", async () => {
+			await withPage(8, async page => {
+				await page.evaluate(() => (window.__playground!.backend.loseNextAnswer = true))
+				await page.locator(".playground-process").click()
+				await expect.poll(() => status(page)).toContain("Yanıt gelmedi")
+				await expect.poll(() => draftStatus(page), { timeout: 5000 }).toMatch(/^Taslak kaydedildi/)
+
+				await reloading(page, () => page.reload())
+
+				await expect(status(page)).resolves.toContain("Yanıt gelmedi")
+				await expect(gutter(page, 0).getAttribute("class")).resolves.toContain("is-sending")
+
+				await page.locator(".playground-resend").click()
+				await expect.poll(() => status(page)).toBe("8 başarılı, 0 başarısız, 0 işlenmedi.")
+				await expect
+					.poll(() => page.evaluate(() => window.__playground!.saver?.dirty), { timeout: 5000 })
+					.toBe(false)
+
+				await reloading(page, () => page.reload())
+
+				const price = await valueAt(page, 0, "newPrice")
+
+				await expect(gutter(page, 0).getAttribute("class")).resolves.toContain("is-succeeded")
+				await type(page, 0, 3, "1")
+				await expect(valueAt(page, 0, "newPrice")).resolves.toBe(price)
+			})
+		})
+
+		it("does not open a draft of another schema version until asked, then drops only what is gone", async () => {
+			await withPage(5, async page => {
+				const sample = await valueAt(page, 0, "newPrice")
+
+				await type(page, 0, 3, "55")
+				await expect.poll(() => draftStatus(page), { timeout: 5000 }).toMatch(/^Taslak kaydedildi/)
+
+				// As if saved under an older schema, with a field this one no longer has.
+				await page.evaluate(key => {
+					const draft = JSON.parse(localStorage.getItem(key) ?? "{}")
+
+					draft.schemaVersion = 0
+					draft.fields.push({ key: "legacyCode", type: "string" })
+					draft.rows[0].values.legacyCode = "ESKİ-1"
+					localStorage.setItem(key, JSON.stringify(draft))
+				}, KEY)
+
+				await reloading(page, () => page.reload())
+
+				await expect(page.locator(".playground-draft-review").innerText()).resolves.toContain(
+					"Bu taslak şemanın 0. sürümüyle kaydedilmiş; şimdiki sürüm 1. Kaldırılan alanlar: legacyCode; 1 satırdaki değerleri atılacak."
+				)
+				// Neither opened nor written over.
+				await expect(valueAt(page, 0, "newPrice")).resolves.toBe(sample)
+				await expect(stored(page)).resolves.toMatchObject({ schemaVersion: 0 })
+
+				await reloading(page, () => page.locator(".playground-open-anyway").click())
+
+				await expect(page.locator(".playground-draft-review").count()).resolves.toBe(0)
+				await expect(valueAt(page, 0, "newPrice")).resolves.toBe("55")
+				await expect(page.evaluate(() => location.search)).resolves.toBe("?rows=5")
+				await expect.poll(() => stored(page)).toMatchObject({ schemaVersion: 1 })
+				await expect(
+					page.evaluate(() =>
+						window.__playground!.store.get(window.__playground!.store.rowIdAt(0)!, "legacyCode")
+					)
+				).resolves.toBeNull()
+			})
+		})
+
+		it("starts a fresh sheet when the draft is thrown away", async () => {
+			await withPage(5, async page => {
+				const sample = await valueAt(page, 0, "newPrice")
+
+				await type(page, 0, 3, "55")
+				await expect.poll(() => draftStatus(page), { timeout: 5000 }).toMatch(/^Taslak kaydedildi/)
+
+				await reloading(page, () => page.locator(".playground-start-over").click())
+
+				await expect(valueAt(page, 0, "newPrice")).resolves.toBe(sample)
+				await expect(stored(page)).resolves.toBeNull()
+			})
+		})
+	})
+
 	describe("theme", () => {
 		it("draws in the theme it is given", async () => {
 			await withPage(

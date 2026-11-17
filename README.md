@@ -7,9 +7,9 @@ templates and to import.
 
 > **Status: early.** A sheet can be drawn, navigated, typed into, copied from and pasted into;
 > what is typed is read the way nouxwell/tabula reads it, checked against the schema's rules as
-> the user types, taken back with undo, checked by a backend and sent to it to be processed. Drafts
-> and lookup search come next. No release has been made and none of the three packages is on npm;
-> each is marked `private` until its first release.
+> the user types, taken back with undo, checked by a backend, sent to it to be processed, and kept
+> as a draft to go on with later. Lookup search comes next. No release has been made and none of
+> the three packages is on npm; each is marked `private` until its first release.
 
 ## Packages
 
@@ -244,6 +244,46 @@ an issue for a deleted row is dropped, one for an unknown field is kept as the r
 
 Give the grid `:issues="session.issues"` and `:results="session.results"`, and the panel the same
 issues. Each row's number then shows its result, and a processed row can no longer be changed.
+
+## Drafts
+
+A draft is the sheet saved to go on with later. It creates no business record: it holds the rows
+under their ids, each row's result from the backend, a run that never answered, the column widths,
+and the schema version the rows were written against. It is plain JSON, kept wherever the
+application keeps it.
+
+```ts
+const saver = new DraftSaver({
+  schema,
+  store,
+  session,
+  save: (draft, { signal }) => api.put(`/drafts/${draft.id}`, draft, { signal }),
+  view: () => ({ columnWidths: widths.value })
+})
+// Saves a moment after the user stops changing the sheet (2 s by default), and on saver.save().
+```
+
+The draft's id is made in the browser, so saving the same draft again replaces it; a save whose
+answer was lost makes no second draft. A save that fails leaves the sheet as it is and says so.
+
+Opening one checks it against the schema as it is now:
+
+```ts
+const opening = openDraft(readDraft(await api.get(`/drafts/${id}`)), schema)
+
+if (opening.status === "opened") {
+  const store = new RowStore({ rows: opening.rows })
+  const session = new SheetSession({ schema, store, adapters, restore: opening.session })
+} else if (opening.status === "review") {
+  // opening.changes: fields added, removed (and how many rows lose a value), retyped, renamed
+}
+```
+
+A draft saved under another schema version is never opened silently: it comes back for review,
+and opens with `{ accept: true }` once the user agrees, `rename` carrying a renamed field's
+values to its new key. Every value is then checked again. A processed row opens locked, and a run
+that never answered opens `unknown`, to be sent again under its key: closing the page mid-run
+cannot lead to the rows being processed twice.
 
 ## Where the line is drawn
 

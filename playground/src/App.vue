@@ -1,17 +1,24 @@
 <script setup lang="ts">
 import {
+	DraftSaver,
 	ModuleSchema,
+	openDraft,
+	readDraft,
 	RowStore,
 	SheetSession,
 	SheetValidator,
 	UndoHistory,
 	VALUE_SETTINGS,
+	type Draft,
+	type DraftChanges,
+	type DraftOpening,
 	type Issue,
 	type ProcessOutcome
 } from "@nouxwell/tabula-core"
 import { TabulaGrid, TabulaIssues, type GridTheme } from "@nouxwell/tabula-vue"
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
 import { FakeBackend } from "./backend"
+import { clearStoredDraft, loadStoredDraft, storeDraft } from "./drafts"
 import { priceUpdate, sampleRows } from "./sample"
 
 const params = new URLSearchParams(location.search)
@@ -19,7 +26,31 @@ const rowCount = Number(params.get("rows") ?? 10_000)
 const initialTheme = params.get("theme")
 
 const schema = ModuleSchema.from(priceUpdate)
-const store = new RowStore({ rows: sampleRows(rowCount) })
+
+// A draft left from last time is opened, unless the schema has moved on since: then the user sees
+// what changed and decides. `accept=1` is that decision, taken from the address once it is used.
+const stored = loadStoredDraft()
+let draft: Draft | null = null
+let opening: DraftOpening | null = null
+let draftProblem: string | null = null
+
+if (stored !== null) {
+	try {
+		draft = readDraft(stored)
+		opening = openDraft(draft, schema, { accept: params.get("accept") === "1" })
+	} catch (error) {
+		draftProblem = error instanceof Error ? error.message : String(error)
+	}
+}
+
+if (params.has("accept")) {
+	params.delete("accept")
+	window.history.replaceState(null, "", `${location.pathname}${params.size > 0 ? `?${params}` : ""}`)
+}
+
+const opened = opening?.status === "opened" ? opening : null
+const review = opening?.status === "review" ? opening.changes : null
+const store = new RowStore({ rows: opened ? opened.rows : sampleRows(rowCount) })
 
 const theme = ref<GridTheme>(initialTheme === "dark" || initialTheme === "auto" ? initialTheme : "light")
 const language = ref<keyof typeof VALUE_SETTINGS>(params.get("values") === "en" ? "en" : "tr")
@@ -40,7 +71,58 @@ history.subscribe(() => (historyVersion.value = history.version))
 
 // The way to the backend: here a pretend one, in a real application the adapters call its API.
 const backend = new FakeBackend()
-const session = new SheetSession({ schema, store, validator, history, adapters: backend.adapters, pollInterval: 300 })
+const session = new SheetSession({
+	schema,
+	store,
+	validator,
+	history,
+	adapters: backend.adapters,
+	pollInterval: 300,
+	...(opened ? { restore: opened.session } : {})
+})
+
+const widths = ref<Readonly<Record<string, number>>>(opened?.view.columnWidths ?? {})
+
+// Saves the sheet a second after the user stops changing it. Not while a draft waits to be reviewed
+// or could not be read: that would write the sample sheet over it.
+const saver =
+	review || draftProblem || opening?.status === "wrong_module"
+		? null
+		: new DraftSaver({
+				schema,
+				store,
+				session,
+				save: storeDraft,
+				delay: 1000,
+				...(opened && draft ? { id: draft.id, name: draft.name } : {}),
+				view: () => ({ columnWidths: widths.value })
+			})
+const saverVersion = shallowRef(saver?.version ?? 0)
+
+saver?.subscribe(() => (saverVersion.value = saver.version))
+watch(widths, () => saver?.changed())
+
+// A draft opened under a newer schema is saved under it at once, so it is not reviewed again.
+if (opened?.changes) {
+	void saver?.save()
+}
+
+// A save started as the page goes away writes before it is gone.
+const flush = (): void => void saver?.flush()
+
+window.addEventListener("pagehide", flush)
+
+function openAnyway(): void {
+	params.set("accept", "1")
+	location.search = params.toString()
+}
+
+function startOver(): void {
+	saver?.dispose()
+	window.removeEventListener("pagehide", flush)
+	clearStoredDraft()
+	location.reload()
+}
 const sessionVersion = shallowRef(session.version)
 const resultVersion = shallowRef(session.results.version)
 const lastRun = shallowRef<ProcessOutcome | null>(null)
@@ -80,7 +162,30 @@ const WORDS = {
 		cancelled: "Durduruldu.",
 		blocked: "Hatalar giderilmeden işlenemez",
 		nothing: "Gönderilecek satır yok.",
-		result: (o: ProcessOutcome) => `${o.succeeded} başarılı, ${o.failed} başarısız, ${o.skipped} işlenmedi.`
+		result: (o: ProcessOutcome) => `${o.succeeded} başarılı, ${o.failed} başarısız, ${o.skipped} işlenmedi.`,
+		saved: "Taslak kaydedildi",
+		unsaved: "Kaydedilmemiş değişiklik var",
+		saving: "Taslak kaydediliyor…",
+		failed: "Taslak kaydedilemedi",
+		saveDraft: "Taslağı kaydet",
+		startOver: "Yeni sayfa",
+		openAnyway: "Taslağı yine de aç",
+		discard: "Taslağı at",
+		unreadable: "Kayıtlı taslak okunamadı.",
+		otherModule: "Kayıtlı taslak başka bir modülün.",
+		changes: (c: DraftChanges) =>
+			[
+				`Bu taslak şemanın ${c.fromVersion}. sürümüyle kaydedilmiş; şimdiki sürüm ${c.toVersion}.`,
+				c.added.length > 0 ? `Yeni alanlar boş açılacak: ${c.added.join(", ")}.` : "",
+				c.removed.length > 0
+					? `Kaldırılan alanlar: ${c.removed.join(", ")}; ${c.losing} satırdaki değerleri atılacak.`
+					: "",
+				c.retyped.length > 0
+					? `Türü değişen alanlar yeniden kontrol edilecek: ${c.retyped.map(field => field.key).join(", ")}.`
+					: ""
+			]
+				.filter(Boolean)
+				.join(" ")
 	},
 	en: {
 		undo: "Undo",
@@ -101,7 +206,30 @@ const WORDS = {
 		cancelled: "Stopped.",
 		blocked: "Fix the errors before processing",
 		nothing: "No rows to send.",
-		result: (o: ProcessOutcome) => `${o.succeeded} processed, ${o.failed} failed, ${o.skipped} not processed.`
+		result: (o: ProcessOutcome) => `${o.succeeded} processed, ${o.failed} failed, ${o.skipped} not processed.`,
+		saved: "Draft saved",
+		unsaved: "Unsaved changes",
+		saving: "Saving the draft…",
+		failed: "The draft could not be saved",
+		saveDraft: "Save draft",
+		startOver: "New sheet",
+		openAnyway: "Open the draft anyway",
+		discard: "Discard the draft",
+		unreadable: "The saved draft could not be read.",
+		otherModule: "The saved draft is of another module.",
+		changes: (c: DraftChanges) =>
+			[
+				`This draft was saved with version ${c.fromVersion} of the schema; it is now version ${c.toVersion}.`,
+				c.added.length > 0 ? `New fields open empty: ${c.added.join(", ")}.` : "",
+				c.removed.length > 0
+					? `Removed fields: ${c.removed.join(", ")}; their values in ${c.losing} rows are dropped.`
+					: "",
+				c.retyped.length > 0
+					? `Fields of another type are checked again: ${c.retyped.map(field => field.key).join(", ")}.`
+					: ""
+			]
+				.filter(Boolean)
+				.join(" ")
 	}
 } as const
 
@@ -150,6 +278,43 @@ const status = computed(() => {
 	return ""
 })
 
+/** One line on the draft: saved when, or what stops it being saved. */
+const draftStatus = computed(() => {
+	void saverVersion.value
+
+	const text = words.value
+	const now = saver?.state
+
+	if (!now) {
+		return ""
+	}
+
+	if (now.status === "saved" && now.savedAt) {
+		return `${text.saved} · ${new Date(now.savedAt).toLocaleTimeString(language.value === "en" ? "en-GB" : "tr-TR")}`
+	}
+
+	if (now.status === "failed") {
+		return `${text.failed}: ${now.failure?.message ?? ""}`
+	}
+
+	return now.status === "saving" ? text.saving : now.status === "unsaved" ? text.unsaved : ""
+})
+
+/** Why the stored draft was not opened, when it was not. */
+const draftNotice = computed(() => {
+	const text = words.value
+
+	if (review) {
+		return text.changes(review)
+	}
+
+	if (draftProblem) {
+		return text.unreadable
+	}
+
+	return opening?.status === "wrong_module" ? text.otherModule : ""
+})
+
 async function check(): Promise<void> {
 	lastRun.value = null
 	await session.check()
@@ -170,12 +335,13 @@ async function ask(): Promise<void> {
 }
 
 onBeforeUnmount(() => {
+	window.removeEventListener("pagehide", flush)
+	saver?.dispose()
 	session.dispose()
 	validator.dispose()
 	history.dispose()
 })
 
-const widths = ref<Readonly<Record<string, number>>>({})
 const grid = ref<InstanceType<typeof TabulaGrid> | null>(null)
 const revision = shallowRef(store.revision)
 const size = shallowRef(store.size)
@@ -218,6 +384,7 @@ onMounted(() => {
 		history,
 		session,
 		backend,
+		saver,
 		widths: () => widths.value
 	}
 	grid.value?.focus()
@@ -290,6 +457,20 @@ onMounted(() => {
 				</button>
 			</span>
 			<span class="playground-status" role="status">{{ status }}</span>
+			<span class="playground-buttons playground-draft-buttons">
+				<button v-if="saver" type="button" class="playground-save" @click="saver.save()">
+					{{ words.saveDraft }}
+				</button>
+				<button type="button" class="playground-start-over" @click="startOver">{{ words.startOver }}</button>
+			</span>
+			<span class="playground-draft" role="status">{{ draftStatus }}</span>
+		</div>
+		<div v-if="draftNotice" class="playground-draft-review" role="alert">
+			<span>{{ draftNotice }}</span>
+			<button v-if="review" type="button" class="playground-open-anyway" @click="openAnyway">
+				{{ words.openAnyway }}
+			</button>
+			<button type="button" class="playground-discard" @click="startOver">{{ words.discard }}</button>
 		</div>
 		<main class="playground-main">
 			<TabulaGrid
@@ -360,9 +541,27 @@ body {
 	gap: 6px;
 }
 
-.playground-status {
+.playground-status,
+.playground-draft {
 	color: inherit;
 	opacity: 0.8;
+}
+
+.playground-draft-buttons {
+	margin-left: auto;
+}
+
+.playground-draft-review {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 12px;
+	align-items: center;
+	padding: 8px 12px;
+	border: 1px solid #e0b252;
+	border-radius: 4px;
+	background: #fdf3dc;
+	color: #4d3800;
+	font-size: 13px;
 }
 
 .playground-main {

@@ -1,4 +1,5 @@
 import type {
+	DraftSaver,
 	ModuleSchema,
 	RowStore,
 	Selection,
@@ -17,6 +18,8 @@ export interface PlaygroundHandle {
 	readonly history: UndoHistory
 	readonly session: SheetSession
 	readonly backend: FakeBackend
+	/** Null while a stored draft waits to be reviewed. */
+	readonly saver: DraftSaver | null
 	readonly widths: () => Readonly<Record<string, number>>
 }
 

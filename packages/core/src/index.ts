@@ -82,10 +82,26 @@ export type {
 	StatusQuery
 } from "./contract"
 
+export { createDraft, DRAFT_FORMAT, DRAFT_VERSION, openDraft, readDraft } from "./draft"
+export type {
+	CreateDraftOptions,
+	Draft,
+	DraftChanges,
+	DraftField,
+	DraftOpening,
+	DraftView,
+	OpenDraftOptions
+} from "./draft"
+
+export { DraftSaver } from "./saver"
+export type { DraftSaverOptions, SaverState, SaverStatus } from "./saver"
+
 export { SheetSession } from "./session"
 export type {
 	CheckOutcome,
 	CheckRecord,
+	PendingRun,
+	PersistedSession,
 	ProcessOutcome,
 	RowResult,
 	RowResults,
