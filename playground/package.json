@@ -1,0 +1,15 @@
+{
+	"name": "playground",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"bundle": "vite build",
+		"typecheck": "vue-tsc -p tsconfig.json"
+	},
+	"dependencies": {
+		"@nouxwell/tabula-core": "workspace:*",
+		"@nouxwell/tabula-vue": "workspace:*",
+		"vue": "^3.5.45"
+	}
+}

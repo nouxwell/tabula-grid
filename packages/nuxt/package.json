@@ -1,0 +1,34 @@
+{
+	"name": "@nouxwell/tabula-nuxt",
+	"version": "0.0.0",
+	"private": true,
+	"description": "The Nuxt module of Tabula Grid.",
+	"license": "MIT",
+	"author": "Hüseyin Niyazi Balın",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/nouxwell/tabula-grid.git",
+		"directory": "packages/nuxt"
+	},
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/module.d.ts",
+			"import": "./dist/module.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "vite build && tsc -p tsconfig.build.json",
+		"typecheck": "tsc -p tsconfig.json"
+	},
+	"dependencies": {
+		"@nouxwell/tabula-vue": "workspace:*",
+		"@nuxt/kit": "^4.6.4"
+	},
+	"devDependencies": {
+		"@nuxt/schema": "^4.6.4"
+	}
+}

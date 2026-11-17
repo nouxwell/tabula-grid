@@ -1,0 +1,495 @@
+{
+	"measuredAt": "2026-11-17T12:43:49.555Z",
+	"machine": {
+		"cpu": "Intel(R) Core(TM) i5-10400T CPU @ 2.00GHz",
+		"threads": 12,
+		"memoryGb": 31.8,
+		"platform": "Windows_NT 10.0.26200",
+		"node": "v24.22.3"
+	},
+	"browser": "Edge 157.0.4341.60, headless",
+	"viewport": {
+		"width": 1440,
+		"height": 900
+	},
+	"vertical": {
+		"step": 120,
+		"frames": 300
+	},
+	"horizontal": {
+		"step": 30,
+		"frames": 200
+	},
+	"jumps": 20,
+	"runsPerCase": 3,
+	"results": [
+		{
+			"page": "own",
+			"rows": 10000,
+			"columns": 12,
+			"throttle": 1,
+			"runs": 3,
+			"followedScroll": true,
+			"pageErrors": [],
+			"scrollers": {
+				"y": "div.og-body",
+				"x": "div.og-body"
+			},
+			"mountMs": 69.1,
+			"mountTaskMs": 70.5,
+			"domNodes": 461,
+			"heapMb": 0.6,
+			"vertical": {
+				"frames": 300,
+				"p50": 16.7,
+				"p95": 16.8,
+				"max": 17.5,
+				"slowFrames": 0,
+				"taskPerFrameMs": 8.15,
+				"scriptPerFrameMs": 0.18
+			},
+			"horizontal": {
+				"frames": 6,
+				"p95": 16.7,
+				"max": 16.7,
+				"slowFrames": 0,
+				"taskPerFrameMs": 3.78
+			},
+			"jumpTaskMs": 28.72,
+			"download": {
+				"files": 3,
+				"rawKb": 77.5,
+				"gzipKb": 30.4
+			}
+		},
+		{
+			"page": "engine",
+			"rows": 10000,
+			"columns": 12,
+			"throttle": 1,
+			"runs": 3,
+			"followedScroll": true,
+			"pageErrors": [],
+			"scrollers": {
+				"y": "div.vertical-inner.scroll-rgRow",
+				"x": "revogr-viewport-scroll.rgCol.scroll-rgCol.hydrated"
+			},
+			"mountMs": 255.2,
+			"mountTaskMs": 206.3,
+			"domNodes": 476,
+			"heapMb": 1.8,
+			"vertical": {
+				"frames": 300,
+				"p50": 16.7,
+				"p95": 16.8,
+				"max": 33.4,
+				"slowFrames": 4,
+				"taskPerFrameMs": 10.12,
+				"scriptPerFrameMs": 0.29
+			},
+			"horizontal": {
+				"frames": 6,
+				"p95": 16.7,
+				"max": 16.7,
+				"slowFrames": 0,
+				"taskPerFrameMs": 3.36
+			},
+			"jumpTaskMs": 33.15,
+			"download": {
+				"files": 12,
+				"rawKb": 409.5,
+				"gzipKb": 131.5
+			}
+		},
+		{
+			"page": "own",
+			"rows": 10000,
+			"columns": 12,
+			"throttle": 4,
+			"runs": 3,
+			"followedScroll": true,
+			"pageErrors": [],
+			"scrollers": {
+				"y": "div.og-body",
+				"x": "div.og-body"
+			},
+			"mountMs": 482.5,
+			"mountTaskMs": 496.1,
+			"domNodes": 461,
+			"heapMb": 0.6,
+			"vertical": {
+				"frames": 300,
+				"p50": 33.4,
+				"p95": 83.4,
+				"max": 149.9,
+				"slowFrames": 280,
+				"taskPerFrameMs": 45.75,
+				"scriptPerFrameMs": 0.58
+			},
+			"horizontal": {
+				"frames": 6,
+				"p95": 16.7,
+				"max": 16.7,
+				"slowFrames": 0,
+				"taskPerFrameMs": 22.02
+			},
+			"jumpTaskMs": 172.66,
+			"download": {
+				"files": 3,
+				"rawKb": 77.5,
+				"gzipKb": 30.4
+			}
+		},
+		{
+			"page": "engine",
+			"rows": 10000,
+			"columns": 12,
+			"throttle": 4,
+			"runs": 3,
+			"followedScroll": true,
+			"pageErrors": [],
+			"scrollers": {
+				"y": "div.vertical-inner.scroll-rgRow",
+				"x": "revogr-viewport-scroll.rgCol.scroll-rgCol.hydrated"
+			},
+			"mountMs": 1367.6,
+			"mountTaskMs": 1325.7,
+			"domNodes": 476,
+			"heapMb": 1.8,
+			"vertical": {
+				"frames": 300,
+				"p50": 33.4,
+				"p95": 149.9,
+				"max": 266.6,
+				"slowFrames": 177,
+				"taskPerFrameMs": 61.71,
+				"scriptPerFrameMs": 1.35
+			},
+			"horizontal": {
+				"frames": 6,
+				"p95": 16.7,
+				"max": 16.7,
+				"slowFrames": 0,
+				"taskPerFrameMs": 19.78
+			},
+			"jumpTaskMs": 198.15,
+			"download": {
+				"files": 12,
+				"rawKb": 409.5,
+				"gzipKb": 131.5
+			}
+		},
+		{
+			"page": "own",
+			"rows": 50000,
+			"columns": 10,
+			"throttle": 1,
+			"runs": 3,
+			"followedScroll": true,
+			"pageErrors": [],
+			"scrollers": {
+				"y": "div.og-body",
+				"x": "none"
+			},
+			"mountMs": 67,
+			"mountTaskMs": 68.4,
+			"domNodes": 391,
+			"heapMb": 0.6,
+			"vertical": {
+				"frames": 300,
+				"p50": 16.7,
+				"p95": 16.8,
+				"max": 16.9,
+				"slowFrames": 0,
+				"taskPerFrameMs": 8.29,
+				"scriptPerFrameMs": 0.11
+			},
+			"horizontal": {
+				"frames": 0,
+				"p95": 0,
+				"max": 0,
+				"slowFrames": 0,
+				"taskPerFrameMs": 0
+			},
+			"jumpTaskMs": 24.67,
+			"download": {
+				"files": 3,
+				"rawKb": 77.5,
+				"gzipKb": 30.4
+			}
+		},
+		{
+			"page": "engine",
+			"rows": 50000,
+			"columns": 10,
+			"throttle": 1,
+			"runs": 3,
+			"followedScroll": true,
+			"pageErrors": [],
+			"scrollers": {
+				"y": "div.vertical-inner.scroll-rgRow",
+				"x": "none"
+			},
+			"mountMs": 378.5,
+			"mountTaskMs": 254.1,
+			"domNodes": 408,
+			"heapMb": 2.2,
+			"vertical": {
+				"frames": 300,
+				"p50": 16.7,
+				"p95": 16.8,
+				"max": 33.3,
+				"slowFrames": 1,
+				"taskPerFrameMs": 9.3,
+				"scriptPerFrameMs": 0.3
+			},
+			"horizontal": {
+				"frames": 0,
+				"p95": 0,
+				"max": 0,
+				"slowFrames": 0,
+				"taskPerFrameMs": 0
+			},
+			"jumpTaskMs": 27.3,
+			"download": {
+				"files": 12,
+				"rawKb": 409.5,
+				"gzipKb": 131.5
+			}
+		},
+		{
+			"page": "own",
+			"rows": 50000,
+			"columns": 10,
+			"throttle": 4,
+			"runs": 3,
+			"followedScroll": true,
+			"pageErrors": [],
+			"scrollers": {
+				"y": "div.og-body",
+				"x": "none"
+			},
+			"mountMs": 308.6,
+			"mountTaskMs": 315.2,
+			"domNodes": 391,
+			"heapMb": 0.6,
+			"vertical": {
+				"frames": 300,
+				"p50": 33.3,
+				"p95": 66.6,
+				"max": 133.3,
+				"slowFrames": 252,
+				"taskPerFrameMs": 36.66,
+				"scriptPerFrameMs": 0.44
+			},
+			"horizontal": {
+				"frames": 0,
+				"p95": 0,
+				"max": 0,
+				"slowFrames": 0,
+				"taskPerFrameMs": 0
+			},
+			"jumpTaskMs": 135.76,
+			"download": {
+				"files": 3,
+				"rawKb": 77.5,
+				"gzipKb": 30.4
+			}
+		},
+		{
+			"page": "engine",
+			"rows": 50000,
+			"columns": 10,
+			"throttle": 4,
+			"runs": 3,
+			"followedScroll": true,
+			"pageErrors": [],
+			"scrollers": {
+				"y": "div.vertical-inner.scroll-rgRow",
+				"x": "none"
+			},
+			"mountMs": 1193.1,
+			"mountTaskMs": 1147.8,
+			"domNodes": 408,
+			"heapMb": 2.2,
+			"vertical": {
+				"frames": 300,
+				"p50": 33.3,
+				"p95": 100,
+				"max": 183.4,
+				"slowFrames": 158,
+				"taskPerFrameMs": 43.61,
+				"scriptPerFrameMs": 1.15
+			},
+			"horizontal": {
+				"frames": 0,
+				"p95": 0,
+				"max": 0,
+				"slowFrames": 0,
+				"taskPerFrameMs": 0
+			},
+			"jumpTaskMs": 167.22,
+			"download": {
+				"files": 12,
+				"rawKb": 409.5,
+				"gzipKb": 131.5
+			}
+		},
+		{
+			"page": "own",
+			"rows": 5000,
+			"columns": 60,
+			"throttle": 1,
+			"runs": 3,
+			"followedScroll": true,
+			"pageErrors": [],
+			"scrollers": {
+				"y": "div.og-body",
+				"x": "div.og-body"
+			},
+			"mountMs": 60.8,
+			"mountTaskMs": 62.5,
+			"domNodes": 496,
+			"heapMb": 0.6,
+			"vertical": {
+				"frames": 300,
+				"p50": 16.7,
+				"p95": 16.8,
+				"max": 16.8,
+				"slowFrames": 0,
+				"taskPerFrameMs": 7.23,
+				"scriptPerFrameMs": 0.11
+			},
+			"horizontal": {
+				"frames": 200,
+				"p95": 16.8,
+				"max": 16.9,
+				"slowFrames": 0,
+				"taskPerFrameMs": 6.94
+			},
+			"jumpTaskMs": 29.14,
+			"download": {
+				"files": 3,
+				"rawKb": 77.5,
+				"gzipKb": 30.4
+			}
+		},
+		{
+			"page": "engine",
+			"rows": 5000,
+			"columns": 60,
+			"throttle": 1,
+			"runs": 3,
+			"followedScroll": true,
+			"pageErrors": [],
+			"scrollers": {
+				"y": "div.vertical-inner.scroll-rgRow",
+				"x": "revogr-viewport-scroll.rgCol.scroll-rgCol.hydrated"
+			},
+			"mountMs": 233.5,
+			"mountTaskMs": 174.7,
+			"domNodes": 510,
+			"heapMb": 1.8,
+			"vertical": {
+				"frames": 300,
+				"p50": 16.7,
+				"p95": 16.8,
+				"max": 17.2,
+				"slowFrames": 0,
+				"taskPerFrameMs": 8.18,
+				"scriptPerFrameMs": 0.22
+			},
+			"horizontal": {
+				"frames": 200,
+				"p95": 16.8,
+				"max": 16.8,
+				"slowFrames": 0,
+				"taskPerFrameMs": 3.6
+			},
+			"jumpTaskMs": 22.94,
+			"download": {
+				"files": 12,
+				"rawKb": 409.5,
+				"gzipKb": 131.5
+			}
+		},
+		{
+			"page": "own",
+			"rows": 5000,
+			"columns": 60,
+			"throttle": 4,
+			"runs": 3,
+			"followedScroll": true,
+			"pageErrors": [],
+			"scrollers": {
+				"y": "div.og-body",
+				"x": "div.og-body"
+			},
+			"mountMs": 433.9,
+			"mountTaskMs": 442.4,
+			"domNodes": 496,
+			"heapMb": 0.6,
+			"vertical": {
+				"frames": 300,
+				"p50": 33.4,
+				"p95": 66.7,
+				"max": 100,
+				"slowFrames": 282,
+				"taskPerFrameMs": 40.41,
+				"scriptPerFrameMs": 0.38
+			},
+			"horizontal": {
+				"frames": 200,
+				"p95": 66.6,
+				"max": 83.3,
+				"slowFrames": 86,
+				"taskPerFrameMs": 28.32
+			},
+			"jumpTaskMs": 201.84,
+			"download": {
+				"files": 3,
+				"rawKb": 77.5,
+				"gzipKb": 30.4
+			}
+		},
+		{
+			"page": "engine",
+			"rows": 5000,
+			"columns": 60,
+			"throttle": 4,
+			"runs": 3,
+			"followedScroll": true,
+			"pageErrors": [],
+			"scrollers": {
+				"y": "div.vertical-inner.scroll-rgRow",
+				"x": "revogr-viewport-scroll.rgCol.scroll-rgCol.hydrated"
+			},
+			"mountMs": 1154.2,
+			"mountTaskMs": 1107.8,
+			"domNodes": 510,
+			"heapMb": 1.8,
+			"vertical": {
+				"frames": 300,
+				"p50": 49.9,
+				"p95": 100,
+				"max": 216.6,
+				"slowFrames": 158,
+				"taskPerFrameMs": 45.49,
+				"scriptPerFrameMs": 0.93
+			},
+			"horizontal": {
+				"frames": 200,
+				"p95": 116.8,
+				"max": 183.5,
+				"slowFrames": 38,
+				"taskPerFrameMs": 27.62
+			},
+			"jumpTaskMs": 267.81,
+			"download": {
+				"files": 12,
+				"rawKb": 409.5,
+				"gzipKb": 131.5
+			}
+		}
+	]
+}

@@ -1,0 +1,19 @@
+{
+	"name": "spike-render",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"bundle": "vite build",
+		"measure": "node measure.ts",
+		"check": "node check.ts",
+		"typecheck": "vue-tsc -p tsconfig.json"
+	},
+	"dependencies": {
+		"@revolist/vue3-datagrid": "^4.31.5",
+		"vue": "^3.5.45"
+	},
+	"devDependencies": {
+		"playwright-core": "^1.65.1"
+	}
+}

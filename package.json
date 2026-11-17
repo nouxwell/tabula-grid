@@ -1,0 +1,30 @@
+{
+	"name": "tabula-grid",
+	"private": true,
+	"description": "Excel-like bulk data workspace for Vue and Nuxt. The browser side of nouxwell/tabula.",
+	"license": "MIT",
+	"type": "module",
+	"packageManager": "pnpm@12.21.0",
+	"engines": {
+		"node": "^22.13.0 || ^24.0.0 || >=26.0.0"
+	},
+	"scripts": {
+		"lint": "eslint .",
+		"format": "prettier --write .",
+		"format:check": "prettier --check ."
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@vitejs/plugin-vue": "^6.0.11",
+		"eslint": "^10.15.0",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-vue": "^10.12.1",
+		"prettier": "^3.10.1",
+		"typescript": "~6.0.3",
+		"typescript-eslint": "^8.72.2",
+		"vite": "^8.3.8",
+		"vitest": "^5.1.0",
+		"vue-eslint-parser": "^10.4.2",
+		"vue-tsc": "^3.3.14"
+	}
+}

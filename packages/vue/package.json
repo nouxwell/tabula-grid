@@ -1,0 +1,40 @@
+{
+	"name": "@nouxwell/tabula-vue",
+	"version": "0.0.0",
+	"private": true,
+	"description": "The Vue 3 components of Tabula Grid.",
+	"license": "MIT",
+	"author": "Hüseyin Niyazi Balın",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/nouxwell/tabula-grid.git",
+		"directory": "packages/vue"
+	},
+	"type": "module",
+	"sideEffects": [
+		"**/*.css"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./style.css": "./dist/style.css"
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "vite build && vue-tsc -p tsconfig.build.json",
+		"typecheck": "vue-tsc -p tsconfig.json"
+	},
+	"dependencies": {
+		"@nouxwell/tabula-core": "workspace:*"
+	},
+	"peerDependencies": {
+		"vue": "^3.5.0"
+	},
+	"devDependencies": {
+		"vue": "^3.5.45"
+	}
+}
