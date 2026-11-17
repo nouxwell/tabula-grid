@@ -218,6 +218,13 @@ function isEditable(field: FieldSchema | undefined): field is FieldSchema {
 	return field !== undefined && field.editable && !props.readonly
 }
 
+/** The header's tooltip: the whole label, and the formula of a column worked out from the others. */
+function headerTitle(col: number): string | undefined {
+	const field = fields.value[col]
+
+	return field?.formula ? `${field.label}\n= ${field.formula}` : field?.label
+}
+
 function headerText(col: number): string {
 	const field = fields.value[col]
 	const sizing = sizings.value[col]
@@ -1253,7 +1260,10 @@ function step(direction: "undo" | "redo"): boolean {
  */
 function showChange(change: StoreChange): void {
 	const rows = view.value
-	const columns = new Map(fields.value.map((field, index) => [field.key, index]))
+	// What the user changed, not what their formulas worked out from it.
+	const columns = new Map(
+		fields.value.flatMap((field, index) => (field.formula === null ? [[field.key, index] as const] : []))
+	)
 	const cells = { top: Infinity, left: Infinity, bottom: -1, right: -1 }
 	const added = { top: Infinity, bottom: -1 }
 	let removedAt = Infinity
@@ -1968,9 +1978,10 @@ defineExpose({
 							:aria-colindex="c + 1"
 							:class="{ 'is-right': cellClasses[c]?.includes('is-right'), 'is-selected': colSelected(c) }"
 							:style="headerStyle(c)"
-							:title="fields[c]?.label"
+							:title="headerTitle(c)"
 							@mousedown="onHeaderDown($event, c)"
 						>
+							<span v-if="fields[c]?.formula" class="tabula-grid-fx" aria-hidden="true">ƒx</span>
 							<span class="tabula-grid-th-text">{{ headerText(c) }}</span>
 							<span v-if="fields[c]?.required" class="tabula-grid-required" aria-hidden="true">*</span>
 							<button
@@ -1999,9 +2010,10 @@ defineExpose({
 						:aria-colindex="c + 1"
 						:class="{ 'is-right': cellClasses[c]?.includes('is-right'), 'is-selected': colSelected(c) }"
 						:style="headerStyle(c)"
-						:title="fields[c]?.label"
+						:title="headerTitle(c)"
 						@mousedown="onHeaderDown($event, c)"
 					>
+						<span v-if="fields[c]?.formula" class="tabula-grid-fx" aria-hidden="true">ƒx</span>
 						<span class="tabula-grid-th-text">{{ headerText(c) }}</span>
 						<span v-if="fields[c]?.required" class="tabula-grid-required" aria-hidden="true">*</span>
 						<button
@@ -2359,6 +2371,16 @@ defineExpose({
 	text-overflow: ellipsis;
 }
 
+/* A column worked out by a formula: its formula is in the header's tooltip. */
+.tabula-grid-fx {
+	flex: none;
+	padding-right: 5px;
+	color: var(--tabula-muted);
+	font-size: 0.85em;
+	font-style: italic;
+	font-weight: 500;
+}
+
 .tabula-grid-required {
 	flex: none;
 	padding-left: 3px;
@@ -2598,6 +2620,15 @@ defineExpose({
 .tabula-grid-cell.is-readonly {
 	background: var(--tabula-readonly-bg);
 	color: var(--tabula-muted);
+}
+
+/* A cell no one types into can still be wrong, such as a formula that cannot be worked out. */
+.tabula-grid-cell.is-readonly.is-error {
+	background: var(--tabula-error-bg);
+}
+
+.tabula-grid-cell.is-readonly.is-warning {
+	background: var(--tabula-warning-bg);
 }
 
 .tabula-grid-range,

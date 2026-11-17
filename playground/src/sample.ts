@@ -7,7 +7,7 @@ export const LONG_LABEL =
 /** The price-update sheet the playground and the browser tests work on. */
 export const priceUpdate: ModuleSchemaInput = {
 	module: "product.price_update",
-	schemaVersion: 1,
+	schemaVersion: 2,
 	title: "Toplu fiyat güncelleme",
 	fields: [
 		{
@@ -46,7 +46,16 @@ export const priceUpdate: ModuleSchemaInput = {
 		},
 		{ key: "validFrom", type: "date", label: "Geçerlilik başlangıç tarihi (fiyat listesi)" },
 		{ key: "active", type: "bool", label: "Aktif" },
-		{ key: "note", type: "string", label: LONG_LABEL, rules: [{ rule: "maxLength", value: 60 }] }
+		{ key: "note", type: "string", label: LONG_LABEL, rules: [{ rule: "maxLength", value: 60 }] },
+		// Worked out from the row, for the user's eyes: not sent, as the backend works prices out itself.
+		{
+			key: "difference",
+			type: "money",
+			label: "Fark",
+			decimals: 2,
+			submit: false,
+			formula: "[newPrice] - [currentPrice]"
+		}
 	]
 }
 

@@ -1,6 +1,7 @@
 import type {
 	ColumnLayout,
 	DraftSaver,
+	FormulaEngine,
 	LookupResolver,
 	ModuleSchema,
 	RowStore,
@@ -24,6 +25,7 @@ export interface PlaygroundHandle {
 	/** Null while a stored draft waits to be reviewed. */
 	readonly saver: DraftSaver | null
 	readonly lookups: LookupResolver
+	readonly formulas: FormulaEngine
 	readonly view: RowView
 	readonly widths: () => Readonly<Record<string, number>>
 	readonly columns: () => ColumnLayout

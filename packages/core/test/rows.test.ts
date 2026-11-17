@@ -232,6 +232,31 @@ describe("RowStore", () => {
 			expect(store.revision).toBe(1)
 		})
 
+		it("puts what a deriver writes in the same change, and takes everything back when it throws", () => {
+			const store = storeOf(2)
+			const changes = recordChanges(store)
+			const stop = store.derive(operations => {
+				if (operations.some(op => op.kind === "set" && op.field === "name")) {
+					store.setCell("row_1", "copy", store.get("row_1", "name"))
+				}
+			})
+
+			store.setCell("row_1", "name", "Termos")
+
+			expect(store.get("row_1", "copy")).toBe("Termos")
+			expect(changes).toHaveLength(1)
+			expect(changes[0]?.operations.map(op => (op.kind === "set" ? op.field : op.kind))).toEqual(["name", "copy"])
+
+			stop()
+			store.derive(() => {
+				throw new Error("refused")
+			})
+
+			expect(() => store.setCell("row_2", "name", "Kupa")).toThrow("refused")
+			expect(store.get("row_2", "name")).toBe("Ürün 2")
+			expect(changes).toHaveLength(1)
+		})
+
 		it("returns nothing and counts nothing for a transaction that changed nothing", () => {
 			const store = storeOf(1)
 

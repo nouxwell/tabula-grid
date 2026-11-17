@@ -1,3 +1,4 @@
+import { isFormulaError } from "../formula/error"
 import type { FieldSchema } from "../schema"
 import type { CellValue } from "../value"
 import { formatDate } from "./date"
@@ -12,6 +13,11 @@ import type { ValueSettings } from "./settings"
 export function formatCell(field: FieldSchema, value: CellValue, settings: ValueSettings): string {
 	if (value === null) {
 		return ""
+	}
+
+	// A formula that could not be worked out shows its error, as a spreadsheet's cell does.
+	if (isFormulaError(value)) {
+		return value.formulaError
 	}
 
 	if (!isFieldValue(field, value)) {
@@ -64,6 +70,10 @@ export function formatCell(field: FieldSchema, value: CellValue, settings: Value
 export function editText(field: FieldSchema, value: CellValue, settings: ValueSettings): string {
 	if (value === null) {
 		return ""
+	}
+
+	if (isFormulaError(value)) {
+		return value.formulaError
 	}
 
 	switch (field.type) {

@@ -69,7 +69,8 @@ describe("ModuleSchema", () => {
 			editable: true,
 			submit: true,
 			rules: [{ rule: "maxLength", value: 200 }],
-			example: "Kampanya sonrası fiyat"
+			example: "Kampanya sonrası fiyat",
+			formula: null
 		})
 		expect(schema.field("currentPrice")).toMatchObject({ editable: false, submit: false, currency: null })
 		expect(schema.field("currency")).toMatchObject({
@@ -154,7 +155,7 @@ describe("ModuleSchema", () => {
 
 	it("refuses a property it does not know, rather than dropping it", () => {
 		expect(problemsOf(withField(5, { key: "note", type: "string", requird: true }))).toEqual([
-			"fields[5].requird: is not a field property; a string field takes key, type, label, required, editable, submit, rules, example"
+			"fields[5].requird: is not a field property; a string field takes key, type, label, required, editable, submit, rules, example, formula"
 		])
 		expect(problemsOf({ ...priceUpdate, version: 3 })).toEqual([
 			"version: is not a module schema property; expected one of module, schemaVersion, title, customization, fields"

@@ -9,7 +9,18 @@ import { LONG_LABEL } from "../src/sample"
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 
 /** Field keys by column, as the playground's schema lays them out. */
-const COLUMNS = ["productId", "sku", "currentPrice", "newPrice", "change", "currency", "validFrom", "active", "note"]
+const COLUMNS = [
+	"productId",
+	"sku",
+	"currentPrice",
+	"newPrice",
+	"change",
+	"currency",
+	"validFrom",
+	"active",
+	"note",
+	"difference"
+]
 
 let server: PreviewServer
 let browser: Browser
@@ -1152,6 +1163,60 @@ describe("TabulaGrid", () => {
 		})
 	})
 
+	describe("formulas", () => {
+		/** The "Fark" column: [newPrice] - [currentPrice]. */
+		const DIFFERENCE = 9
+
+		async function type(page: Page, row: number, col: number, text: string): Promise<void> {
+			await cell(page, row, col).click()
+			await page.keyboard.type(text)
+			await press(page, "Enter")
+		}
+
+		it("works a column out from its row, keeps it from being typed into, and works it out again", async () => {
+			await withPage(20, async page => {
+				// 1.493,91 - 1.571,41
+				await expect(valueAt(page, 0, "difference")).resolves.toBe("-77.5")
+				await expect(header(page, DIFFERENCE).getAttribute("title")).resolves.toBe(
+					"Fark\n= [newPrice] - [currentPrice]"
+				)
+				await expect(header(page, DIFFERENCE).locator(".tabula-grid-fx").innerText()).resolves.toBe("ƒx")
+
+				await type(page, 0, 3, "1600")
+
+				await expect.poll(() => valueAt(page, 0, "difference")).toBe("28.59")
+				await expect.poll(() => cell(page, 0, DIFFERENCE).innerText()).toBe("28,59")
+
+				await type(page, 0, DIFFERENCE, "5")
+				await expect(valueAt(page, 0, "difference")).resolves.toBe("28.59")
+			})
+		})
+
+		it("takes back an edit and what its formula worked out, in one undo", async () => {
+			await withPage(20, async page => {
+				await type(page, 0, 3, "1600")
+				await expect.poll(() => valueAt(page, 0, "difference")).toBe("28.59")
+
+				await press(page, "Control+Z")
+
+				await expect.poll(() => valueAt(page, 0, "difference")).toBe("-77.5")
+				await expect(page.locator(".playground-undo").isDisabled()).resolves.toBe(true)
+			})
+		})
+
+		it("shows in its cell a formula that cannot be worked out, and says why", async () => {
+			await withPage(20, async page => {
+				await type(page, 0, 3, "pahalı")
+
+				await expect.poll(() => cell(page, 0, DIFFERENCE).innerText()).toBe("#VALUE!")
+				await expect(cell(page, 0, DIFFERENCE).getAttribute("class")).resolves.toContain("is-error")
+				await expect(cell(page, 0, DIFFERENCE).getAttribute("title")).resolves.toBe(
+					"Formül hesaplanamadı: #VALUE! (bir değer beklenen türde değil)"
+				)
+			})
+		})
+	})
+
 	describe("hiding and pinning columns", () => {
 		const headerText = (page: Page, col: number): Promise<string> =>
 			header(page, col).locator(".tabula-grid-th-text").innerText()
@@ -1377,7 +1442,7 @@ describe("TabulaGrid", () => {
 				await reloading(page, () => page.reload())
 
 				await expect(page.locator(".playground-draft-review").innerText()).resolves.toContain(
-					"Bu taslak şemanın 0. sürümüyle kaydedilmiş; şimdiki sürüm 1. Kaldırılan alanlar: legacyCode; 1 satırdaki değerleri atılacak."
+					"Bu taslak şemanın 0. sürümüyle kaydedilmiş; şimdiki sürüm 2. Kaldırılan alanlar: legacyCode; 1 satırdaki değerleri atılacak."
 				)
 				// Neither opened nor written over.
 				await expect(valueAt(page, 0, "newPrice")).resolves.toBe(sample)
@@ -1388,7 +1453,7 @@ describe("TabulaGrid", () => {
 				await expect(page.locator(".playground-draft-review").count()).resolves.toBe(0)
 				await expect(valueAt(page, 0, "newPrice")).resolves.toBe("55")
 				await expect(page.evaluate(() => location.search)).resolves.toBe("?rows=5")
-				await expect.poll(() => stored(page)).toMatchObject({ schemaVersion: 1 })
+				await expect.poll(() => stored(page)).toMatchObject({ schemaVersion: 2 })
 				await expect(
 					page.evaluate(() =>
 						window.__playground!.store.get(window.__playground!.store.rowIdAt(0)!, "legacyCode")

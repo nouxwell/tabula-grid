@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {
+	applyFormulas,
 	DraftSaver,
+	FormulaEngine,
 	LookupResolver,
 	ModuleSchema,
 	openDraft,
@@ -54,7 +56,10 @@ if (params.has("accept")) {
 
 const opened = opening?.status === "opened" ? opening : null
 const review = opening?.status === "review" ? opening.changes : null
-const store = new RowStore({ rows: opened ? opened.rows : sampleRows(rowCount) })
+// Formula fields worked out before the store exists: opening the sheet is no change of the user's.
+const store = new RowStore({ rows: opened ? opened.rows : applyFormulas(schema, sampleRows(rowCount)) })
+// Keeps them worked out as the sheet changes; what it writes joins the edit's undo step.
+const formulas = new FormulaEngine({ schema, store })
 
 const theme = ref<GridTheme>(initialTheme === "dark" || initialTheme === "auto" ? initialTheme : "light")
 const language = ref<keyof typeof VALUE_SETTINGS>(params.get("values") === "en" ? "en" : "tr")
@@ -360,6 +365,7 @@ onBeforeUnmount(() => {
 	window.removeEventListener("pagehide", flush)
 	saver?.dispose()
 	lookups.dispose()
+	formulas.dispose()
 	view.dispose()
 	session.dispose()
 	validator.dispose()
@@ -410,6 +416,7 @@ onMounted(() => {
 		backend,
 		saver,
 		lookups,
+		formulas,
 		view,
 		widths: () => widths.value,
 		columns: () => columns.value

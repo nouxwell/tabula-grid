@@ -61,6 +61,23 @@ export type {
 	LookupSearchResponse
 } from "./lookup"
 
+export { applyFormulas, FORMULA_ORIGIN, FormulaEngine } from "./formula/engine"
+export type { FormulaEngineOptions } from "./formula/engine"
+export {
+	boolValue as formulaBool,
+	EMPTY as FORMULA_EMPTY,
+	errorValue as formulaError,
+	FUNCTIONS as FORMULA_FUNCTIONS,
+	formulaNumber,
+	numberArgument,
+	textValue as formulaText
+} from "./formula/evaluate"
+export type { FormulaFunction, FormulaValue } from "./formula/evaluate"
+export { formulaFields, parseFormula } from "./formula/parse"
+export type { BinaryOperator, FormulaNode } from "./formula/parse"
+export { isFormulaError } from "./formula/error"
+export type { FormulaErrorCode, FormulaErrorValue } from "./formula/error"
+
 export { RowView, rowsWithIssues, rowsWithResult } from "./view"
 export type { RowFilter } from "./view"
 

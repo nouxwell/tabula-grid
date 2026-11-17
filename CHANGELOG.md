@@ -103,6 +103,18 @@ The three packages are versioned together.
 - **`TabulaGrid`** takes a `view`: row numbers stay the sheet's, a paste writes only into the rows
   shown, and `goTo` shows a row the filter left out. **`TabulaIssues`** has a switch for only the
   rows with issues, bound with `v-model:only-issue-rows`, and a Refresh button (`refresh-rows`).
+- **Formulas.** A schema field can have a `formula` over the other fields of its row, by key in
+  brackets, in a spreadsheet's language with English function names. `parseFormula` turns it into
+  a tree that is worked out, never run as code, in decimals rather than floats. Sixteen functions
+  are built in, an application can add its own, and what cannot be worked out is an error value
+  (`#DIV/0!`, `#VALUE!`, `#NAME?`, `#NUM!`) shown in the cell and reported as `formula_error`. A
+  formula that does not parse, reads an unknown field or goes round in a circle refuses the schema;
+  a formula field is never editable. New error code `invalid_formula`.
+- **`FormulaEngine`** keeps formula fields worked out inside the change that called for them, and
+  `applyFormulas` fills rows before a store exists. **`RowStore.derive`** is how: work that belongs
+  to every change, written into it, so an edit and what follows from it are one revision, one
+  notice and one undo step. `TabulaGrid` marks a formula column with ƒx and shows its formula in
+  the header's tooltip; an undo selects what the user changed, not what was worked out from it.
 - **Hiding and pinning columns.** `ColumnLayout` (`order`, `hidden`, `pinned`, by field key) with
   `arrangeColumns` and `withColumn`; keys the schema no longer has are passed over. `TabulaGrid`
   takes it as `v-model:columns`, and a header's menu pins, hides and shows hidden columns again.

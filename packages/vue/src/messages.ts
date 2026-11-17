@@ -24,7 +24,8 @@ const ISSUES: Readonly<Record<GridLocale, Readonly<Record<string, Wording>>>> = 
 		max_value: (p, s) => `En fazla ${number(p.max, s)} olabilir.`,
 		min_length: p => `En az ${p.min} karakter olmalı; ${p.length} karakter.`,
 		max_length: p => `En fazla ${p.max} karakter olabilir; ${p.length} karakter.`,
-		not_unique: p => `Bu değer kolonda ${p.count} kez geçiyor; bir kez geçmeli.`
+		not_unique: p => `Bu değer kolonda ${p.count} kez geçiyor; bir kez geçmeli.`,
+		formula_error: p => `Formül hesaplanamadı: ${p.error}${because(p.error, "tr")}`
 	},
 	en: {
 		required: () => "This field is required.",
@@ -38,7 +39,8 @@ const ISSUES: Readonly<Record<GridLocale, Readonly<Record<string, Wording>>>> = 
 		max_value: (p, s) => `Must be at most ${number(p.max, s)}.`,
 		min_length: p => `Must be at least ${p.min} characters; it is ${p.length}.`,
 		max_length: p => `Must be at most ${p.max} characters; it is ${p.length}.`,
-		not_unique: p => `This value appears ${p.count} times in the column; it may appear once.`
+		not_unique: p => `This value appears ${p.count} times in the column; it may appear once.`,
+		formula_error: p => `The formula could not be worked out: ${p.error}${because(p.error, "en")}`
 	}
 }
 
@@ -163,4 +165,26 @@ export function dateExample(pattern: string | undefined): string {
 	}
 
 	return text
+}
+
+/** Why a formula gave its error, in words, after the error itself. */
+const FORMULA_REASONS: Readonly<Record<GridLocale, Readonly<Record<string, string>>>> = {
+	tr: {
+		"#DIV/0!": "sıfıra bölme",
+		"#VALUE!": "bir değer beklenen türde değil",
+		"#NAME?": "bilinmeyen fonksiyon",
+		"#NUM!": "sayı olarak hesaplanamıyor"
+	},
+	en: {
+		"#DIV/0!": "a division by zero",
+		"#VALUE!": "a value is not of the kind expected",
+		"#NAME?": "an unknown function",
+		"#NUM!": "not a number that can be worked out"
+	}
+}
+
+function because(error: string | undefined, locale: GridLocale): string {
+	const reason = FORMULA_REASONS[locale][error ?? ""]
+
+	return reason ? ` (${reason})` : ""
 }

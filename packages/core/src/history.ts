@@ -8,7 +8,8 @@ export interface UndoHistoryOptions {
 	readonly limit?: number
 	/**
 	 * Whether a change belongs to the step before it rather than being a step of its own. By default,
-	 * a lookup matching the names an edit put in (`"lookup"`): one Ctrl+Z takes back both.
+	 * a lookup matching the names an edit put in (`"lookup"`): one Ctrl+Z takes back both. Formulas
+	 * need no joining: what they work out is part of the edit's own change.
 	 */
 	readonly joins?: (change: StoreChange) => boolean
 }

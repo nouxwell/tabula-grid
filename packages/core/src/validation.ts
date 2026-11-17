@@ -1,4 +1,5 @@
 import { compareDecimal } from "./decimal"
+import { isFormulaError } from "./formula/error"
 import { Listeners } from "./listeners"
 import type { RowId, RowStore, StoreChange } from "./rows"
 import type { FieldRule, FieldSchema, ModuleSchema } from "./schema"
@@ -17,7 +18,14 @@ import { VALUE_SETTINGS, type ValueSettings } from "./values/settings"
  */
 
 export type LocalIssueCode =
-	ValueProblemCode | "required" | "min_value" | "max_value" | "min_length" | "max_length" | "not_unique"
+	| ValueProblemCode
+	| "required"
+	| "min_value"
+	| "max_value"
+	| "min_length"
+	| "max_length"
+	| "not_unique"
+	| "formula_error"
 
 export type IssueSeverity = "error" | "warning"
 
@@ -419,6 +427,15 @@ export class SheetValidator implements IssueSet {
 
 /** The issues of one value, apart from uniqueness, which needs the other rows. */
 export function checkValue(rowId: RowId, field: FieldSchema, value: CellValue, settings: ValueSettings): Issue[] {
+	// A formula that could not be worked out: its error is the only thing to say about the cell.
+	if (isFormulaError(value)) {
+		return [
+			cellIssue(rowId, field, "formula_error", `The formula gives ${value.formulaError}.`, {
+				error: value.formulaError
+			})
+		]
+	}
+
 	const problem = valueProblem(field, value, settings)
 
 	// A value that is not of its type is only that: a minimum means nothing for "abc".

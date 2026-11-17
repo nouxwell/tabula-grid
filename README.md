@@ -275,6 +275,45 @@ an issue for a deleted row is dropped, one for an unknown field is kept as the r
 Give the grid `:issues="session.issues"` and `:results="session.results"`, and the panel the same
 issues. Each row's number then shows its result, and a processed row can no longer be changed.
 
+## Formulas
+
+A field in the module schema can be worked out from the other fields of its row instead of typed:
+
+```json
+{ "key": "difference", "type": "money", "decimals": 2, "formula": "[newPrice] - [currentPrice]" }
+```
+
+The language is a spreadsheet's, without cell addresses: fields by key in brackets, numbers with a
+point, English function names, arguments separated by commas or semicolons. `SUM`, `AVERAGE`,
+`MIN`, `MAX`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `ABS`, `IF`, `IFERROR`, `AND`, `OR`, `NOT`, `ISBLANK`,
+`LEN` and `CONCAT` are built in, with `+ - * / ^ %`, `&` for text and the comparisons. Nothing a user
+writes is ever run as code: a formula is parsed, and the tree is worked out.
+
+- **Exact.** Numbers are decimals, not floats: 0.1 + 0.2 is 0.3, a division goes to 20 places, and
+  the result is rounded to the field's places, half away from zero.
+- **As Excel works.** An empty field is 0 in a sum and nothing in an average, `IF` works out only
+  the branch it takes, text compares regardless of case, and what cannot be worked out is an error
+  value: `#DIV/0!`, `#VALUE!`, `#NAME?`, `#NUM!`. The cell shows it, and it is an issue that holds
+  back processing.
+- **Checked as the schema is read.** A formula that does not parse, reads a field the schema does
+  not have, or goes round in a circle refuses the schema. A formula field is never editable.
+- **One change.** `FormulaEngine` works the formulas out inside the change that called for them:
+  an edit and its consequences are one revision, one notice to listeners, one Ctrl+Z.
+  `applyFormulas` fills rows before the store is made, so opening a sheet is no change at all.
+
+```ts
+const store = new RowStore({ rows: applyFormulas(schema, rows) })
+const formulas = new FormulaEngine({
+  schema,
+  store,
+  // An application's own function: it works a value out of its arguments and does nothing else.
+  functions: { MARGIN: ([price, cost]) => formulaNumber(margin(numberArgument(price), numberArgument(cost))) }
+})
+```
+
+What the browser works out is shown to the user and sent like any value, never trusted: the
+backend works it out again. A field with `submit: false` is not sent at all.
+
 ## Lookups
 
 A lookup holds a record as `{ id, label }`: the user sees the label, the backend receives the id.

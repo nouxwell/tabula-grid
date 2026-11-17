@@ -14,6 +14,7 @@ import {
 } from "./contract"
 import { neverAborted, raced, wait } from "./async"
 import { TabulaError } from "./errors"
+import { isFormulaError } from "./formula/error"
 import type { UndoHistory } from "./history"
 import { randomPart, sequence } from "./ids"
 import { Listeners } from "./listeners"
@@ -703,7 +704,12 @@ export class SheetSession {
 			if (field.submit) {
 				const value = this.store.get(rowId, field.key)
 
-				values[field.key] = field.type === "lookup" ? lookupPayload(value) : value
+				// An error a formula gave is no value to send; the backend works the formula out again.
+				values[field.key] = isFormulaError(value)
+					? null
+					: field.type === "lookup"
+						? lookupPayload(value)
+						: value
 			}
 		}
 

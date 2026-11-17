@@ -1,5 +1,6 @@
 import { compareDecimal, normalizeDecimal } from "./decimal"
 import { SchemaError, TabulaError, type SchemaProblem } from "./errors"
+import { formulaFields, parseFormula } from "./formula/parse"
 import { compilePattern } from "./values/date"
 
 /**
@@ -60,6 +61,11 @@ interface FieldBase {
 	readonly rules: readonly FieldRule[]
 	/** A sample value, as text, for the column's help. */
 	readonly example: string | null
+	/**
+	 * Worked out from the row's other fields rather than typed, such as
+	 * `ROUND([newPrice] - [currentPrice], 2)`. Such a field is never editable.
+	 */
+	readonly formula: string | null
 }
 
 export interface TextField extends FieldBase {
@@ -133,6 +139,8 @@ export interface FieldInput {
 	submit?: boolean
 	rules?: RuleInput[]
 	example?: string
+	/** Worked out from the row's other fields; see `FieldSchema.formula`. */
+	formula?: string
 	/** decimal, quantity, percent and money */
 	decimals?: number
 	/** money */
@@ -157,7 +165,19 @@ export interface ModuleSchemaInput {
 }
 
 const MODULE_PROPERTIES = ["module", "schemaVersion", "title", "customization", "fields"]
-const COMMON_PROPERTIES = ["key", "type", "label", "required", "editable", "submit", "rules", "example"]
+const COMMON_PROPERTIES = ["key", "type", "label", "required", "editable", "submit", "rules", "example", "formula"]
+
+/** Kinds of field a formula can fill: a value worked out, never a record or a choice from a list. */
+const FORMULA_TYPES: readonly FieldType[] = [
+	"string",
+	"integer",
+	"decimal",
+	"quantity",
+	"percent",
+	"money",
+	"bool",
+	"date"
+]
 
 const TYPE_PROPERTIES: Readonly<Record<FieldType, readonly string[]>> = {
 	string: [],
@@ -285,6 +305,10 @@ function fieldToJson(field: FieldSchema): FieldInput {
 
 	if (field.example !== null) {
 		json.example = field.example
+	}
+
+	if (field.formula !== null) {
+		json.formula = field.formula
 	}
 
 	switch (field.type) {
@@ -437,7 +461,84 @@ function readFields(value: unknown, problems: Problems): FieldSchema[] | null {
 		}
 	})
 
+	checkFormulas(fields, firstIndex, problems)
+
 	return fields
+}
+
+/**
+ * Every formula parses, reads only fields the schema has, never itself, and no formula reads, through
+ * others, the field it fills: a circle has no value to start from.
+ */
+function checkFormulas(fields: readonly FieldSchema[], indexOf: ReadonlyMap<string, number>, problems: Problems): void {
+	const keys = new Set(fields.map(field => field.key))
+	const reads = new Map<string, string[]>()
+
+	for (const field of fields) {
+		if (field.formula === null) {
+			continue
+		}
+
+		const path = `fields[${indexOf.get(field.key) ?? 0}].formula`
+		let fieldsRead: string[]
+
+		try {
+			fieldsRead = formulaFields(parseFormula(field.formula))
+		} catch (error) {
+			problems.add(path, error instanceof Error ? error.message : String(error))
+			continue
+		}
+
+		for (const key of fieldsRead) {
+			if (key === field.key) {
+				problems.add(path, `reads [${key}], the field it fills`)
+			} else if (!keys.has(key)) {
+				problems.add(path, `reads [${key}], which is not a field of this schema`)
+			}
+		}
+
+		reads.set(
+			field.key,
+			fieldsRead.filter(key => key !== field.key)
+		)
+	}
+
+	// A depth-first walk over the formulas: meeting a field still on the path is a circle.
+	const done = new Set<string>()
+	const reported = new Set<string>()
+	const walk = (key: string, path: string[]): void => {
+		if (done.has(key)) {
+			return
+		}
+
+		const at = path.indexOf(key)
+
+		if (at >= 0) {
+			const circle = [...path.slice(at), key]
+
+			if (!circle.some(member => reported.has(member))) {
+				circle.forEach(member => reported.add(member))
+				problems.add(
+					`fields[${indexOf.get(key) ?? 0}].formula`,
+					`is part of a circle of formulas: ${circle.map(member => `[${member}]`).join(" → ")}`
+				)
+			}
+
+			return
+		}
+
+		for (const next of reads.get(key) ?? []) {
+			if (reads.has(next)) {
+				walk(next, [...path, key])
+			}
+		}
+
+		done.add(key)
+	}
+
+	for (const key of reads.keys()) {
+		walk(key, [])
+	}
 }
 
 function readField(raw: unknown, path: string, problems: Problems): FieldSchema | null {
@@ -458,13 +559,31 @@ function readField(raw: unknown, path: string, problems: Problems): FieldSchema 
 	const editable = readBoolean(raw, "editable", true, path, problems)
 	const submit = readBoolean(raw, "submit", true, path, problems)
 	const example = readText(raw, "example", path, problems, false)
+	const formula = readText(raw, "formula", path, problems, false)
 	const rules = readRules(raw.rules, at(path, "rules"), type, problems)
 
 	if (type === null || key === null) {
 		return null
 	}
 
-	const base = { key, label: label ?? key, required, editable, submit, rules: Object.freeze(rules), example }
+	if (formula !== null && !FORMULA_TYPES.includes(type)) {
+		problems.add(
+			at(path, "formula"),
+			`cannot fill ${aFieldOf(type)}; a formula works out a text, a number, a date or yes and no`
+		)
+	}
+
+	// A value worked out is not typed over: a formula field is never editable, whatever it says.
+	const base = {
+		key,
+		label: label ?? key,
+		required,
+		editable: formula === null && editable,
+		submit,
+		rules: Object.freeze(rules),
+		example,
+		formula
+	}
 	let field: FieldSchema
 
 	switch (type) {

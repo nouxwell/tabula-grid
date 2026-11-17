@@ -93,6 +93,7 @@ export class RowStore {
 	#log: StoreOperation[] | null = null
 	readonly #createRowId: () => RowId
 	readonly #listeners = new Listeners<StoreChange>()
+	readonly #derivers = new Set<(operations: readonly StoreOperation[]) => void>()
 
 	constructor(options: RowStoreOptions = {}) {
 		this.#createRowId = options.createRowId ?? sessionRowIds()
@@ -156,6 +157,24 @@ export class RowStore {
 		return this.#listeners.add(listener)
 	}
 
+	/**
+	 * Adds work that belongs to every change, such as working formulas out. `fn` is called at the
+	 * end of each transaction that changed something, before it is done, with what it changed; what
+	 * `fn` writes is part of the same change: one revision, one notice, one step to undo. Listeners
+	 * never see a sheet whose formulas are behind its values.
+	 *
+	 * Returns the way to stop.
+	 */
+	derive(fn: (operations: readonly StoreOperation[]) => void): () => void {
+		const entry = (operations: readonly StoreOperation[]): void => fn(operations)
+
+		this.#derivers.add(entry)
+
+		return () => {
+			this.#derivers.delete(entry)
+		}
+	}
+
 	// ---------------------------------------------------------------- writing
 
 	/**
@@ -178,6 +197,13 @@ export class RowStore {
 
 		try {
 			fn()
+
+			// What follows from the change goes in with it; a deriver that throws takes it all back.
+			if (log.length > 0) {
+				for (const derive of [...this.#derivers]) {
+					derive([...log])
+				}
+			}
 		} catch (error) {
 			this.#log = null
 
