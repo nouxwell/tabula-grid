@@ -414,7 +414,7 @@ describe("TabulaGrid", () => {
 				await expect.poll(() => valueAt(page, 0, "validFrom")).toBe("31.02.2026")
 				await expect(cell(page, 0, 6).getAttribute("aria-invalid")).resolves.toBe("true")
 				await expect(cell(page, 0, 6).getAttribute("title")).resolves.toBe(
-					'"31.02.2026" could not be read as a date; expected format: d.m.Y'
+					"“31.02.2026” tarih olarak okunamadı. Örnek: 31.12.2026"
 				)
 				await expect(cell(page, 0, 6).innerText()).resolves.toBe("31.02.2026")
 
@@ -451,6 +451,134 @@ describe("TabulaGrid", () => {
 					}
 				}
 			})
+		})
+	})
+
+	describe("rules and issues", () => {
+		const panel = (page: Page): Locator => page.locator(".tabula-issues")
+		const items = (page: Page): Locator => panel(page).locator(".tabula-issues-item")
+
+		it("starts with no issues on a sheet that keeps its rules", async () => {
+			await withPage(20, async page => {
+				await expect.poll(() => panel(page).locator(".tabula-issues-none").innerText()).toBe("Sorun yok.")
+				await expect(page.locator(".tabula-grid-cell.is-error").count()).resolves.toBe(0)
+			})
+		})
+
+		it("marks an emptied required cell, says why in Turkish, and lists it", async () => {
+			await withPage(20, async page => {
+				await cell(page, 2, 3).click()
+				await press(page, "Delete")
+
+				await expect.poll(() => cell(page, 2, 3).getAttribute("class")).toContain("is-error")
+				await expect(cell(page, 2, 3).getAttribute("title")).resolves.toBe("Bu alan zorunlu.")
+				await expect(cell(page, 2, 3).getAttribute("aria-invalid")).resolves.toBe("true")
+				await expect(items(page).count()).resolves.toBe(1)
+				await expect(items(page).first().innerText()).resolves.toBe("Satır 3 · Yeni fiyat\nBu alan zorunlu.")
+				await expect(panel(page).locator(".tabula-issues-count.is-error").innerText()).resolves.toBe("1 hata")
+			})
+		})
+
+		it("checks limits and clears the issue once the value keeps them", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 4).click()
+				await page.keyboard.type("150")
+				await press(page, "Enter")
+
+				await expect.poll(() => cell(page, 0, 4).getAttribute("title")).toBe("En fazla 100 olabilir.")
+
+				await cell(page, 0, 4).click()
+				await page.keyboard.type("-12,5")
+				await press(page, "Enter")
+
+				await expect.poll(() => cell(page, 0, 4).getAttribute("title")).toBeNull()
+				await expect(items(page).count()).resolves.toBe(0)
+			})
+		})
+
+		it("marks every row holding the same product, and clears them all when one changes", async () => {
+			await withPage(20, async page => {
+				await cell(page, 1, 0).click()
+				await clipboard(page, "Kopya ürün")
+				await press(page, "Control+V")
+				await cell(page, 4, 0).click()
+				await press(page, "Control+V")
+
+				await expect
+					.poll(() => cell(page, 1, 0).getAttribute("title"))
+					.toBe("Bu değer kolonda 2 kez geçiyor; bir kez geçmeli.")
+				await expect(cell(page, 4, 0).getAttribute("class")).resolves.toContain("is-error")
+
+				await cell(page, 4, 0).click()
+				await page.keyboard.type("Başka ürün")
+				await press(page, "Enter")
+
+				await expect.poll(() => cell(page, 1, 0).getAttribute("title")).toBeNull()
+			})
+		})
+
+		it("goes to an issue's cell from the list, scrolling it into view", async () => {
+			await withPage(300, async page => {
+				await page.evaluate(() => {
+					const { store } = window.__playground!
+
+					store.setCell(store.rowIdAt(250)!, "newPrice", null)
+				})
+
+				await expect.poll(() => items(page).count()).toBe(1)
+				await expect(cell(page, 250, 3).count()).resolves.toBe(0)
+
+				await items(page).first().click()
+
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 250, col: 3 } })
+				await expect.poll(() => cell(page, 250, 3).isVisible()).toBe(true)
+				// The keyboard is the grid's again: typing fixes the cell.
+				await page.keyboard.type("10")
+				await press(page, "Enter")
+				await expect.poll(() => valueAt(page, 250, "newPrice")).toBe("10")
+				await expect.poll(() => items(page).count()).toBe(0)
+			})
+		})
+
+		it("walks through the issues with Next and Previous, wrapping round", async () => {
+			await withPage(20, async page => {
+				await page.evaluate(() => {
+					const { store } = window.__playground!
+
+					store.setCells([
+						{ rowId: store.rowIdAt(3)!, field: "newPrice", value: null },
+						{ rowId: store.rowIdAt(7)!, field: "change", value: "500" }
+					])
+				})
+
+				const next = panel(page).getByRole("button", { name: "Sonraki" })
+				const previous = panel(page).getByRole("button", { name: "Önceki" })
+
+				await next.click()
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 3, col: 3 } })
+				await next.click()
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 7, col: 4 } })
+				await next.click()
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 3, col: 3 } })
+				await previous.click()
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 7, col: 4 } })
+			})
+		})
+
+		it("speaks English when the sheet does", async () => {
+			await withPage(
+				20,
+				async page => {
+					await cell(page, 0, 3).click()
+					await press(page, "Delete")
+
+					await expect.poll(() => cell(page, 0, 3).getAttribute("title")).toBe("This field is required.")
+					await expect(items(page).first().innerText()).resolves.toBe(
+						"Row 1 · Yeni fiyat\nThis field is required."
+					)
+				},
+				"&values=en"
+			)
 		})
 	})
 

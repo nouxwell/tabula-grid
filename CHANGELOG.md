@@ -45,3 +45,11 @@ The three packages are versioned together.
   05/03/2026 as 3 May.
 - **`TabulaGrid`** shows values the sheet's way, reads what is typed and pasted, and marks a cell
   holding text it could not read. Its `value-settings` prop takes any `ValueSettings`.
+- **`SheetValidator`** checks a sheet against the schema's rules (`required`, `min`, `max`,
+  `minLength`, `maxLength`, `unique`, and each value's type) and keeps the result current, checking
+  only what a change touched. Issues are bound to row ids and field keys and carry a code and
+  params. A repeated value points at the first ten other rows holding it and counts the rest, so
+  one paste over 50,000 rows stays cheap.
+- **`TabulaIssues`** lists a sheet's issues with counts, Previous and Next, and emits the one
+  chosen. `TabulaGrid` marks errors and warnings on their cells with Turkish or English tooltips
+  (`locale`), takes a shared `validator`, and goes to a cell with `goTo(rowId, field)`.

@@ -2,7 +2,7 @@ import { addComponent, defineNuxtModule } from "@nuxt/kit"
 import type { NuxtModule } from "@nuxt/schema"
 
 export interface ModuleOptions {
-	/** Put in front of every component this module registers: `App` gives `AppTabulaGrid`. */
+	/** Put in front of every component this module registers: `App` gives `AppTabulaGrid` and `AppTabulaIssues`. */
 	prefix: string
 }
 
@@ -21,12 +21,14 @@ const module: NuxtModule<ModuleOptions, ModuleOptions, false> = defineNuxtModule
 	},
 	setup(options, nuxt) {
 		// Client only: the grid measures text and reads the clipboard, and a server has neither.
-		addComponent({
-			name: `${options.prefix}TabulaGrid`,
-			export: "TabulaGrid",
-			filePath: "@nouxwell/tabula-vue",
-			mode: "client"
-		})
+		for (const component of ["TabulaGrid", "TabulaIssues"]) {
+			addComponent({
+				name: `${options.prefix}${component}`,
+				export: component,
+				filePath: "@nouxwell/tabula-vue",
+				mode: "client"
+			})
+		}
 
 		nuxt.options.css.push("@nouxwell/tabula-vue/style.css")
 	}

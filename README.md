@@ -5,10 +5,10 @@ for Vue and Nuxt. It is the browser side of [nouxwell/tabula](https://github.com
 the PHP library that defines a column once and uses that one definition to export, to build
 templates and to import.
 
-> **Status: early.** A sheet can be drawn, navigated, typed into, copied from and pasted into, and
-> what is typed is read as numbers, dates, yes or no and options the way nouxwell/tabula reads
-> them. Rules, undo and the adapters come next. No release has been made and none of the three
-> packages is on npm; each is marked `private` until its first release.
+> **Status: early.** A sheet can be drawn, navigated, typed into, copied from and pasted into;
+> what is typed is read the way nouxwell/tabula reads it, and checked against the schema's rules
+> as the user types. Undo and the backend adapters come next. No release has been made and none
+> of the three packages is on npm; each is marked `private` until its first release.
 
 ## Packages
 
@@ -126,13 +126,47 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
   its contents within the automatic limits. All five numbers can be set for the module and for
   each column.
 - **Values.** Cells show their values the sheet's way, and what is typed or pasted is read into
-  the field's type. Copied text pastes back as the same values. A cell holding text it could not
-  read keeps it, gets a red corner, and says why in its tooltip. Pass `value-settings` for
-  anything other than Turkish.
+  the field's type. Copied text pastes back as the same values. Pass `value-settings` for anything
+  other than Turkish.
+- **Issues.** A cell breaking a rule, or holding text it could not read, gets a red corner and
+  says why in its tooltip, in Turkish or English (`locale`). `goTo(rowId, field)` selects a cell
+  and scrolls it into view, which is what an issue's ids are for.
 - **Themes.** `light`, `dark` or `auto`, and every colour is a `--tabula-*` CSS variable.
 
 With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>` is available everywhere,
 drawn in the browser only.
+
+## Rules and issues
+
+`SheetValidator` checks a sheet against its schema and keeps the result current: required fields,
+`min` and `max` compared as decimals, `minLength` and `maxLength` counted in characters a reader
+sees, `unique` across the column, and values that are not of their type. After each change it
+checks only the cells the change touched.
+
+Each issue is bound to a row by its id and to a field by its key, never to a row number or a
+header, and carries a code and params rather than only a sentence. `TabulaIssues` lists them, with
+counts, Previous and Next; give it and the grid the same validator, and send its `select` to the
+grid's `goTo`:
+
+```vue
+<script setup lang="ts">
+const validator = new SheetValidator(schema, store, VALUE_SETTINGS.tr)
+const grid = ref<InstanceType<typeof TabulaGrid>>()
+</script>
+
+<template>
+  <TabulaGrid ref="grid" :schema="schema" :store="store" :validator="validator" />
+  <TabulaIssues
+    :validator="validator"
+    :schema="schema"
+    :store="store"
+    @select="issue => grid?.goTo(issue.rowId!, issue.field)"
+  />
+</template>
+```
+
+These are the browser's checks, for the user's sake. Passing them promises nothing: the backend
+checks everything again before it writes.
 
 ## Where the line is drawn
 

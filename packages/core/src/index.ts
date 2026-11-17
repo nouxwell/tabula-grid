@@ -51,6 +51,9 @@ export type { CellPosition, CellRange, Direction, IsBlank, MoveOptions } from ".
 
 export { parseTsv, toTsv } from "./clipboard"
 
+export { checkValue, SheetValidator } from "./validation"
+export type { Issue, IssueSeverity, IssueSummary, IssueTarget, LocalIssueCode } from "./validation"
+
 export { defineValueSettings, VALUE_SETTINGS } from "./values/settings"
 export type { ValueSettings } from "./values/settings"
 export { isFieldValue, readInput, valueProblem } from "./values/read"

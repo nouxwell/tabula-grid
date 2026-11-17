@@ -10,7 +10,14 @@ export const priceUpdate: ModuleSchemaInput = {
 	schemaVersion: 1,
 	title: "Toplu fiyat güncelleme",
 	fields: [
-		{ key: "productId", type: "lookup", label: "Ürün", required: true, lookup: "product" },
+		{
+			key: "productId",
+			type: "lookup",
+			label: "Ürün",
+			required: true,
+			lookup: "product",
+			rules: [{ rule: "unique" }]
+		},
 		{ key: "sku", type: "string", label: "SKU", editable: false, submit: false },
 		{ key: "currentPrice", type: "money", label: "Mevcut fiyat", editable: false, submit: false, decimals: 2 },
 		{
@@ -21,7 +28,16 @@ export const priceUpdate: ModuleSchemaInput = {
 			decimals: 2,
 			rules: [{ rule: "min", value: "0" }]
 		},
-		{ key: "change", type: "percent", label: "Değişim %", decimals: 1 },
+		{
+			key: "change",
+			type: "percent",
+			label: "Değişim %",
+			decimals: 1,
+			rules: [
+				{ rule: "min", value: "-100" },
+				{ rule: "max", value: "100" }
+			]
+		},
 		{
 			key: "currency",
 			type: "options",
@@ -30,7 +46,7 @@ export const priceUpdate: ModuleSchemaInput = {
 		},
 		{ key: "validFrom", type: "date", label: "Geçerlilik başlangıç tarihi (fiyat listesi)" },
 		{ key: "active", type: "bool", label: "Aktif" },
-		{ key: "note", type: "string", label: LONG_LABEL }
+		{ key: "note", type: "string", label: LONG_LABEL, rules: [{ rule: "maxLength", value: 60 }] }
 	]
 }
 

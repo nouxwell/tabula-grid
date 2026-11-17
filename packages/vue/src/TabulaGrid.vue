@@ -9,9 +9,9 @@ import {
 	readInput,
 	resolveColumnSizing,
 	Selection,
+	SheetValidator,
 	toTsv,
 	VALUE_SETTINGS,
-	valueProblem,
 	type CellPosition,
 	type CellRange,
 	type ColumnSizing,
@@ -19,7 +19,7 @@ import {
 	type FieldSchema,
 	type ModuleSchema,
 	type RowStore,
-	type ValueProblem,
+	type Issue,
 	type ValueSettings
 } from "@nouxwell/tabula-core"
 import {
@@ -35,6 +35,7 @@ import {
 	type PropType
 } from "vue"
 import { alignmentOf } from "./alignment"
+import { issueText, type GridLocale } from "./messages"
 import { horizontalPadding, textMeasurer, type Measure } from "./measure"
 import type { GridTheme } from "./types"
 
@@ -56,7 +57,15 @@ const props = defineProps({
 	 */
 	valueSettings: { type: Object as PropType<ValueSettings>, default: () => VALUE_SETTINGS.tr },
 	/** Pixels. */
-	rowHeight: { type: Number, default: 30 }
+	rowHeight: { type: Number, default: 30 },
+	/**
+	 * The checks to show. Pass the one an issue panel shows too, so both tell the same story; left
+	 * out, the grid checks the sheet against the schema on its own. A validator passed in belongs to
+	 * the host: the grid neither changes its settings nor disposes of it.
+	 */
+	validator: { type: Object as PropType<SheetValidator>, default: undefined },
+	/** The language of the grid's own words: issue messages and labels. */
+	locale: { type: String as PropType<GridLocale>, default: "tr" }
 })
 
 /** Widths the user set by dragging or fitting, by field key. Bind it with v-model to keep them. */
@@ -349,19 +358,33 @@ function text(row: number, col: number): string {
 		: formatCell(field, store.value.get(rowId, field.key), props.valueSettings)
 }
 
-/**
- * What is wrong with what a cell holds, or null. A cell holding text it could not read as its type
- * keeps that text and says so here, until it is fixed.
- */
-function problemAt(row: number, col: number): ValueProblem | null {
-	void dataVersion.value
+/** The issues on a cell, as the validator has them now. */
+function issuesAt(row: number, col: number): readonly Issue[] {
+	void issueVersion.value
 
 	const rowId = store.value.rowIdAt(row)
 	const field = fields.value[col]
 
-	return rowId === undefined || field === undefined
-		? null
-		: valueProblem(field, store.value.get(rowId, field.key), props.valueSettings)
+	return rowId === undefined || field === undefined ? [] : validator.value.issuesAt(rowId, field.key)
+}
+
+function issueClass(row: number, col: number): string | undefined {
+	const issues = issuesAt(row, col)
+
+	if (issues.length === 0) {
+		return undefined
+	}
+
+	return issues.some(issue => issue.severity === "error") ? "is-error" : "is-warning"
+}
+
+/** Every issue on the cell in the user's language, one per line, for its tooltip. */
+function issueTitle(row: number, col: number): string | undefined {
+	const issues = issuesAt(row, col)
+
+	return issues.length === 0
+		? undefined
+		: issues.map(issue => issueText(issue, props.locale, props.valueSettings)).join("\n")
 }
 
 /** Reads text into a field's type: its value, or the text itself when it cannot be read. */
@@ -1045,6 +1068,41 @@ watch(
 	}
 )
 
+// The validator: the host's when given, otherwise one of the grid's own for this schema and store,
+// made again when either is replaced.
+const validator = shallowRef<SheetValidator>(
+	toRaw(props.validator) ?? new SheetValidator(schema.value, store.value, props.valueSettings)
+)
+const issueVersion = shallowRef(0)
+let ownValidator: SheetValidator | null = props.validator ? null : validator.value
+
+watch(
+	() => [toRaw(props.validator), schema.value, store.value] as const,
+	([given, nextSchema, nextStore], previous, onCleanup) => {
+		if (given) {
+			ownValidator?.dispose()
+			ownValidator = null
+			validator.value = given
+		} else if (!ownValidator || previous !== undefined) {
+			ownValidator?.dispose()
+			ownValidator = new SheetValidator(nextSchema, nextStore, props.valueSettings)
+			validator.value = ownValidator
+		}
+
+		issueVersion.value++
+		onCleanup(validator.value.subscribe(() => issueVersion.value++))
+	},
+	{ immediate: true }
+)
+
+watch(
+	() => props.valueSettings,
+	settings => {
+		// Only the grid's own: a validator from the host keeps the settings the host gave it.
+		ownValidator?.setSettings(settings)
+	}
+)
+
 watch(sizings, () => measureHeaders())
 watch(offsets, () => updateWindow())
 watch(
@@ -1068,14 +1126,39 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+	ownValidator?.dispose()
 	resizeObserver?.disconnect()
 	stopDrag?.()
 	stopSelection()
 })
 
+/**
+ * Goes to a row, and to one of its fields when given: selects the cell, scrolls it into view and
+ * gives the grid the keyboard. An issue's rowId and field are what it takes. False when the row is
+ * no longer there.
+ */
+function goTo(rowId: string, field?: string | null): boolean {
+	const row = store.value.indexOf(rowId)
+
+	if (row < 0) {
+		return false
+	}
+
+	commitEdit(false)
+
+	const col = field ? fields.value.findIndex(candidate => candidate.key === field) : -1
+
+	selection.moveTo(row, col < 0 ? (selection.active?.col ?? 0) : col)
+	reveal()
+	focusInput()
+
+	return true
+}
+
 defineExpose({
 	/** The selection, in on-screen positions. */
 	selection,
+	goTo,
 	focus: focusInput,
 	/** Fits a column to its header and contents, as a double click on its edge does. */
 	autoFit
@@ -1182,10 +1265,10 @@ defineExpose({
 							:aria-colindex="c + 1"
 							:aria-selected="inRange(r, c)"
 							:aria-readonly="!isEditable(fields[c]) || undefined"
-							:aria-invalid="problemAt(r, c) ? 'true' : undefined"
-							:class="[cellClasses[c], { 'is-invalid': problemAt(r, c) }]"
+							:aria-invalid="issueClass(r, c) === 'is-error' ? 'true' : undefined"
+							:class="[cellClasses[c], issueClass(r, c)]"
 							:style="cellStyles[c]"
-							:title="problemAt(r, c)?.message"
+							:title="issueTitle(r, c)"
 						>
 							{{ text(r, c) }}
 						</div>
@@ -1229,8 +1312,10 @@ defineExpose({
 	--tabula-accent: #2946c9;
 	--tabula-range-bg: rgb(41 70 201 / 10%);
 	--tabula-required: #ad2a22;
-	--tabula-invalid-bg: #fbe8e6;
-	--tabula-invalid-mark: #c0392b;
+	--tabula-error-bg: #fbe8e6;
+	--tabula-warning-bg: #fdf1dc;
+	--tabula-error-mark: #c0392b;
+	--tabula-warning-mark: #c27c0e;
 	--tabula-font-size: 13px;
 
 	position: relative;
@@ -1261,8 +1346,10 @@ defineExpose({
 	--tabula-accent: #92a6ff;
 	--tabula-range-bg: rgb(146 166 255 / 16%);
 	--tabula-required: #ff9087;
-	--tabula-invalid-bg: #3b2220;
-	--tabula-invalid-mark: #ff8a80;
+	--tabula-error-bg: #3b2220;
+	--tabula-warning-bg: #3a2c12;
+	--tabula-error-mark: #ff8a80;
+	--tabula-warning-mark: #f0b860;
 
 	color-scheme: dark;
 }
@@ -1280,8 +1367,10 @@ defineExpose({
 		--tabula-accent: #92a6ff;
 		--tabula-range-bg: rgb(146 166 255 / 16%);
 		--tabula-required: #ff9087;
-		--tabula-invalid-bg: #3b2220;
-		--tabula-invalid-mark: #ff8a80;
+		--tabula-error-bg: #3b2220;
+		--tabula-warning-bg: #3a2c12;
+		--tabula-error-mark: #ff8a80;
+		--tabula-warning-mark: #f0b860;
 
 		color-scheme: dark;
 	}
@@ -1428,19 +1517,28 @@ defineExpose({
 	text-align: center;
 }
 
-/* A cell holding text it could not read as its type, Excel-style: a tint and a mark in the corner. */
-.tabula-grid-cell.is-invalid {
-	background: var(--tabula-invalid-bg);
+/* A cell with an issue, Excel-style: a tint and a mark in the corner, red for an error and amber for a warning. */
+.tabula-grid-cell.is-error {
+	background: var(--tabula-error-bg);
 }
 
-.tabula-grid-cell.is-invalid::after {
+.tabula-grid-cell.is-warning {
+	background: var(--tabula-warning-bg);
+}
+
+.tabula-grid-cell.is-error::after,
+.tabula-grid-cell.is-warning::after {
 	content: "";
 	position: absolute;
 	top: 0;
 	right: 0;
 	border-width: 0 7px 7px 0;
 	border-style: solid;
-	border-color: transparent var(--tabula-invalid-mark) transparent transparent;
+	border-color: transparent var(--tabula-error-mark) transparent transparent;
+}
+
+.tabula-grid-cell.is-warning::after {
+	border-right-color: var(--tabula-warning-mark);
 }
 
 .tabula-grid-cell.is-readonly {
