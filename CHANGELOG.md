@@ -103,6 +103,13 @@ The three packages are versioned together.
 - **`TabulaGrid`** takes a `view`: row numbers stay the sheet's, a paste writes only into the rows
   shown, and `goTo` shows a row the filter left out. **`TabulaIssues`** has a switch for only the
   rows with issues, bound with `v-model:only-issue-rows`, and a Refresh button (`refresh-rows`).
+- **Hiding and pinning columns.** `ColumnLayout` (`order`, `hidden`, `pinned`, by field key) with
+  `arrangeColumns` and `withColumn`; keys the schema no longer has are passed over. `TabulaGrid`
+  takes it as `v-model:columns`, and a header's menu pins, hides and shows hidden columns again.
+  Pinned columns come first and are held in place with CSS `sticky`, so they do not lag behind a
+  sideways scroll; the selection and the active cell are drawn with them. A paste passes over a
+  hidden column, and going to an issue in one shows it. A draft keeps the layout, following
+  renamed fields.
 - **`DraftSaver`** saves a sheet a moment after the user stops changing it, and when asked, one
   save at a time, under an id made in the browser so a save repeated is the same draft. A failed
   save leaves the sheet as it is and says so. New error code `invalid_draft`.

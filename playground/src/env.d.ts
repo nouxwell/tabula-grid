@@ -1,4 +1,5 @@
 import type {
+	ColumnLayout,
 	DraftSaver,
 	LookupResolver,
 	ModuleSchema,
@@ -25,6 +26,7 @@ export interface PlaygroundHandle {
 	readonly lookups: LookupResolver
 	readonly view: RowView
 	readonly widths: () => Readonly<Record<string, number>>
+	readonly columns: () => ColumnLayout
 }
 
 declare global {

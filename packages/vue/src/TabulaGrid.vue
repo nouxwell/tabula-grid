@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+	arrangeColumns,
 	autoColumnWidth,
 	clampColumnWidth,
 	editText,
@@ -17,11 +18,13 @@ import {
 	UNDO_ORIGIN,
 	UndoHistory,
 	VALUE_SETTINGS,
+	withColumn,
 	type CellPosition,
 	type CellRange,
 	type ColumnSizing,
 	type Direction,
 	type CellValue,
+	type ColumnLayout,
 	type FieldSchema,
 	type Issue,
 	type IssueSet,
@@ -102,6 +105,12 @@ const props = defineProps({
 /** Widths the user set by dragging or fitting, by field key. Bind it with v-model to keep them. */
 const columnWidths = defineModel<Readonly<Record<string, number>>>("columnWidths", { default: () => ({}) })
 
+/**
+ * Which columns are hidden, pinned or moved: the user's own arrangement. Bind it with v-model to
+ * keep it; the header's menu changes it.
+ */
+const columns = defineModel<ColumnLayout>("columns", { default: () => ({}) })
+
 const HEADER_HEIGHT = 32
 const OVERSCAN_ROWS = 6
 const OVERSCAN_COLS = 2
@@ -130,7 +139,11 @@ const STEPS: Readonly<Record<Direction, CellPosition>> = {
 // host passed, the grid works on the objects themselves and learns about changes by subscribing.
 const store = shallowRef<RowStore>(toRaw(props.store))
 const schema = shallowRef<ModuleSchema>(toRaw(props.schema))
-const fields = computed<readonly FieldSchema[]>(() => schema.value.fields)
+const arranged = computed(() => arrangeColumns(schema.value.fields, columns.value))
+/** The columns shown, in order, the pinned ones first. A column's index on screen is its place here. */
+const fields = computed<readonly FieldSchema[]>(() => arranged.value.fields)
+/** How many of the first columns stay in place while the sheet scrolls sideways. */
+const pinnedCount = computed(() => arranged.value.pinned)
 
 const selection = new Selection(0, 0)
 const dataVersion = shallowRef(0)
@@ -140,7 +153,6 @@ const rowCount = shallowRef(0)
 const id = useId()
 const root = ref<HTMLElement | null>(null)
 const scroller = ref<HTMLElement | null>(null)
-const head = ref<HTMLElement | null>(null)
 const gutter = ref<HTMLElement | null>(null)
 const body = ref<HTMLElement | null>(null)
 const editor = ref<HTMLInputElement | null>(null)
@@ -185,6 +197,7 @@ const offsets = computed<readonly number[]>(() => {
 })
 
 const totalWidth = computed(() => offsets.value[offsets.value.length - 1] ?? 0)
+const pinnedWidth = computed(() => offsets.value[pinnedCount.value] ?? 0)
 const totalHeight = computed(() => rowCount.value * props.rowHeight)
 const gutterWidth = computed(() => Math.max(44, String(Math.max(rowCount.value, 1)).length * 8 + 20))
 
@@ -212,8 +225,11 @@ function headerText(col: number): string {
 	return field && sizing ? headerDisplayText(field.label, sizing.headerDisplayMaxLength) : ""
 }
 
+/** A pinned header sits in the pinned block, which starts past the row numbers; the rest in the head row. */
 function headerStyle(col: number): string {
-	return `left:${gutterWidth.value + (offsets.value[col] ?? 0)}px;width:${widths.value[col] ?? 0}px`
+	const left = (col < pinnedCount.value ? 0 : gutterWidth.value) + (offsets.value[col] ?? 0)
+
+	return `left:${left}px;width:${widths.value[col] ?? 0}px`
 }
 
 /** The column under a horizontal position in the body. */
@@ -306,7 +322,11 @@ const rowPool = shallowRef(1)
 const colPool = shallowRef(1)
 
 const visibleRows = computed(() => span(firstRow.value, lastRow.value))
+/** The columns on screen that scroll; the pinned ones are drawn apart, always. */
 const visibleCols = computed(() => span(firstCol.value, lastCol.value))
+const pinnedCols = computed(() => span(0, pinnedCount.value - 1))
+/** How far the sheet is scrolled sideways, for what is drawn in place over it. */
+const scrollX = shallowRef(0)
 
 function span(first: number, last: number): number[] {
 	const list: number[] = []
@@ -345,8 +365,12 @@ function updateWindow(): void {
 	colPool.value = Math.max(1, Math.min(cols, Math.ceil(width / narrowest) + OVERSCAN_COLS * 2 + 2))
 	firstRow.value = Math.max(0, Math.floor(top / props.rowHeight) - OVERSCAN_ROWS)
 	lastRow.value = Math.min(rows - 1, Math.floor((top + height) / props.rowHeight) + OVERSCAN_ROWS)
-	firstCol.value = cols === 0 ? 0 : Math.max(0, columnAt(left) - OVERSCAN_COLS)
-	lastCol.value = cols === 0 ? -1 : Math.min(cols - 1, columnAt(left + width) + OVERSCAN_COLS)
+	const pinned = pinnedCount.value
+
+	// The pinned columns cover the first pixels of the body on screen: the ones that scroll start after.
+	scrollX.value = left
+	firstCol.value = cols <= pinned ? pinned : Math.max(pinned, columnAt(left + pinnedWidth.value) - OVERSCAN_COLS)
+	lastCol.value = cols <= pinned ? pinned - 1 : Math.min(cols - 1, columnAt(left + width) + OVERSCAN_COLS)
 
 	// The list under the editor moves with the cell it belongs to.
 	if (listOpen.value) {
@@ -373,10 +397,17 @@ function reveal(target: CellPosition | null = selection.head): void {
 		element.scrollTop = top + props.rowHeight - height
 	}
 
-	if (left < element.scrollLeft) {
-		element.scrollLeft = left
+	// A pinned column is always in view; one that scrolls must clear the pinned ones.
+	if (target.col < pinnedCount.value) {
+		return
+	}
+
+	const start = element.scrollLeft + pinnedWidth.value
+
+	if (left < start) {
+		element.scrollLeft = left - pinnedWidth.value
 	} else if (right > element.scrollLeft + width) {
-		element.scrollLeft = Math.min(left, right - width)
+		element.scrollLeft = Math.min(left - pinnedWidth.value, right - width)
 	}
 }
 
@@ -550,22 +581,46 @@ function colSelected(col: number): boolean {
 	return range.value !== null && col >= range.value.left && col <= range.value.right
 }
 
-function box(area: CellRange): Record<string, string> {
+/** Where a range of cells is drawn; `shift` moves it sideways, as the input over a pinned cell is. */
+function box(area: CellRange, shift = 0): Record<string, string> {
 	const left = offsets.value[area.left] ?? 0
 
 	return {
-		transform: `translate(${left}px, ${area.top * props.rowHeight}px)`,
+		transform: `translate(${left + shift}px, ${area.top * props.rowHeight}px)`,
 		width: `${(offsets.value[area.right + 1] ?? left) - left}px`,
 		height: `${(area.bottom - area.top + 1) * props.rowHeight}px`
 	}
 }
 
-const rangeStyle = computed(() => (range.value ? box(range.value) : {}))
+/** The selected range, split where the pinned columns end: each part is drawn with its columns. */
+const rangeParts = computed(() => {
+	const area = range.value
+	const pinned = pinnedCount.value
+
+	return {
+		pinned: area && area.left < pinned ? box({ ...area, right: Math.min(area.right, pinned - 1) }) : null,
+		free: area && area.right >= pinned ? box({ ...area, left: Math.max(area.left, pinned) }) : null
+	}
+})
+
+const activePinned = computed(() => active.value !== null && active.value.col < pinnedCount.value)
 
 const activeStyle = computed(() => {
 	const cell = active.value
 
 	return cell ? box({ top: cell.row, bottom: cell.row, left: cell.col, right: cell.col }) : {}
+})
+
+/**
+ * Where the input sits. It is one element, so it never loses the keyboard on the way between the
+ * pinned columns and the rest; over a pinned cell it is moved along as the sheet scrolls.
+ */
+const inputStyle = computed(() => {
+	const cell = active.value
+
+	return cell && activePinned.value
+		? box({ top: cell.row, bottom: cell.row, left: cell.col, right: cell.col }, scrollX.value)
+		: activeStyle.value
 })
 
 // ---------------------------------------------------------------- editing
@@ -601,7 +656,7 @@ const editorStyle = computed(() => {
 	const room = totalWidth.value - (offsets.value[state.col] ?? 0)
 	const wanted = measureDraft ? measureDraft(draft.value) + EDITOR_CHROME : cellWidth
 
-	return { ...activeStyle.value, width: `${Math.min(Math.max(cellWidth, wanted), Math.max(cellWidth, room))}px` }
+	return { ...inputStyle.value, width: `${Math.min(Math.max(cellWidth, wanted), Math.max(cellWidth, room))}px` }
 })
 
 /**
@@ -1405,7 +1460,7 @@ function cellAt(event: MouseEvent): CellPosition | null {
 
 	return {
 		row: clamp(Math.floor((event.clientY - rect.top) / props.rowHeight), 0, rowCount.value - 1),
-		col: columnAt(clamp(event.clientX - rect.left, 0, totalWidth.value - 1))
+		col: columnAtClient(event.clientX)
 	}
 }
 
@@ -1442,10 +1497,17 @@ function onBodyDown(event: MouseEvent): void {
 	})
 }
 
+/** The column under a point on screen: a pinned one where they are drawn, otherwise one that scrolls. */
 function columnAtClient(clientX: number): number {
-	const rect = head.value?.getBoundingClientRect()
+	const element = scroller.value
+	// From where the columns start on screen, just past the row numbers.
+	const x = clientX - (element?.getBoundingClientRect().left ?? 0) - gutterWidth.value
 
-	return columnAt(Math.max(0, clientX - (rect?.left ?? 0) - gutterWidth.value))
+	if (pinnedCount.value > 0 && x < pinnedWidth.value) {
+		return columnAt(Math.max(0, x))
+	}
+
+	return columnAt(clamp(x + (element?.scrollLeft ?? 0), 0, Math.max(0, totalWidth.value - 1)))
 }
 
 function rowAtClient(clientY: number): number {
@@ -1675,6 +1737,99 @@ watch(
 )
 
 watch(sizings, () => measureHeaders())
+
+// Columns hidden, shown, pinned or moved: positions on screen mean other columns now.
+watch(arranged, () => {
+	editing.value = null
+	closeColumnMenu()
+	syncSize()
+})
+
+// ---------------------------------------------------------------- column menu
+
+/** The menu of the column whose header button was pressed, placed under the button. */
+const columnMenu = shallowRef<{ readonly col: number; readonly left: number; readonly top: number } | null>(null)
+let stopMenu: (() => void) | null = null
+
+/** Columns the user hid that the schema still has. */
+const hiddenCount = computed(() => (columns.value.hidden ?? []).filter(key => schema.value.has(key)).length)
+
+function openColumnMenu(event: MouseEvent, col: number): void {
+	const frame = root.value
+	const button = event.currentTarget as HTMLElement | null
+
+	if (!frame || !button) {
+		return
+	}
+
+	commitEdit(false)
+	closeColumnMenu()
+
+	const at = button.getBoundingClientRect()
+	const box = frame.getBoundingClientRect()
+
+	columnMenu.value = { col, left: at.left - box.left, top: at.bottom - box.top }
+
+	// A press anywhere else closes it.
+	const close = (down: MouseEvent): void => {
+		const menu = frame.querySelector(".tabula-grid-menu")
+
+		if (!(down.target instanceof Node && menu?.contains(down.target))) {
+			closeColumnMenu()
+		}
+	}
+
+	window.addEventListener("mousedown", close, true)
+	stopMenu = () => window.removeEventListener("mousedown", close, true)
+	void nextTick(() => frame.querySelector<HTMLElement>(".tabula-grid-menu button")?.focus())
+}
+
+function closeColumnMenu(refocus = false): void {
+	stopMenu?.()
+	stopMenu = null
+	columnMenu.value = null
+
+	if (refocus) {
+		focusInput()
+	}
+}
+
+function columnAction(action: "pin" | "unpin" | "hide" | "showHidden"): void {
+	const menu = columnMenu.value
+	const field = menu ? fields.value[menu.col] : undefined
+
+	closeColumnMenu(true)
+
+	if (action === "showHidden") {
+		columns.value = Object.freeze({ ...columns.value, hidden: [] })
+	} else if (field) {
+		columns.value = withColumn(
+			columns.value,
+			field.key,
+			action === "hide" ? { hidden: true } : { pinned: action === "pin" }
+		)
+	}
+}
+
+/** Up and down move between the menu's items; Escape closes it and gives the grid the keyboard back. */
+function onMenuKeydown(event: KeyboardEvent): void {
+	const items = [
+		...(root.value?.querySelectorAll<HTMLButtonElement>(".tabula-grid-menu button:not(:disabled)") ?? [])
+	]
+	const at = items.indexOf(document.activeElement as HTMLButtonElement)
+
+	if (event.key === "Escape") {
+		closeColumnMenu(true)
+	} else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+		const by = event.key === "ArrowDown" ? 1 : -1
+
+		items[(at + by + items.length) % items.length]?.focus()
+	} else {
+		return
+	}
+
+	event.preventDefault()
+}
 watch(offsets, () => updateWindow())
 watch(
 	() => props.rowHeight,
@@ -1698,6 +1853,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
 	stopSearch()
+	closeColumnMenu()
 	ownValidator?.dispose()
 	ownHistory?.dispose()
 	ownView?.dispose()
@@ -1712,6 +1868,11 @@ onBeforeUnmount(() => {
  * out is shown, in its place. False when the row is no longer there.
  */
 function goTo(rowId: string, field?: string | null): boolean {
+	return go(rowId, field ?? null, true)
+}
+
+/** `mayShow`: a column the user hid is shown first, once; the cell is gone to when it is. */
+function go(rowId: string, field: string | null, mayShow: boolean): boolean {
 	if (!view.value.show(rowId)) {
 		return false
 	}
@@ -1725,6 +1886,14 @@ function goTo(rowId: string, field?: string | null): boolean {
 	commitEdit(false)
 
 	const col = field ? fields.value.findIndex(candidate => candidate.key === field) : -1
+
+	if (field && col < 0 && mayShow && columns.value.hidden?.includes(field)) {
+		columns.value = withColumn(columns.value, field, { hidden: false })
+		// The layout comes back through v-model on the next render.
+		void nextTick(() => go(rowId, field, false))
+
+		return true
+	}
 
 	selection.moveTo(row, col < 0 ? (selection.active?.col ?? 0) : col)
 	reveal()
@@ -1762,7 +1931,7 @@ defineExpose({
 		role="grid"
 		:tabindex="active ? -1 : 0"
 		:data-tabula-theme="theme"
-		:class="{ 'is-filtered': filtered }"
+		:class="{ 'is-filtered': filtered, 'is-scrolled-x': scrollX > 0 }"
 		:style="{ '--tabula-row-height': `${rowHeight}px` }"
 		:aria-rowcount="rowCount + 1"
 		:aria-colcount="fields.length"
@@ -1780,13 +1949,48 @@ defineExpose({
 				:style="{ width: `${gutterWidth + totalWidth}px`, height: `${HEADER_HEIGHT + totalHeight}px` }"
 			>
 				<div
-					ref="head"
 					class="tabula-grid-head"
 					role="row"
 					aria-rowindex="1"
 					:style="{ width: `${gutterWidth + totalWidth}px`, height: `${HEADER_HEIGHT}px` }"
 				>
 					<div class="tabula-grid-corner" :style="{ width: `${gutterWidth}px` }" @mousedown="onCornerDown" />
+					<div
+						v-if="pinnedCount > 0"
+						class="tabula-grid-head-pinned"
+						:style="{ left: `${gutterWidth}px`, width: `${pinnedWidth}px` }"
+					>
+						<div
+							v-for="c in pinnedCols"
+							:key="c"
+							class="tabula-grid-th is-pinned"
+							role="columnheader"
+							:aria-colindex="c + 1"
+							:class="{ 'is-right': cellClasses[c]?.includes('is-right'), 'is-selected': colSelected(c) }"
+							:style="headerStyle(c)"
+							:title="fields[c]?.label"
+							@mousedown="onHeaderDown($event, c)"
+						>
+							<span class="tabula-grid-th-text">{{ headerText(c) }}</span>
+							<span v-if="fields[c]?.required" class="tabula-grid-required" aria-hidden="true">*</span>
+							<button
+								type="button"
+								class="tabula-grid-th-menu"
+								tabindex="-1"
+								:aria-label="GRID_TEXT[locale].columnMenu"
+								@mousedown.stop.prevent="openColumnMenu($event, c)"
+							>
+								⋯
+							</button>
+							<span
+								v-if="sizings[c]?.resizable"
+								class="tabula-grid-resize"
+								aria-hidden="true"
+								@mousedown.stop="onResizeStart($event, c)"
+								@dblclick.stop="autoFit(c)"
+							/>
+						</div>
+					</div>
 					<div
 						v-for="c in visibleCols"
 						:key="c % colPool"
@@ -1800,6 +2004,15 @@ defineExpose({
 					>
 						<span class="tabula-grid-th-text">{{ headerText(c) }}</span>
 						<span v-if="fields[c]?.required" class="tabula-grid-required" aria-hidden="true">*</span>
+						<button
+							type="button"
+							class="tabula-grid-th-menu"
+							tabindex="-1"
+							:aria-label="GRID_TEXT[locale].columnMenu"
+							@mousedown.stop.prevent="openColumnMenu($event, c)"
+						>
+							⋯
+						</button>
 						<span
 							v-if="sizings[c]?.resizable"
 							class="tabula-grid-resize"
@@ -1840,6 +2053,41 @@ defineExpose({
 					@mousedown="onBodyDown"
 					@dblclick="startEdit()"
 				>
+					<!-- The pinned columns, held in place as the rest scroll under them. -->
+					<div
+						v-if="pinnedCount > 0"
+						class="tabula-grid-pinned"
+						:style="{ left: `${gutterWidth}px`, width: `${pinnedWidth}px`, height: `${totalHeight}px` }"
+					>
+						<div
+							v-for="r in visibleRows"
+							:key="r % rowPool"
+							class="tabula-grid-row"
+							:class="{ 'is-locked': rowLocked(r) }"
+							role="presentation"
+							:data-row="r"
+							:style="{ transform: `translateY(${r * rowHeight}px)` }"
+						>
+							<div
+								v-for="c in pinnedCols"
+								:id="`${id}-${r}-${c}`"
+								:key="c"
+								class="tabula-grid-cell"
+								role="gridcell"
+								:aria-colindex="c + 1"
+								:aria-selected="inRange(r, c)"
+								:aria-readonly="!isEditable(fields[c]) || rowLocked(r) || undefined"
+								:aria-invalid="issueClass(r, c) === 'is-error' ? 'true' : undefined"
+								:class="[cellClasses[c], issueClass(r, c)]"
+								:style="cellStyles[c]"
+								:title="issueTitle(r, c)"
+							>
+								{{ text(r, c) }}
+							</div>
+						</div>
+						<div v-if="rangeParts.pinned" class="tabula-grid-range" :style="rangeParts.pinned" />
+						<div v-if="active && activePinned" class="tabula-grid-active" :style="activeStyle" />
+					</div>
 					<div
 						v-for="r in visibleRows"
 						:key="r % rowPool"
@@ -1847,6 +2095,8 @@ defineExpose({
 						:class="{ 'is-locked': rowLocked(r) }"
 						role="row"
 						:aria-rowindex="r + 2"
+						:data-row="r"
+						:aria-owns="pinnedCount > 0 ? pinnedCols.map(c => `${id}-${r}-${c}`).join(' ') : undefined"
 						:style="{ transform: `translateY(${r * rowHeight}px)` }"
 					>
 						<div
@@ -1866,15 +2116,15 @@ defineExpose({
 							{{ text(r, c) }}
 						</div>
 					</div>
-					<div v-if="range" class="tabula-grid-range" :style="rangeStyle" />
-					<div v-if="active" class="tabula-grid-active" :style="activeStyle" />
+					<div v-if="rangeParts.free" class="tabula-grid-range" :style="rangeParts.free" />
+					<div v-if="active && !activePinned" class="tabula-grid-active" :style="activeStyle" />
 					<input
 						v-if="active"
 						ref="editor"
 						v-model="draft"
 						class="tabula-grid-input"
 						:class="editing ? ['is-editing', cellClasses[editing.col]] : undefined"
-						:style="editing ? editorStyle : activeStyle"
+						:style="editing ? editorStyle : inputStyle"
 						:aria-label="inputLabel"
 						:role="listField ? 'combobox' : undefined"
 						:aria-autocomplete="listField ? 'list' : undefined"
@@ -1920,6 +2170,41 @@ defineExpose({
 			</li>
 			<li v-if="listNote" class="tabula-grid-list-note" role="presentation">{{ GRID_TEXT[locale][listNote] }}</li>
 		</ul>
+		<div
+			v-if="columnMenu"
+			class="tabula-grid-menu"
+			role="menu"
+			:aria-label="GRID_TEXT[locale].columnMenu"
+			:style="{ left: `${columnMenu.left}px`, top: `${columnMenu.top}px` }"
+			@keydown="onMenuKeydown"
+		>
+			<button
+				type="button"
+				role="menuitem"
+				class="tabula-grid-menu-pin"
+				@click="columnAction(columnMenu.col < pinnedCount ? 'unpin' : 'pin')"
+			>
+				{{ columnMenu.col < pinnedCount ? GRID_TEXT[locale].unpin : GRID_TEXT[locale].pin }}
+			</button>
+			<button
+				type="button"
+				role="menuitem"
+				class="tabula-grid-menu-hide"
+				:disabled="fields.length <= 1"
+				@click="columnAction('hide')"
+			>
+				{{ GRID_TEXT[locale].hide }}
+			</button>
+			<button
+				v-if="hiddenCount > 0"
+				type="button"
+				role="menuitem"
+				class="tabula-grid-menu-show"
+				@click="columnAction('showHidden')"
+			>
+				{{ GRID_TEXT[locale].showHidden }} ({{ hiddenCount }})
+			</button>
+		</div>
 		<div ref="headerProbe" class="tabula-grid-th tabula-grid-probe" aria-hidden="true" />
 		<div ref="cellProbe" class="tabula-grid-cell tabula-grid-probe" aria-hidden="true" />
 	</div>
@@ -2027,6 +2312,7 @@ defineExpose({
 	position: sticky;
 	top: 0;
 	z-index: 3;
+	display: flex;
 	box-sizing: border-box;
 	border-bottom: 1px solid var(--tabula-head-line);
 	background: var(--tabula-head-bg);
@@ -2035,7 +2321,8 @@ defineExpose({
 .tabula-grid-corner {
 	position: sticky;
 	left: 0;
-	z-index: 1;
+	z-index: 2;
+	flex: none;
 	box-sizing: border-box;
 	height: 100%;
 	border-right: 1px solid var(--tabula-head-line);
@@ -2087,6 +2374,61 @@ defineExpose({
 	cursor: col-resize;
 }
 
+/* A header's menu button: there when the pointer is over the header. */
+.tabula-grid-th-menu {
+	position: absolute;
+	top: 50%;
+	right: 9px;
+	display: none;
+	padding: 0 5px;
+	border: 1px solid var(--tabula-head-line);
+	border-radius: 3px;
+	background: var(--tabula-head-bg);
+	color: var(--tabula-muted);
+	font: inherit;
+	line-height: 18px;
+	transform: translateY(-50%);
+	cursor: pointer;
+}
+
+.tabula-grid-th:hover .tabula-grid-th-menu {
+	display: block;
+}
+
+.tabula-grid-menu {
+	position: absolute;
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	min-width: 190px;
+	padding: 3px 0;
+	border: 1px solid var(--tabula-head-line);
+	border-radius: 4px;
+	background: var(--tabula-bg);
+	box-shadow: 0 6px 18px rgb(0 0 0 / 14%);
+}
+
+.tabula-grid-menu button {
+	padding: 6px 12px;
+	border: 0;
+	background: transparent;
+	color: var(--tabula-fg);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.tabula-grid-menu button:hover,
+.tabula-grid-menu button:focus-visible {
+	outline: none;
+	background: var(--tabula-range-bg);
+}
+
+.tabula-grid-menu button:disabled {
+	color: var(--tabula-muted);
+	cursor: default;
+}
+
 .tabula-grid-resize:hover {
 	background: var(--tabula-accent);
 }
@@ -2115,10 +2457,36 @@ defineExpose({
 	text-align: right;
 }
 
+/* Clipped, but not a scroll box of its own: the pinned columns inside stick to the sheet's scrolling. */
 .tabula-grid-body {
 	position: absolute;
 	z-index: 0;
-	overflow: hidden;
+	overflow: clip;
+}
+
+/* The pinned columns: in the head and in the body, held in place while the rest scroll under them. */
+.tabula-grid-head-pinned,
+.tabula-grid-pinned {
+	position: sticky;
+	z-index: 1;
+	flex: none;
+	box-shadow: inset -2px 0 0 var(--tabula-head-line);
+}
+
+.tabula-grid-head-pinned {
+	height: 100%;
+	background: var(--tabula-head-bg);
+}
+
+.tabula-grid-pinned {
+	background: var(--tabula-bg);
+}
+
+.tabula-grid.is-scrolled-x .tabula-grid-head-pinned,
+.tabula-grid.is-scrolled-x .tabula-grid-pinned {
+	box-shadow:
+		inset -2px 0 0 var(--tabula-head-line),
+		4px 0 6px -3px rgb(0 0 0 / 22%);
 }
 
 .tabula-grid-row {
@@ -2257,7 +2625,7 @@ defineExpose({
 	position: absolute;
 	top: 0;
 	left: 0;
-	z-index: 1;
+	z-index: 2;
 	box-sizing: border-box;
 	margin: 0;
 	padding: 0 7px;

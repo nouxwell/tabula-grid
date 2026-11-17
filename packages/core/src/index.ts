@@ -135,10 +135,12 @@ export type { ReadResult, ValueProblem, ValueProblemCode } from "./values/read"
 export { digitsFor, editText, formatCell } from "./values/format"
 
 export {
+	arrangeColumns,
 	autoColumnWidth,
 	clampColumnWidth,
 	DEFAULT_COLUMN_SIZING,
 	headerDisplayText,
-	resolveColumnSizing
+	resolveColumnSizing,
+	withColumn
 } from "./columns"
-export type { ColumnSizing } from "./columns"
+export type { ArrangedColumns, ColumnLayout, ColumnSizing } from "./columns"

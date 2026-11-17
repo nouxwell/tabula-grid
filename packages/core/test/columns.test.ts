@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest"
 import {
+	arrangeColumns,
 	autoColumnWidth,
 	clampColumnWidth,
 	DEFAULT_COLUMN_SIZING,
 	headerDisplayText,
 	resolveColumnSizing,
-	TabulaError
+	TabulaError,
+	withColumn
 } from "../src/index"
 
 describe("column sizing", () => {
@@ -72,5 +74,43 @@ describe("headerDisplayText", () => {
 
 	it("counts characters, so a cut never splits one", () => {
 		expect(headerDisplayText("📦📦📦", 2)).toBe("📦📦…")
+	})
+})
+
+describe("column layout", () => {
+	const fields = ["product", "sku", "price", "change", "note"].map(key => ({ key }))
+	const keys = (layout: Parameters<typeof arrangeColumns>[1]) => {
+		const arranged = arrangeColumns(fields, layout)
+
+		return `${arranged.fields.map(field => field.key).join(",")} | ${arranged.pinned}`
+	}
+
+	it("shows every column in the schema's order when there is no layout", () => {
+		expect(keys({})).toBe("product,sku,price,change,note | 0")
+	})
+
+	it("hides, orders and pins, the pinned columns first", () => {
+		expect(keys({ hidden: ["sku"] })).toBe("product,price,change,note | 0")
+		expect(keys({ order: ["note", "price"] })).toBe("note,price,product,sku,change | 0")
+		expect(keys({ pinned: ["price", "product"] })).toBe("product,price,sku,change,note | 2")
+		expect(keys({ order: ["price"], pinned: ["product", "price"], hidden: ["price"] })).toBe(
+			"product,sku,change,note | 1"
+		)
+	})
+
+	it("passes over keys the schema does not have, as a layout saved before a column went", () => {
+		expect(keys({ order: ["gone", "note"], hidden: ["gone"], pinned: ["gone"] })).toBe(
+			"note,product,sku,price,change | 0"
+		)
+	})
+
+	it("hides and shows, pins and lets go of, one column at a time", () => {
+		const hidden = withColumn({}, "sku", { hidden: true })
+		const pinned = withColumn(hidden, "note", { pinned: true })
+
+		expect(pinned).toEqual({ hidden: ["sku"], pinned: ["note"] })
+		expect(withColumn(pinned, "sku", { hidden: false })).toEqual({ hidden: [], pinned: ["note"] })
+		expect(withColumn(pinned, "note", { pinned: false })).toEqual({ hidden: ["sku"], pinned: [] })
+		expect(keys(pinned)).toBe("note,product,price,change | 1")
 	})
 })

@@ -59,8 +59,9 @@ async function withPage(rows: number, test: (page: Page) => Promise<void>, query
 	}
 }
 
+/** The cell at a position on screen, whether its column is pinned or scrolls. */
 function cell(page: Page, row: number, col: number): Locator {
-	return page.locator(`.tabula-grid-row[aria-rowindex="${row + 2}"] .tabula-grid-cell[aria-colindex="${col + 1}"]`)
+	return page.locator(`.tabula-grid-row[data-row="${row}"] .tabula-grid-cell[aria-colindex="${col + 1}"]`)
 }
 
 function header(page: Page, col: number): Locator {
@@ -1147,6 +1148,147 @@ describe("TabulaGrid", () => {
 				await expect(valueAt(page, 20, "newPrice")).resolves.toBe("3")
 				// The rows in between, hidden, kept what they held.
 				await expect(valueAt(page, 3, "newPrice")).resolves.not.toBeNull()
+			})
+		})
+	})
+
+	describe("hiding and pinning columns", () => {
+		const headerText = (page: Page, col: number): Promise<string> =>
+			header(page, col).locator(".tabula-grid-th-text").innerText()
+		const layout = (page: Page) => page.evaluate(() => window.__playground!.columns())
+
+		/** Opens a column's menu from its header and picks an item. */
+		async function menu(page: Page, col: number, item: "pin" | "hide" | "show"): Promise<void> {
+			await header(page, col).hover()
+			await header(page, col).locator(".tabula-grid-th-menu").click()
+			await page.locator(`.tabula-grid-menu-${item}`).click()
+		}
+
+		async function scrollTo(page: Page, left: number): Promise<void> {
+			await page.evaluate(x => {
+				const scroller = document.querySelector(".tabula-grid-scroller")!
+
+				scroller.scrollLeft = x
+				scroller.dispatchEvent(new Event("scroll"))
+			}, left)
+		}
+
+		it("hides a column from its header's menu, and shows the hidden ones again", async () => {
+			await withPage(20, async page => {
+				await menu(page, 1, "hide")
+
+				await expect.poll(() => headerText(page, 1)).toBe("Mevcut fiyat")
+				await expect(layout(page)).resolves.toEqual({ hidden: ["sku"] })
+
+				await header(page, 0).hover()
+				await header(page, 0).locator(".tabula-grid-th-menu").click()
+				await expect(page.locator(".tabula-grid-menu-show").innerText()).resolves.toBe(
+					"Gizli kolonları göster (1)"
+				)
+				await page.locator(".tabula-grid-menu-show").click()
+
+				await expect.poll(() => headerText(page, 1)).toBe("SKU")
+			})
+		})
+
+		it("pins a column, which stays in place while the sheet scrolls sideways", async () => {
+			await withPage(20, async page => {
+				await menu(page, 3, "pin")
+
+				// Pinned columns come first.
+				await expect.poll(() => headerText(page, 0)).toBe("Yeni fiyat")
+				await expect(layout(page)).resolves.toEqual({ pinned: ["newPrice"] })
+
+				const before = await cell(page, 0, 0).boundingBox()
+				const header0 = await header(page, 0).boundingBox()
+
+				await scrollTo(page, 500)
+				await expect.poll(() => page.locator(".tabula-grid").getAttribute("class")).toContain("is-scrolled-x")
+
+				await expect(cell(page, 0, 0).boundingBox()).resolves.toMatchObject({ x: before?.x, y: before?.y })
+				await expect(header(page, 0).boundingBox()).resolves.toMatchObject({ x: header0?.x })
+
+				// A press on the pinned cell is a press on it, however far the rest has scrolled.
+				await cell(page, 0, 0).click()
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 0, col: 0 } })
+				await page.keyboard.type("5")
+				await press(page, "Enter")
+				await expect.poll(() => valueAt(page, 0, "newPrice")).toBe("5")
+			})
+		})
+
+		it("moves across the pinned columns with the keyboard, keeping the active cell clear of them", async () => {
+			await withPage(20, async page => {
+				await menu(page, 0, "pin")
+				await cell(page, 0, 0).click()
+
+				await press(page, "End")
+				const scrolled = await page.evaluate(() => document.querySelector(".tabula-grid-scroller")!.scrollLeft)
+
+				expect(scrolled).toBeGreaterThan(0)
+
+				await press(page, "Home")
+				await expect(
+					page.evaluate(() => document.querySelector(".tabula-grid-scroller")!.scrollLeft)
+				).resolves.toBe(scrolled)
+
+				await press(page, "ArrowRight")
+
+				const pinned = await cell(page, 0, 0).boundingBox()
+				const next = await cell(page, 0, 1).boundingBox()
+
+				expect(next?.x).toBeGreaterThanOrEqual((pinned?.x ?? 0) + (pinned?.width ?? 0) - 1)
+			})
+		})
+
+		it("goes to an issue in a hidden column, and shows the column", async () => {
+			await withPage(20, async page => {
+				await menu(page, 3, "hide")
+				await expect.poll(() => headerText(page, 3)).toBe("Değişim %")
+
+				await page.evaluate(() => {
+					const { store } = window.__playground!
+
+					store.setCell(store.rowIdAt(2)!, "newPrice", null)
+				})
+				await page.locator(".tabula-issues-item", { hasText: "Satır 3" }).click()
+
+				await expect.poll(() => headerText(page, 3)).toBe("Yeni fiyat")
+				await expect.poll(() => selected(page)).toMatchObject({ active: { row: 2, col: 3 } })
+			})
+		})
+
+		it("pastes into the columns shown, passing over a hidden one", async () => {
+			await withPage(20, async page => {
+				const currency = await valueAt(page, 0, "currency")
+
+				await menu(page, 5, "hide")
+				await expect.poll(() => headerText(page, 5)).toBe("Geçerlilik başlangıç tarihi (fiyat listesi)")
+
+				await cell(page, 0, 4).click()
+				await clipboard(page, "5\t31.12.2026")
+				await press(page, "Control+V")
+
+				await expect.poll(() => valueAt(page, 0, "validFrom")).toBe("2026-12-31")
+				await expect(valueAt(page, 0, "change")).resolves.toBe("5")
+				await expect(valueAt(page, 0, "currency")).resolves.toBe(currency)
+			})
+		})
+
+		it("keeps the columns as the user left them in the draft", async () => {
+			await withPage(20, async page => {
+				await menu(page, 3, "pin")
+				await expect.poll(() => headerText(page, 0)).toBe("Yeni fiyat")
+				await menu(page, 2, "hide")
+				await expect
+					.poll(() => page.locator(".playground-draft").innerText(), { timeout: 5000 })
+					.toMatch(/^Taslak kaydedildi/)
+
+				await Promise.all([page.waitForEvent("load"), page.reload()])
+				await page.waitForFunction(() => window.__playground !== undefined)
+
+				await expect(headerText(page, 0)).resolves.toBe("Yeni fiyat")
+				await expect(layout(page)).resolves.toEqual({ pinned: ["newPrice"], hidden: ["sku"] })
 			})
 		})
 	})

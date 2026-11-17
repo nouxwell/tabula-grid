@@ -1,3 +1,4 @@
+import type { ColumnLayout } from "./columns"
 import type { ProcessRequest } from "./contract"
 import { TabulaError } from "./errors"
 import type { RowEntry, RowInit, RowStore } from "./rows"
@@ -27,6 +28,8 @@ export interface DraftField {
 export interface DraftView {
 	/** Widths the user set, by field key, as the grid's `columnWidths` holds them. */
 	readonly columnWidths: Readonly<Record<string, number>>
+	/** Which columns are hidden, pinned or moved, as the grid's `columns` holds them. */
+	readonly columns?: ColumnLayout
 }
 
 export interface Draft {
@@ -77,7 +80,10 @@ export function createDraft(options: CreateDraftOptions): Draft {
 		revision: store.revision,
 		rows: Object.freeze(store.snapshot()),
 		session: session?.persisted() ?? Object.freeze({ results: Object.freeze([]), pending: null }),
-		view: Object.freeze({ columnWidths: Object.freeze({ ...options.view?.columnWidths }) })
+		view: Object.freeze({
+			columnWidths: Object.freeze({ ...options.view?.columnWidths }),
+			...(options.view?.columns ? { columns: freezeLayout(options.view.columns) } : {})
+		})
 	})
 }
 
@@ -168,11 +174,22 @@ export function openDraft(draft: Draft, schema: ModuleSchema, options: OpenDraft
 		}
 	}
 
+	// The layout follows renamed fields, and lets go of removed ones.
+	const layout = draft.view.columns
+	const keys = (list: readonly string[]): string[] => list.map(keep).filter((key): key is string => key !== null)
+	const columns = layout
+		? freezeLayout({
+				...(layout.order ? { order: keys(layout.order) } : {}),
+				...(layout.hidden ? { hidden: keys(layout.hidden) } : {}),
+				...(layout.pinned ? { pinned: keys(layout.pinned) } : {})
+			})
+		: undefined
+
 	return {
 		status: "opened",
 		rows,
 		session: draft.session,
-		view: Object.freeze({ columnWidths: Object.freeze(columnWidths) }),
+		view: Object.freeze({ columnWidths: Object.freeze(columnWidths), ...(columns ? { columns } : {}) }),
 		changes
 	}
 }
@@ -329,6 +346,8 @@ export function readDraft(input: unknown): Draft {
 		}
 	}
 
+	const columns = readLayout(plain(root.view)?.columns, "view.columns", problem)
+
 	if (problems.length > 0) {
 		throw new TabulaError(
 			"invalid_draft",
@@ -349,7 +368,51 @@ export function readDraft(input: unknown): Draft {
 		revision,
 		rows: Object.freeze(rows),
 		session: Object.freeze({ results: Object.freeze(results), pending }),
-		view: Object.freeze({ columnWidths: Object.freeze(columnWidths) })
+		view: Object.freeze({ columnWidths: Object.freeze(columnWidths), ...(columns ? { columns } : {}) })
+	})
+}
+
+function readLayout(input: unknown, path: string, problem: Problem): ColumnLayout | undefined {
+	if (input === undefined || input === null) {
+		return undefined
+	}
+
+	const layout = plain(input)
+
+	if (!layout) {
+		problem(path, "must be an object.")
+
+		return undefined
+	}
+
+	const list = (name: "order" | "hidden" | "pinned"): string[] | undefined => {
+		const value = layout[name]
+
+		if (value === undefined) {
+			return undefined
+		}
+
+		if (!Array.isArray(value) || value.some(item => typeof item !== "string")) {
+			problem(`${path}.${name}`, "must be a list of field keys.")
+
+			return undefined
+		}
+
+		return value as string[]
+	}
+
+	const order = list("order")
+	const hidden = list("hidden")
+	const pinned = list("pinned")
+
+	return freezeLayout({ ...(order ? { order } : {}), ...(hidden ? { hidden } : {}), ...(pinned ? { pinned } : {}) })
+}
+
+function freezeLayout(layout: ColumnLayout): ColumnLayout {
+	return Object.freeze({
+		...(layout.order ? { order: Object.freeze([...layout.order]) } : {}),
+		...(layout.hidden ? { hidden: Object.freeze([...layout.hidden]) } : {}),
+		...(layout.pinned ? { pinned: Object.freeze([...layout.pinned]) } : {})
 	})
 }
 

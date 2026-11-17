@@ -224,6 +224,20 @@ describe("drafts", () => {
 			expect(opening.rows[2]?.values).toMatchObject({ location: "B-4" })
 		}
 
+		// The column layout follows the rename too.
+		const laidOut = createDraft({
+			id: "d_2",
+			schema,
+			store: storeOf(),
+			view: { columnWidths: {}, columns: { hidden: ["counted"], pinned: ["shelf"], order: ["shelf", "product"] } }
+		})
+		const reopened = openDraft(readDraft(stored(laidOut)), renamed, { rename: { shelf: "location" }, accept: true })
+
+		expect(reopened).toMatchObject({
+			status: "opened",
+			view: { columns: { hidden: ["counted"], pinned: ["location"], order: ["location", "product"] } }
+		})
+
 		expect(codeOf(() => openDraft(draft, renamed, { rename: { aisle: "location" } }))).toBe("invalid_argument")
 		expect(codeOf(() => openDraft(draft, renamed, { rename: { shelf: "bin" } }))).toBe("unknown_field")
 	})

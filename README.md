@@ -134,6 +134,11 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
   and scrolls it into view, which is what an issue's ids are for.
 - **Undo.** Ctrl+Z takes a step back, Ctrl+Y or Ctrl+Shift+Z makes it again, and either selects
   what it changed. While a cell is being edited, Ctrl+Z belongs to the editor.
+- **Hiding and pinning.** A header's menu (⋯) pins a column, hides it, or shows the hidden ones
+  again. Pinned columns come first and stay in place while the rest scroll sideways under them.
+  The user's arrangement is a `ColumnLayout`, `{ order, hidden, pinned }` by field key; bind it
+  with `v-model:columns` to keep it, as a draft does. Hiding a column relaxes nothing: its issues
+  are still listed, going to one shows the column again, and a paste passes over it.
 - **Themes.** `light`, `dark` or `auto`, and every colour is a `--tabula-*` CSS variable.
 
 With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>` is available everywhere,

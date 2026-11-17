@@ -91,7 +91,12 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		searching: "Aranıyor…",
 		none: "Eşleşen kayıt yok",
 		more: "Daha fazlası var; aramayı daraltın",
-		unavailable: "Arama yapılamadı"
+		unavailable: "Arama yapılamadı",
+		columnMenu: "Kolon seçenekleri",
+		pin: "Sabitle",
+		unpin: "Sabitlemeyi kaldır",
+		hide: "Gizle",
+		showHidden: "Gizli kolonları göster"
 	},
 	en: {
 		succeeded: "Processed",
@@ -102,7 +107,12 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		searching: "Searching…",
 		none: "No matching records",
 		more: "There are more; narrow the search",
-		unavailable: "The search could not be made"
+		unavailable: "The search could not be made",
+		columnMenu: "Column options",
+		pin: "Pin",
+		unpin: "Unpin",
+		hide: "Hide",
+		showHidden: "Show hidden columns"
 	}
 }
 

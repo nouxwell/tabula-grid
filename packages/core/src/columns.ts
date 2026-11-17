@@ -93,3 +93,77 @@ export function clampColumnWidth(width: number, sizing: ColumnSizing): number {
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, value))
 }
+
+/**
+ * A user's arrangement of the columns, kept with their view of the sheet. Only how the columns are
+ * shown: hiding a required column relaxes nothing, and its issues are still listed.
+ *
+ * Keys the schema does not have are passed over, so a layout saved before a column was removed
+ * still applies.
+ */
+export interface ColumnLayout {
+	/** Columns in the order to show them; those left out follow, in the schema's order. */
+	readonly order?: readonly string[]
+	readonly hidden?: readonly string[]
+	/** Columns kept in place on the left while the sheet scrolls sideways. They are shown first. */
+	readonly pinned?: readonly string[]
+}
+
+export interface ArrangedColumns<F> {
+	/** The columns shown, in order: the pinned ones first. */
+	readonly fields: readonly F[]
+	/** How many of the first are pinned. */
+	readonly pinned: number
+}
+
+/** The columns a layout shows, in the order it shows them. */
+export function arrangeColumns<F extends { readonly key: string }>(
+	fields: readonly F[],
+	layout: ColumnLayout = {}
+): ArrangedColumns<F> {
+	const byKey = new Map(fields.map(field => [field.key, field]))
+	const hidden = new Set(layout.hidden ?? [])
+	const pinned = new Set(layout.pinned ?? [])
+	const ordered: F[] = []
+	const seen = new Set<string>()
+
+	for (const key of [...(layout.order ?? []), ...fields.map(field => field.key)]) {
+		const field = byKey.get(key)
+
+		if (field && !seen.has(key)) {
+			seen.add(key)
+			ordered.push(field)
+		}
+	}
+
+	const shown = ordered.filter(field => !hidden.has(field.key))
+	const first = shown.filter(field => pinned.has(field.key))
+
+	return Object.freeze({
+		fields: Object.freeze([...first, ...shown.filter(field => !pinned.has(field.key))]),
+		pinned: first.length
+	})
+}
+
+/** The layout with one column hidden or shown, pinned or let go. */
+export function withColumn(
+	layout: ColumnLayout,
+	key: string,
+	change: { readonly hidden?: boolean; readonly pinned?: boolean }
+): ColumnLayout {
+	const toggle = (list: readonly string[] | undefined, on: boolean | undefined): readonly string[] | undefined => {
+		if (on === undefined) {
+			return list
+		}
+
+		const rest = (list ?? []).filter(item => item !== key)
+
+		return Object.freeze(on ? [...rest, key] : rest)
+	}
+
+	return Object.freeze({
+		...layout,
+		...(change.hidden === undefined ? {} : { hidden: toggle(layout.hidden, change.hidden) }),
+		...(change.pinned === undefined ? {} : { pinned: toggle(layout.pinned, change.pinned) })
+	})
+}

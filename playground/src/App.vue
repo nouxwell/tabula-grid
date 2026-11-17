@@ -13,6 +13,7 @@ import {
 	UndoHistory,
 	VALUE_SETTINGS,
 	type Draft,
+	type ColumnLayout,
 	type DraftChanges,
 	type DraftOpening,
 	type Issue,
@@ -101,6 +102,8 @@ if (opened) {
 }
 
 const widths = ref<Readonly<Record<string, number>>>(opened?.view.columnWidths ?? {})
+// The user's columns: hidden, pinned, moved. Kept in the draft with the widths.
+const columns = ref<ColumnLayout>(opened?.view.columns ?? {})
 
 // Saves the sheet a second after the user stops changing it. Not while a draft waits to be reviewed
 // or could not be read: that would write the sample sheet over it.
@@ -114,12 +117,12 @@ const saver =
 				save: storeDraft,
 				delay: 1000,
 				...(opened && draft ? { id: draft.id, name: draft.name } : {}),
-				view: () => ({ columnWidths: widths.value })
+				view: () => ({ columnWidths: widths.value, columns: columns.value })
 			})
 const saverVersion = shallowRef(saver?.version ?? 0)
 
 saver?.subscribe(() => (saverVersion.value = saver.version))
-watch(widths, () => saver?.changed())
+watch([widths, columns], () => saver?.changed())
 
 // A draft opened under a newer schema is saved under it at once, so it is not reviewed again.
 if (opened?.changes) {
@@ -408,7 +411,8 @@ onMounted(() => {
 		saver,
 		lookups,
 		view,
-		widths: () => widths.value
+		widths: () => widths.value,
+		columns: () => columns.value
 	}
 	grid.value?.focus()
 })
@@ -502,6 +506,7 @@ onMounted(() => {
 			<TabulaGrid
 				ref="grid"
 				v-model:column-widths="widths"
+				v-model:columns="columns"
 				class="playground-grid"
 				:schema="schema"
 				:store="store"
