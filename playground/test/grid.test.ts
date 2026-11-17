@@ -260,13 +260,13 @@ describe("TabulaGrid", () => {
 				const before = await revision(page)
 
 				await cell(page, 1, 3).click()
-				await page.keyboard.type("389.90")
+				await page.keyboard.type("389,90")
 				await press(page, "Enter")
 
-				await expect.poll(() => valueAt(page, 1, "newPrice")).toBe("389.90")
+				await expect.poll(() => valueAt(page, 1, "newPrice")).toBe("389.9")
 				await expect(revision(page)).resolves.toBe(before + 1)
 				await expect(selected(page)).resolves.toMatchObject({ active: { row: 2, col: 3 } })
-				await expect.poll(() => cell(page, 1, 3).innerText()).toBe("389.90")
+				await expect.poll(() => cell(page, 1, 3).innerText()).toBe("389,90")
 			})
 		})
 
@@ -310,7 +310,8 @@ describe("TabulaGrid", () => {
 
 				const editor = page.locator(".tabula-grid-input.is-editing")
 
-				await expect(editor.inputValue()).resolves.toBe(original)
+				// Every digit, the Turkish decimal comma, no grouping: what reads back to the same value.
+				await expect(editor.inputValue()).resolves.toBe(String(original).replace(".", ","))
 
 				await page.keyboard.type("9")
 				await press(page, "Escape")
@@ -362,6 +363,97 @@ describe("TabulaGrid", () => {
 		})
 	})
 
+	describe("values", () => {
+		it("shows numbers, dates and yes or no the Turkish way", async () => {
+			await withPage(20, async page => {
+				const current = String(await valueAt(page, 0, "currentPrice"))
+				const [whole = "", fraction = ""] = current.split(".")
+
+				await expect
+					.poll(() => cell(page, 0, 2).innerText())
+					.toBe(`${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${fraction.padEnd(2, "0")}`)
+
+				const date = String(await valueAt(page, 0, "validFrom"))
+
+				await expect(cell(page, 0, 6).innerText()).resolves.toBe(date.split("-").reverse().join("."))
+				await expect(cell(page, 0, 7).innerText()).resolves.toBe(
+					(await valueAt(page, 0, "active")) ? "Evet" : "Hayır"
+				)
+			})
+		})
+
+		it("reads what is typed the Turkish way into the value a backend receives", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 3).click()
+				await page.keyboard.type("1.234,5")
+				await press(page, "Enter")
+
+				await expect.poll(() => valueAt(page, 0, "newPrice")).toBe("1234.5")
+				await expect(cell(page, 0, 3).innerText()).resolves.toBe("1.234,50")
+
+				await cell(page, 0, 7).click()
+				await page.keyboard.type("hayır")
+				await press(page, "Enter")
+
+				await expect.poll(() => valueAt(page, 0, "active")).toBe(false)
+
+				await cell(page, 0, 6).click()
+				await page.keyboard.type("28.02.2026")
+				await press(page, "Enter")
+
+				await expect.poll(() => valueAt(page, 0, "validFrom")).toBe("2026-02-28")
+			})
+		})
+
+		it("keeps text it cannot read as it was typed, and marks the cell until it is fixed", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 6).click()
+				await page.keyboard.type("31.02.2026")
+				await press(page, "Enter")
+
+				await expect.poll(() => valueAt(page, 0, "validFrom")).toBe("31.02.2026")
+				await expect(cell(page, 0, 6).getAttribute("aria-invalid")).resolves.toBe("true")
+				await expect(cell(page, 0, 6).getAttribute("title")).resolves.toBe(
+					'"31.02.2026" could not be read as a date; expected format: d.m.Y'
+				)
+				await expect(cell(page, 0, 6).innerText()).resolves.toBe("31.02.2026")
+
+				await cell(page, 0, 6).click()
+				await page.keyboard.type("28.02.2026")
+				await press(page, "Enter")
+
+				await expect.poll(() => cell(page, 0, 6).getAttribute("aria-invalid")).toBeNull()
+				await expect(cell(page, 0, 6).innerText()).resolves.toBe("28.02.2026")
+			})
+		})
+
+		it("copies what it shows, and pastes it back as the same values", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 3).click()
+				await press(page, "Shift+ArrowRight", 4)
+				await press(page, "Shift+ArrowDown")
+				await clipboard(page, "")
+				await press(page, "Control+C")
+				await expect.poll(() => clipboard(page)).not.toBe("")
+
+				await cell(page, 10, 3).click()
+				await press(page, "Control+V")
+
+				// Numbers by value: the sample writes "13.0" where reading gives "13", the same number.
+				const same = (value: unknown): unknown =>
+					typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : value
+
+				for (const key of ["newPrice", "change", "currency", "validFrom", "active"]) {
+					for (const offset of [0, 1]) {
+						const original = same(await valueAt(page, offset, key))
+
+						await expect.poll(async () => same(await valueAt(page, 10 + offset, key))).toEqual(original)
+					}
+				}
+			})
+		})
+	})
+
 	describe("clipboard", () => {
 		it("copies a range as text a spreadsheet reads", async () => {
 			await withPage(20, async page => {
@@ -391,6 +483,9 @@ describe("TabulaGrid", () => {
 				await expect(valueAt(page, 5, "sku")).resolves.toBeNull()
 				await expect(revision(page)).resolves.toBe(before + 1)
 				await expect(selected(page)).resolves.toMatchObject({ range: { top: 3, left: 0, bottom: 5, right: 3 } })
+
+				// "D" is not a price: kept as pasted, and marked.
+				await expect(cell(page, 3, 3).getAttribute("aria-invalid")).resolves.toBe("true")
 			})
 		})
 

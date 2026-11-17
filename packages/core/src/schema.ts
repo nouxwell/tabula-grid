@@ -1,5 +1,6 @@
 import { compareDecimal, normalizeDecimal } from "./decimal"
 import { SchemaError, TabulaError, type SchemaProblem } from "./errors"
+import { compilePattern } from "./values/date"
 
 /**
  * The module schema: the developer's definition of a sheet, as the backend sends it.
@@ -88,6 +89,8 @@ export interface BoolField extends FieldBase {
 
 export interface DateField extends FieldBase {
 	readonly type: "date" | "datetime"
+	/** The field's own pattern in PHP's notation, such as `d.m.Y`; null leaves it to the sheet's settings. */
+	readonly pattern: string | null
 }
 
 export interface OptionsField extends FieldBase {
@@ -140,6 +143,8 @@ export interface FieldInput {
 	multiple?: boolean
 	/** lookup */
 	lookup?: string
+	/** date and datetime */
+	pattern?: string
 }
 
 /** The module schema as it is written in the JSON. */
@@ -162,8 +167,8 @@ const TYPE_PROPERTIES: Readonly<Record<FieldType, readonly string[]>> = {
 	quantity: ["decimals"],
 	percent: ["decimals"],
 	bool: [],
-	date: [],
-	datetime: [],
+	date: ["pattern"],
+	datetime: ["pattern"],
 	options: ["options", "multiple"],
 	lookup: ["lookup"]
 }
@@ -301,6 +306,12 @@ function fieldToJson(field: FieldSchema): FieldInput {
 		case "options":
 			json.options = field.options.map(option => ({ ...option }))
 			json.multiple = field.multiple
+			break
+		case "date":
+		case "datetime":
+			if (field.pattern !== null) {
+				json.pattern = field.pattern
+			}
 			break
 		case "lookup":
 			json.lookup = field.lookup
@@ -460,9 +471,11 @@ function readField(raw: unknown, path: string, problems: Problems): FieldSchema 
 		case "string":
 		case "integer":
 		case "bool":
+			field = { ...base, type }
+			break
 		case "date":
 		case "datetime":
-			field = { ...base, type }
+			field = { ...base, type, pattern: readPattern(raw, path, problems) }
 			break
 		case "decimal":
 		case "quantity":
@@ -542,6 +555,21 @@ function readKey(raw: Json, path: string, problems: Problems): string | null {
 	}
 
 	return key
+}
+
+function readPattern(raw: Json, path: string, problems: Problems): string | null {
+	const pattern = readText(raw, "pattern", path, problems, false)
+
+	if (pattern !== null && compilePattern(pattern) === null) {
+		problems.add(
+			at(path, "pattern"),
+			`"${pattern}" uses a letter that is not one of d, j, m, n, Y, y, H, G, i, s; write other letters with a backslash before them`
+		)
+
+		return null
+	}
+
+	return pattern
 }
 
 function readDecimals(raw: Json, path: string, problems: Problems): number | null {

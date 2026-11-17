@@ -51,6 +51,12 @@ export type { CellPosition, CellRange, Direction, IsBlank, MoveOptions } from ".
 
 export { parseTsv, toTsv } from "./clipboard"
 
+export { defineValueSettings, VALUE_SETTINGS } from "./values/settings"
+export type { ValueSettings } from "./values/settings"
+export { isFieldValue, readInput, valueProblem } from "./values/read"
+export type { ReadResult, ValueProblem, ValueProblemCode } from "./values/read"
+export { digitsFor, editText, formatCell } from "./values/format"
+
 export {
 	autoColumnWidth,
 	clampColumnWidth,

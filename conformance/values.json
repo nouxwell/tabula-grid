@@ -1,0 +1,331 @@
+{
+	"about": "Text in, value out, for nouxwell/tabula's parsers and @nouxwell/tabula-core alike. A case marked \"php\": false uses something the PHP side does not have.",
+	"settings": {
+		"tr": {
+			"decimalSeparator": ",",
+			"thousandSeparator": ".",
+			"currencySymbols": { "TRY": "₺", "USD": "$" },
+			"symbolPosition": "after",
+			"datePattern": "d.m.Y",
+			"dateTimePattern": "d.m.Y H:i",
+			"trueWord": "Evet",
+			"falseWord": "Hayır"
+		},
+		"en": {
+			"decimalSeparator": ".",
+			"thousandSeparator": ",",
+			"currencySymbols": { "TRY": "₺", "USD": "$" },
+			"symbolPosition": "before",
+			"datePattern": "Y-m-d",
+			"dateTimePattern": "Y-m-d H:i",
+			"trueWord": "Yes",
+			"falseWord": "No"
+		},
+		"tr-sol": {
+			"decimalSeparator": ",",
+			"thousandSeparator": ".",
+			"currencySymbols": { "PEN": "S/." },
+			"symbolPosition": "after",
+			"datePattern": "d.m.Y",
+			"dateTimePattern": "d.m.Y H:i",
+			"trueWord": "Evet",
+			"falseWord": "Hayır"
+		}
+	},
+	"read": [
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "1.234,56", "value": "1234.56" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "1234,56", "value": "1234.56" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "1,234.56", "value": "1234.56" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "1.234", "value": "1234" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "1.5", "value": "1.5" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "1.234.567", "value": "1234567" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "1.234.567,8", "value": "1234567.8" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "(1.234,56)", "value": "-1234.56" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "1.234,56-", "value": "-1234.56" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "-0,5", "value": "-0.5" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "1234.5600", "value": "1234.56" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "  42 ", "value": "42" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "1 234,5", "value": "1234.5" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "1\u00a0234,5", "value": "1234.5" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "12 adet", "value": "12" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "0,30", "value": "0.3" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "abc", "problem": "not_a_number" },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": ".", "problem": "not_a_number" },
+		{ "settings": "en", "field": { "type": "decimal" }, "input": "1,234.56", "value": "1234.56" },
+		{ "settings": "en", "field": { "type": "decimal" }, "input": "1.234", "value": "1.234" },
+		{ "settings": "en", "field": { "type": "decimal" }, "input": "1,234", "value": "1234" },
+		{ "settings": "en", "field": { "type": "decimal" }, "input": "1,5", "value": "1.5" },
+		{ "settings": "en", "field": { "type": "decimal" }, "input": "1.234,56", "value": "1234.56" },
+
+		{ "settings": "tr", "field": { "type": "integer" }, "input": "1.234", "value": "1234" },
+		{ "settings": "tr", "field": { "type": "integer" }, "input": "12,0", "value": "12" },
+		{ "settings": "tr", "field": { "type": "integer" }, "input": "-7", "value": "-7" },
+		{ "settings": "tr", "field": { "type": "integer" }, "input": "12,5", "problem": "not_an_integer" },
+		{ "settings": "tr", "field": { "type": "integer" }, "input": "abc", "problem": "not_a_number" },
+		{
+			"settings": "tr",
+			"field": { "type": "integer" },
+			"input": "9223372036854775807",
+			"value": "9223372036854775807"
+		},
+		{
+			"settings": "tr",
+			"field": { "type": "integer" },
+			"input": "9223372036854775808",
+			"problem": "not_an_integer"
+		},
+
+		{ "settings": "tr", "field": { "type": "quantity" }, "input": "1,5", "value": "1.5" },
+		{ "settings": "tr", "field": { "type": "quantity" }, "input": "2.500", "value": "2500" },
+
+		{
+			"settings": "tr",
+			"field": { "type": "money", "currency": "TRY" },
+			"input": "1.234,56 ₺",
+			"value": "1234.56"
+		},
+		{ "settings": "tr", "field": { "type": "money", "currency": "TRY" }, "input": "₺1.234,56", "value": "1234.56" },
+		{
+			"settings": "tr",
+			"field": { "type": "money", "currency": "TRY" },
+			"input": "TRY 1.234,56",
+			"value": "1234.56"
+		},
+		{ "settings": "tr", "field": { "type": "money", "currency": "TRY" }, "input": "$1,234.56", "value": "1234.56" },
+		{ "settings": "tr", "field": { "type": "money", "currency": "TRY" }, "input": "1.234 ₺", "value": "1234" },
+		{
+			"settings": "tr",
+			"field": { "type": "money", "currency": "TRY" },
+			"input": "-1.234,56 ₺",
+			"value": "-1234.56"
+		},
+		{
+			"settings": "tr",
+			"field": { "type": "money", "currency": "TRY" },
+			"input": "₺ -1.234,56",
+			"value": "-1234.56"
+		},
+		{
+			"settings": "tr",
+			"field": { "type": "money", "currency": "TRY" },
+			"input": "abc ₺",
+			"problem": "not_a_number"
+		},
+		{ "settings": "tr", "field": { "type": "money" }, "input": "349,90", "value": "349.9" },
+		{
+			"settings": "tr-sol",
+			"field": { "type": "money", "currency": "PEN" },
+			"input": "1.234,56 S/.",
+			"value": "1234.56"
+		},
+		{
+			"settings": "tr-sol",
+			"field": { "type": "money", "currency": "PEN" },
+			"input": "S/. 1.234,56",
+			"value": "1234.56"
+		},
+
+		{ "settings": "tr", "field": { "type": "bool" }, "input": "Evet", "value": true },
+		{ "settings": "tr", "field": { "type": "bool" }, "input": "EVET", "value": true },
+		{ "settings": "tr", "field": { "type": "bool" }, "input": "hayır", "value": false },
+		{ "settings": "tr", "field": { "type": "bool" }, "input": "HAYIR", "value": false },
+		{ "settings": "tr", "field": { "type": "bool" }, "input": "1", "value": true },
+		{ "settings": "tr", "field": { "type": "bool" }, "input": "0", "value": false },
+		{ "settings": "tr", "field": { "type": "bool" }, "input": "yes", "value": true },
+		{ "settings": "tr", "field": { "type": "bool" }, "input": "off", "value": false },
+		{ "settings": "tr", "field": { "type": "bool" }, "input": "e", "value": true },
+		{ "settings": "tr", "field": { "type": "bool" }, "input": "h", "value": false },
+		{ "settings": "tr", "field": { "type": "bool" }, "input": "belki", "problem": "not_a_boolean" },
+		{ "settings": "en", "field": { "type": "bool" }, "input": "No", "value": false },
+
+		{ "settings": "tr", "field": { "type": "date" }, "input": "31.12.2026", "value": "2026-12-31" },
+		{ "settings": "tr", "field": { "type": "date" }, "input": "1.2.2026", "value": "2026-02-01" },
+		{ "settings": "tr", "field": { "type": "date" }, "input": "2026-12-31", "value": "2026-12-31" },
+		{ "settings": "tr", "field": { "type": "date" }, "input": "45296", "value": "2024-01-05" },
+		{ "settings": "tr", "field": { "type": "date" }, "input": "05.01.2024 09:30", "value": "2024-01-05" },
+		{ "settings": "tr", "field": { "type": "date" }, "input": "32.13.2024", "problem": "not_a_date" },
+		{ "settings": "tr", "field": { "type": "date" }, "input": "0000-00-00", "problem": "not_a_date" },
+		{ "settings": "tr", "field": { "type": "date" }, "input": "yarın", "problem": "not_a_date" },
+		{ "settings": "tr", "field": { "type": "date" }, "input": "2024", "problem": "not_a_date" },
+		{ "settings": "tr", "field": { "type": "date" }, "input": "31.02.2026", "problem": "not_a_date" },
+		{ "settings": "tr", "field": { "type": "date" }, "input": "2026-02-30", "problem": "not_a_date" },
+		{ "settings": "tr", "field": { "type": "date" }, "input": "05/03/2026", "problem": "not_a_date" },
+		{ "settings": "tr", "field": { "type": "date" }, "input": "1 March 2026", "problem": "not_a_date" },
+		{
+			"settings": "tr",
+			"field": { "type": "datetime" },
+			"input": "2024-01-05T09:30:00+03:00",
+			"problem": "not_a_date"
+		},
+		{ "settings": "tr", "field": { "type": "datetime" }, "input": "05.01.2024 24:00", "problem": "not_a_date" },
+		{ "settings": "tr", "field": { "type": "datetime" }, "input": "2024-1-5 9:30", "value": "2024-01-05T09:30:00" },
+		{
+			"settings": "tr",
+			"field": { "type": "date", "pattern": "d/m/Y" },
+			"input": "31/12/2026",
+			"value": "2026-12-31"
+		},
+		{ "settings": "en", "field": { "type": "date" }, "input": "2026-03-05", "value": "2026-03-05" },
+
+		{
+			"settings": "tr",
+			"field": { "type": "datetime" },
+			"input": "05.01.2024 09:30",
+			"value": "2024-01-05T09:30:00"
+		},
+		{ "settings": "tr", "field": { "type": "datetime" }, "input": "05.01.2024", "value": "2024-01-05T00:00:00" },
+		{
+			"settings": "tr",
+			"field": { "type": "datetime" },
+			"input": "2024-01-05T09:30:00",
+			"value": "2024-01-05T09:30:00"
+		},
+
+		{
+			"settings": "tr",
+			"field": {
+				"type": "options",
+				"options": [
+					{ "value": "open", "label": "Açık" },
+					{ "value": "closed", "label": "Kapalı" },
+					{ "value": 3, "label": "Üç" }
+				]
+			},
+			"input": "Açık",
+			"value": "open"
+		},
+		{
+			"settings": "tr",
+			"field": {
+				"type": "options",
+				"options": [
+					{ "value": "open", "label": "Açık" },
+					{ "value": "closed", "label": "Kapalı" },
+					{ "value": 3, "label": "Üç" }
+				]
+			},
+			"input": "  kapalı ",
+			"value": "closed"
+		},
+		{
+			"settings": "tr",
+			"field": {
+				"type": "options",
+				"options": [
+					{ "value": "open", "label": "Açık" },
+					{ "value": "closed", "label": "Kapalı" },
+					{ "value": 3, "label": "Üç" }
+				]
+			},
+			"input": "open",
+			"value": "open"
+		},
+		{
+			"settings": "tr",
+			"field": {
+				"type": "options",
+				"options": [
+					{ "value": "open", "label": "Açık" },
+					{ "value": "closed", "label": "Kapalı" },
+					{ "value": 3, "label": "Üç" }
+				]
+			},
+			"input": "3",
+			"value": 3
+		},
+		{
+			"settings": "tr",
+			"field": {
+				"type": "options",
+				"options": [
+					{ "value": "open", "label": "Açık" },
+					{ "value": "closed", "label": "Kapalı" },
+					{ "value": 3, "label": "Üç" }
+				]
+			},
+			"input": "AÇIK",
+			"problem": "not_an_option"
+		},
+		{
+			"settings": "tr",
+			"field": {
+				"type": "options",
+				"options": [
+					{ "value": "open", "label": "Açık" },
+					{ "value": "closed", "label": "Kapalı" },
+					{ "value": 3, "label": "Üç" }
+				]
+			},
+			"input": "yarı açık",
+			"problem": "not_an_option"
+		},
+		{
+			"settings": "tr",
+			"php": false,
+			"field": {
+				"type": "options",
+				"multiple": true,
+				"options": [
+					{ "value": "open", "label": "Açık" },
+					{ "value": "closed", "label": "Kapalı" }
+				]
+			},
+			"input": "Açık, Kapalı",
+			"value": ["open", "closed"]
+		},
+
+		{ "settings": "tr", "field": { "type": "string" }, "input": "  Çelik Termos  ", "value": "Çelik Termos" },
+		{ "settings": "tr", "field": { "type": "string" }, "input": " ", "value": null },
+		{ "settings": "tr", "field": { "type": "decimal" }, "input": "   ", "value": null },
+
+		{ "settings": "tr", "php": false, "field": { "type": "percent" }, "input": "%15", "value": "15" },
+		{ "settings": "tr", "php": false, "field": { "type": "percent" }, "input": "12,5 %", "value": "12.5" },
+		{
+			"settings": "tr",
+			"php": false,
+			"field": { "type": "lookup", "lookup": "product" },
+			"input": " Çelik ",
+			"value": "Çelik"
+		}
+	],
+	"format": [
+		{ "settings": "tr", "field": { "type": "decimal", "decimals": 2 }, "value": "1234.5", "text": "1.234,50" },
+		{
+			"settings": "tr",
+			"field": { "type": "decimal", "decimals": 2 },
+			"value": "1234567.891",
+			"text": "1.234.567,89"
+		},
+		{ "settings": "tr", "field": { "type": "decimal", "decimals": 2 }, "value": "-0.001", "text": "0,00" },
+		{ "settings": "tr", "field": { "type": "decimal", "decimals": 2 }, "value": "1.005", "text": "1,01" },
+		{ "settings": "tr", "field": { "type": "decimal", "decimals": 0 }, "value": "2.5", "text": "3" },
+		{ "settings": "tr", "field": { "type": "quantity" }, "value": "12", "text": "12,000" },
+		{ "settings": "tr", "field": { "type": "integer" }, "value": "1234567", "text": "1.234.567" },
+		{ "settings": "en", "field": { "type": "decimal", "decimals": 2 }, "value": "1234.5", "text": "1,234.50" },
+		{ "settings": "tr", "field": { "type": "money", "currency": "TRY" }, "value": "1234.5", "text": "1.234,50 ₺" },
+		{ "settings": "tr", "field": { "type": "money", "currency": "EUR" }, "value": "10", "text": "10,00 EUR" },
+		{ "settings": "en", "field": { "type": "money", "currency": "USD" }, "value": "1234.5", "text": "$ 1,234.50" },
+		{ "settings": "tr", "field": { "type": "money" }, "value": "1234.5", "text": "1.234,50" },
+		{ "settings": "tr", "field": { "type": "bool" }, "value": true, "text": "Evet" },
+		{ "settings": "en", "field": { "type": "bool" }, "value": false, "text": "No" },
+		{ "settings": "tr", "field": { "type": "date" }, "value": "2026-12-31", "text": "31.12.2026" },
+		{
+			"settings": "tr",
+			"field": { "type": "datetime" },
+			"value": "2024-01-05T09:30:00",
+			"text": "05.01.2024 09:30"
+		},
+		{
+			"settings": "tr",
+			"field": {
+				"type": "options",
+				"options": [
+					{ "value": "open", "label": "Açık" },
+					{ "value": "closed", "label": "Kapalı" }
+				]
+			},
+			"value": "closed",
+			"text": "Kapalı"
+		}
+	]
+}

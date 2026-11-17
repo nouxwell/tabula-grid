@@ -2,18 +2,25 @@
 import {
 	autoColumnWidth,
 	clampColumnWidth,
+	editText,
+	formatCell,
 	headerDisplayText,
 	parseTsv,
+	readInput,
 	resolveColumnSizing,
 	Selection,
 	toTsv,
+	VALUE_SETTINGS,
+	valueProblem,
 	type CellPosition,
 	type CellRange,
 	type ColumnSizing,
 	type Direction,
 	type FieldSchema,
 	type ModuleSchema,
-	type RowStore
+	type RowStore,
+	type ValueProblem,
+	type ValueSettings
 } from "@nouxwell/tabula-core"
 import {
 	computed,
@@ -27,7 +34,7 @@ import {
 	watch,
 	type PropType
 } from "vue"
-import { alignmentOf, cellText, editText } from "./cellText"
+import { alignmentOf } from "./alignment"
 import { horizontalPadding, textMeasurer, type Measure } from "./measure"
 import type { GridTheme } from "./types"
 
@@ -43,6 +50,11 @@ const props = defineProps({
 	/** No cell can be changed: no typing, pasting, clearing or cutting. */
 	readonly: { type: Boolean, default: false },
 	theme: { type: String as PropType<GridTheme>, default: "light" },
+	/**
+	 * How values are written and read: separators, digits, date patterns, the words for yes and no.
+	 * Turkish by default, as nouxwell/tabula's own defaults are.
+	 */
+	valueSettings: { type: Object as PropType<ValueSettings>, default: () => VALUE_SETTINGS.tr },
 	/** Pixels. */
 	rowHeight: { type: Number, default: 30 }
 })
@@ -225,7 +237,7 @@ function autoFit(col: number): void {
 
 	for (let row = 0; row < rows.size; row += step) {
 		const rowId = rows.rowIdAt(row)
-		const text = rowId === undefined ? "" : cellText(field, rows.get(rowId, field.key))
+		const text = rowId === undefined ? "" : formatCell(field, rows.get(rowId, field.key), props.valueSettings)
 
 		if (text !== "") {
 			content = Math.max(content, measureCell(text) + cellPadding)
@@ -332,7 +344,29 @@ function text(row: number, col: number): string {
 	const rowId = store.value.rowIdAt(row)
 	const field = fields.value[col]
 
-	return rowId === undefined || field === undefined ? "" : cellText(field, store.value.get(rowId, field.key))
+	return rowId === undefined || field === undefined
+		? ""
+		: formatCell(field, store.value.get(rowId, field.key), props.valueSettings)
+}
+
+/**
+ * What is wrong with what a cell holds, or null. A cell holding text it could not read as its type
+ * keeps that text and says so here, until it is fixed.
+ */
+function problemAt(row: number, col: number): ValueProblem | null {
+	void dataVersion.value
+
+	const rowId = store.value.rowIdAt(row)
+	const field = fields.value[col]
+
+	return rowId === undefined || field === undefined
+		? null
+		: valueProblem(field, store.value.get(rowId, field.key), props.valueSettings)
+}
+
+/** Reads text into a field's type: its value, or the text itself when it cannot be read. */
+function valueOf(field: FieldSchema, input: string) {
+	return readInput(field, input, props.valueSettings).value
 }
 
 function isBlank(row: number, col: number): boolean {
@@ -465,7 +499,12 @@ function beginEdit(mode: EditState["mode"]): boolean {
 	}
 
 	measureDraft = cellProbe.value ? textMeasurer(cellProbe.value) : null
-	editing.value = { row: cell.row, col: cell.col, original: editText(field, store.value.get(rowId, field.key)), mode }
+	editing.value = {
+		row: cell.row,
+		col: cell.col,
+		original: editText(field, store.value.get(rowId, field.key), props.valueSettings),
+		mode
+	}
 	reveal()
 
 	return true
@@ -549,7 +588,7 @@ function commitEdit(refocus = true): void {
 	const field = fields.value[state.col]
 
 	if (rowId !== undefined && field !== undefined && text !== state.original) {
-		store.value.setCell(rowId, field.key, text === "" ? null : text)
+		store.value.setCell(rowId, field.key, valueOf(field, text))
 	}
 
 	if (refocus) {
@@ -780,7 +819,7 @@ function onPaste(event: ClipboardEvent): void {
 					const value = fill ? block[0]?.[0] : block[offset]?.[step]
 
 					if (rowId !== undefined && isEditable(field) && value !== undefined) {
-						rows.setCell(rowId, field.key, value === "" ? null : value)
+						rows.setCell(rowId, field.key, valueOf(field, value))
 					}
 				}
 			}
@@ -1143,8 +1182,10 @@ defineExpose({
 							:aria-colindex="c + 1"
 							:aria-selected="inRange(r, c)"
 							:aria-readonly="!isEditable(fields[c]) || undefined"
-							:class="cellClasses[c]"
+							:aria-invalid="problemAt(r, c) ? 'true' : undefined"
+							:class="[cellClasses[c], { 'is-invalid': problemAt(r, c) }]"
 							:style="cellStyles[c]"
+							:title="problemAt(r, c)?.message"
 						>
 							{{ text(r, c) }}
 						</div>
@@ -1188,6 +1229,8 @@ defineExpose({
 	--tabula-accent: #2946c9;
 	--tabula-range-bg: rgb(41 70 201 / 10%);
 	--tabula-required: #ad2a22;
+	--tabula-invalid-bg: #fbe8e6;
+	--tabula-invalid-mark: #c0392b;
 	--tabula-font-size: 13px;
 
 	position: relative;
@@ -1218,6 +1261,8 @@ defineExpose({
 	--tabula-accent: #92a6ff;
 	--tabula-range-bg: rgb(146 166 255 / 16%);
 	--tabula-required: #ff9087;
+	--tabula-invalid-bg: #3b2220;
+	--tabula-invalid-mark: #ff8a80;
 
 	color-scheme: dark;
 }
@@ -1235,6 +1280,8 @@ defineExpose({
 		--tabula-accent: #92a6ff;
 		--tabula-range-bg: rgb(146 166 255 / 16%);
 		--tabula-required: #ff9087;
+		--tabula-invalid-bg: #3b2220;
+		--tabula-invalid-mark: #ff8a80;
 
 		color-scheme: dark;
 	}
@@ -1379,6 +1426,21 @@ defineExpose({
 
 .tabula-grid-cell.is-center {
 	text-align: center;
+}
+
+/* A cell holding text it could not read as its type, Excel-style: a tint and a mark in the corner. */
+.tabula-grid-cell.is-invalid {
+	background: var(--tabula-invalid-bg);
+}
+
+.tabula-grid-cell.is-invalid::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	right: 0;
+	border-width: 0 7px 7px 0;
+	border-style: solid;
+	border-color: transparent var(--tabula-invalid-mark) transparent transparent;
 }
 
 .tabula-grid-cell.is-readonly {

@@ -5,10 +5,10 @@ for Vue and Nuxt. It is the browser side of [nouxwell/tabula](https://github.com
 the PHP library that defines a column once and uses that one definition to export, to build
 templates and to import.
 
-> **Status: early.** A sheet can be drawn, navigated, typed into, copied from and pasted into.
-> Values are kept as typed: reading them as numbers and dates, validation, undo and the adapters
-> come next. No release has been made and none of the three packages is on npm; each is marked
-> `private` until its first release.
+> **Status: early.** A sheet can be drawn, navigated, typed into, copied from and pasted into, and
+> what is typed is read as numbers, dates, yes or no and options the way nouxwell/tabula reads
+> them. Rules, undo and the adapters come next. No release has been made and none of the three
+> packages is on npm; each is marked `private` until its first release.
 
 ## Packages
 
@@ -62,6 +62,31 @@ The core also holds the two rules the grid needs from a spreadsheet: `parseTsv` 
 and write clipboard text the way Excel and Google Sheets do, and `resolveColumnSizing` with its
 helpers decides how wide a column may be.
 
+### Values
+
+A cell holds what a backend can take as it is: numbers as decimal text (`"1234.56"`, never a
+float, so a price is exactly what was typed), dates as ISO text (`"2026-12-31"`), yes and no as
+booleans, an option as its value, a lookup as `{ id, label }`.
+
+`readInput(field, text, settings)` turns what a person typed into that, the way nouxwell/tabula
+reads an imported file: "1.234,56", "1.234,56 ₺", "(1.234,56)", "31.12.2026", "Evet" and an option's
+label all work with Turkish settings. `formatCell` writes a value back the sheet's way, and
+`editText` gives the text an editor opens with, every digit kept. Text that cannot be read is
+never thrown away: the cell keeps it as typed, and `valueProblem` says what was expected, with the
+same codes and params as nouxwell/tabula's `RowErrorCode`.
+
+```ts
+import { readInput, VALUE_SETTINGS } from "@nouxwell/tabula-core"
+
+readInput(schema.field("newPrice"), "1.234,5 ₺", VALUE_SETTINGS.tr) // { value: "1234.5", problem: null }
+readInput(schema.field("validFrom"), "31.02.2026", VALUE_SETTINGS.tr).problem?.code // "not_a_date"
+```
+
+`VALUE_SETTINGS.tr` is nouxwell/tabula's own defaults with Turkish words for yes and no;
+`VALUE_SETTINGS.en` has English separators and ISO dates. `defineValueSettings` changes any part
+and checks the result. [conformance/](conformance/README.md) is the file of cases both sides are
+run against, and lists where they differ on purpose.
+
 ## The grid
 
 `TabulaGrid` in `@nouxwell/tabula-vue` draws a schema and a row store:
@@ -100,6 +125,10 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
   goes up to 1,000 pixels and is never undone by measuring; double-clicking it fits the column to
   its contents within the automatic limits. All five numbers can be set for the module and for
   each column.
+- **Values.** Cells show their values the sheet's way, and what is typed or pasted is read into
+  the field's type. Copied text pastes back as the same values. A cell holding text it could not
+  read keeps it, gets a red corner, and says why in its tooltip. Pass `value-settings` for
+  anything other than Turkish.
 - **Themes.** `light`, `dark` or `auto`, and every colour is a `--tabula-*` CSS variable.
 
 With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>` is available everywhere,

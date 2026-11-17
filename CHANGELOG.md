@@ -34,3 +34,14 @@ The three packages are versioned together.
 - **`@nouxwell/tabula-nuxt`** registers `TabulaGrid`, drawn in the browser only.
 - **Browser tests** that build the playground and drive the grid with a real keyboard, mouse and
   clipboard, on CI as well.
+- **Reading and writing values**: `readInput`, `formatCell`, `editText` and `valueProblem`, with
+  `VALUE_SETTINGS.tr`, `VALUE_SETTINGS.en` and `defineValueSettings`. Numbers are held as decimal
+  text and dates as ISO text. Text is read as nouxwell/tabula reads an imported file, rule for
+  rule; text that cannot be read stays in the cell with a problem coded as `RowErrorCode` codes it.
+- **A date field's own `pattern`** in the module schema, as `Field::pattern()` has on the PHP side.
+- **`conformance/values.json`**, run by both this package and nouxwell/tabula
+  (`conformance/php/check.php`), so the two sides read and write every value alike. From
+  nouxwell/tabula 0.9.0 that includes dates: neither side rolls 31.02.2026 into March or reads
+  05/03/2026 as 3 May.
+- **`TabulaGrid`** shows values the sheet's way, reads what is typed and pasted, and marks a cell
+  holding text it could not read. Its `value-settings` prop takes any `ValueSettings`.

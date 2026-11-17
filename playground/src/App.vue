@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ModuleSchema, RowStore } from "@nouxwell/tabula-core"
+import { ModuleSchema, RowStore, VALUE_SETTINGS } from "@nouxwell/tabula-core"
 import { TabulaGrid, type GridTheme } from "@nouxwell/tabula-vue"
 import { computed, onMounted, ref, shallowRef } from "vue"
 import { priceUpdate, sampleRows } from "./sample"
@@ -12,6 +12,8 @@ const schema = ModuleSchema.from(priceUpdate)
 const store = new RowStore({ rows: sampleRows(rowCount) })
 
 const theme = ref<GridTheme>(initialTheme === "dark" || initialTheme === "auto" ? initialTheme : "light")
+const language = ref<keyof typeof VALUE_SETTINGS>(params.get("values") === "en" ? "en" : "tr")
+const valueSettings = computed(() => VALUE_SETTINGS[language.value])
 const widths = ref<Readonly<Record<string, number>>>({})
 const grid = ref<InstanceType<typeof TabulaGrid> | null>(null)
 const revision = shallowRef(store.revision)
@@ -61,9 +63,23 @@ onMounted(() => {
 					<option value="auto">Sistem</option>
 				</select>
 			</label>
+			<label>
+				Biçim
+				<select v-model="language">
+					<option value="tr">Türkçe</option>
+					<option value="en">English</option>
+				</select>
+			</label>
 		</header>
 		<main class="playground-grid">
-			<TabulaGrid ref="grid" v-model:column-widths="widths" :schema="schema" :store="store" :theme="theme" />
+			<TabulaGrid
+				ref="grid"
+				v-model:column-widths="widths"
+				:schema="schema"
+				:store="store"
+				:theme="theme"
+				:value-settings="valueSettings"
+			/>
 		</main>
 	</div>
 </template>
