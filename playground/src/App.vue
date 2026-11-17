@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import {
 	applyFormulas,
+	arrangeColumns,
+	csvDelimiterFor,
+	decodeText,
 	DraftSaver,
+	exportTable,
+	importTable,
+	parseCsv,
+	toCsv,
 	FormulaEngine,
 	LookupResolver,
 	ModuleSchema,
@@ -19,7 +26,8 @@ import {
 	type DraftChanges,
 	type DraftOpening,
 	type Issue,
-	type ProcessOutcome
+	type ProcessOutcome,
+	type TableImport
 } from "@nouxwell/tabula-core"
 import { TabulaGrid, TabulaIssues, type GridTheme } from "@nouxwell/tabula-vue"
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
@@ -150,6 +158,59 @@ function startOver(): void {
 	clearStoredDraft()
 	location.reload()
 }
+
+// ---------------------------------------------------------------- CSV
+
+const csvInput = ref<HTMLInputElement | null>(null)
+/** What the last import brought, for the line that says so. */
+const imported = shallowRef<TableImport | null>(null)
+
+/**
+ * Reads a CSV file as Excel writes it, in UTF-8 or in Windows-1254, and adds its rows at the end
+ * of the sheet as one change: one Ctrl+Z takes the whole import back, product matches included.
+ */
+async function importCsv(event: Event): Promise<void> {
+	const input = event.target as HTMLInputElement
+	const file = input.files?.[0]
+
+	input.value = ""
+
+	if (!file) {
+		return
+	}
+
+	const text = decodeText(new Uint8Array(await file.arrayBuffer()))
+	const result = importTable(parseCsv(text), { schema, settings: valueSettings.value })
+
+	if (result.rows.length > 0) {
+		const first = store.size
+
+		store.transact(() => store.appendRows(result.rows), { origin: "import" })
+
+		const rowId = store.rowIdAt(first)
+
+		if (rowId !== undefined) {
+			grid.value?.goTo(rowId)
+		}
+	}
+
+	imported.value = result
+}
+
+/** Writes the rows and columns on screen as the sheet shows them, for Excel in the sheet's language. */
+function exportCsv(): void {
+	const fields = arrangeColumns(schema.fields, columns.value).fields
+	const rowIds = Array.from({ length: view.size }, (_, index) => view.rowIdAt(index) ?? "")
+	const settings = valueSettings.value
+	const text = toCsv(exportTable({ store, fields, rowIds, settings }), { delimiter: csvDelimiterFor(settings) })
+	const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }))
+	const link = document.createElement("a")
+
+	link.href = url
+	link.download = `${schema.module}.csv`
+	link.click()
+	setTimeout(() => URL.revokeObjectURL(url), 0)
+}
 const sessionVersion = shallowRef(session.version)
 const resultVersion = shallowRef(session.results.version)
 const lastRun = shallowRef<ProcessOutcome | null>(null)
@@ -196,6 +257,18 @@ const WORDS = {
 		failed: "Taslak kaydedilemedi",
 		saveDraft: "Taslağı kaydet",
 		startOver: "Yeni sayfa",
+		importCsv: "CSV içe aktar",
+		exportCsv: "CSV dışa aktar",
+		imported: (result: TableImport, label: (key: string) => string) =>
+			[
+				`${result.rows.length} satır içe aktarıldı.`,
+				listed("Eşleşmeyen kolonlar", result, "unknown"),
+				listed("Salt okunur kolonlar atlandı", result, "read_only"),
+				result.unreadable > 0 ? `${result.unreadable} hücre okunamadı; işaretlendi.` : "",
+				result.missing.length > 0 ? `Eksik zorunlu alanlar: ${result.missing.map(label).join(", ")}.` : ""
+			]
+				.filter(Boolean)
+				.join(" "),
 		openAnyway: "Taslağı yine de aç",
 		discard: "Taslağı at",
 		unreadable: "Kayıtlı taslak okunamadı.",
@@ -240,6 +313,18 @@ const WORDS = {
 		failed: "The draft could not be saved",
 		saveDraft: "Save draft",
 		startOver: "New sheet",
+		importCsv: "Import CSV",
+		exportCsv: "Export CSV",
+		imported: (result: TableImport, label: (key: string) => string) =>
+			[
+				`${result.rows.length} rows imported.`,
+				listed("Columns not matched", result, "unknown"),
+				listed("Read-only columns passed over", result, "read_only"),
+				result.unreadable > 0 ? `${result.unreadable} cells could not be read; they are marked.` : "",
+				result.missing.length > 0 ? `Required fields missing: ${result.missing.map(label).join(", ")}.` : ""
+			]
+				.filter(Boolean)
+				.join(" "),
 		openAnyway: "Open the draft anyway",
 		discard: "Discard the draft",
 		unreadable: "The saved draft could not be read.",
@@ -261,6 +346,17 @@ const WORDS = {
 } as const
 
 const words = computed(() => WORDS[language.value])
+
+/** "Title: a, b." for the columns of an import in one state; nothing when there are none. */
+function listed(title: string, result: TableImport, status: string): string {
+	const headers = result.columns.filter(column => column.status === status).map(column => column.header)
+
+	return headers.length > 0 ? `${title}: ${headers.join(", ")}.` : ""
+}
+
+const importNotice = computed(() =>
+	imported.value ? words.value.imported(imported.value, key => schema.field(key).label) : ""
+)
 
 /** One line on where the sheet stands with the backend. */
 const status = computed(() => {
@@ -499,8 +595,24 @@ onMounted(() => {
 					{{ words.saveDraft }}
 				</button>
 				<button type="button" class="playground-start-over" @click="startOver">{{ words.startOver }}</button>
+				<button type="button" class="playground-import" @click="csvInput?.click()">
+					{{ words.importCsv }}
+				</button>
+				<input
+					ref="csvInput"
+					class="playground-import-file"
+					type="file"
+					accept=".csv,text/csv"
+					hidden
+					@change="importCsv"
+				/>
+				<button type="button" class="playground-export" @click="exportCsv">{{ words.exportCsv }}</button>
 			</span>
 			<span class="playground-draft" role="status">{{ draftStatus }}</span>
+		</div>
+		<div v-if="importNotice" class="playground-imported" role="status">
+			<span>{{ importNotice }}</span>
+			<button type="button" class="playground-imported-close" @click="imported = null">×</button>
 		</div>
 		<div v-if="draftNotice" class="playground-draft-review" role="alert">
 			<span>{{ draftNotice }}</span>
@@ -591,6 +703,27 @@ body {
 
 .playground-draft-buttons {
 	margin-left: auto;
+}
+
+.playground-imported {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	padding: 6px 12px;
+	border: 1px solid #9fc3a8;
+	border-radius: 4px;
+	background: #e9f6ec;
+	color: #1d4a2a;
+	font-size: 13px;
+}
+
+.playground-imported button {
+	margin-left: auto;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
 }
 
 .playground-draft-review {

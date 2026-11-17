@@ -22,5 +22,14 @@ declare const AbortController: {
 	new (): AbortController
 }
 
+interface TextDecoder {
+	decode(input?: Uint8Array): string
+}
+
+declare const TextDecoder: {
+	prototype: TextDecoder
+	new (label?: string, options?: { readonly fatal?: boolean }): TextDecoder
+}
+
 declare function setTimeout(handler: () => void, timeout?: number): unknown
 declare function clearTimeout(timer: unknown): void

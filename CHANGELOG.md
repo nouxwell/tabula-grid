@@ -103,6 +103,13 @@ The three packages are versioned together.
 - **`TabulaGrid`** takes a `view`: row numbers stay the sheet's, a paste writes only into the rows
   shown, and `goTo` shows a row the filter left out. **`TabulaIssues`** has a switch for only the
   rows with issues, bound with `v-model:only-issue-rows`, and a Refresh button (`refresh-rows`).
+- **CSV.** `parseCsv` and `toCsv` read and write CSV as spreadsheets do, the delimiter told from
+  the first line (`detectDelimiter`), and `decodeText` reads a file as UTF-8 or else as
+  Windows-1254. `importTable` turns a table into rows, matching headers to fields by label or key
+  and reading each cell as a paste does, and says which columns matched, which were passed over and
+  which required fields are missing. `exportTable` writes rows the sheet's way, guarding text that
+  a spreadsheet would run as a formula; `csvDelimiterFor` picks `;` where the comma is the decimal
+  mark.
 - **Formulas.** A schema field can have a `formula` over the other fields of its row, by key in
   brackets, in a spreadsheet's language with English function names. `parseFormula` turns it into
   a tree that is worked out, never run as code, in decimals rather than floats. Sixteen functions

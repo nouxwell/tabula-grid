@@ -275,6 +275,35 @@ an issue for a deleted row is dropped, one for an unknown field is kept as the r
 Give the grid `:issues="session.issues"` and `:results="session.results"`, and the panel the same
 issues. Each row's number then shows its result, and a processed row can no longer be changed.
 
+## Importing and exporting
+
+CSV is read and written in the browser; an xlsx file goes to the application's backend, which
+reads it with nouxwell/tabula and answers with rows in the module's own values, ready for the store.
+
+```ts
+const text = decodeText(new Uint8Array(await file.arrayBuffer()))
+const result = importTable(parseCsv(text), { schema, settings })
+
+store.transact(() => store.appendRows(result.rows), { origin: "import" })
+// result.columns: what each column became; result.missing: required fields no column brought
+
+const csv = toCsv(exportTable({ store, fields, rowIds, settings }), { delimiter: csvDelimiterFor(settings) })
+```
+
+- **As Excel writes it.** Quoted cells, doubled quotes and line breaks inside a cell. The
+  delimiter is told from the first line: a Turkish Excel writes `;`, since its decimal mark is the
+  comma. A file that is not UTF-8 is read as Windows-1254, which is what Excel saves a Turkish
+  "CSV" in.
+- **Columns by name.** A header names its field by label or by key, in any case; `columns` maps
+  them by position instead. A column of a read-only or computed field is passed over, and the
+  result says which columns matched, which did not, and which required fields are missing.
+- **Cells as typed.** Each cell is read as a paste reads it: text that is no value of its field
+  stays as written, marked; product names are matched to products by the lookup, in one request.
+  Appended in one change, an import goes back with one Ctrl+Z.
+- **Out as the sheet writes it.** Every digit with the sheet's decimal mark, dates in its pattern,
+  a BOM so Excel reads UTF-8. Text that Excel would run as a formula when the file is opened,
+  starting with `=`, `+`, `-` or `@`, is written with a `'` before it; a number is never touched.
+
 ## Formulas
 
 A field in the module schema can be worked out from the other fields of its row instead of typed:

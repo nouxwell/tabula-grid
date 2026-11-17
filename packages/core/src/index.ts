@@ -86,6 +86,11 @@ export type { CellPosition, CellRange, Direction, IsBlank, MoveOptions } from ".
 
 export { parseTsv, toTsv } from "./clipboard"
 
+export { decodeText, detectDelimiter, parseCsv, toCsv } from "./csv"
+export type { CsvDelimiter, CsvReadOptions, CsvWriteOptions } from "./csv"
+export { csvDelimiterFor, exportTable, importTable } from "./table"
+export type { ColumnMatch, ColumnStatus, TableExportOptions, TableImport, TableImportOptions } from "./table"
+
 export { checkValue, SheetValidator } from "./validation"
 export type {
 	Issue,

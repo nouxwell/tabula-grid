@@ -1,3 +1,4 @@
+import fs from "node:fs"
 import path from "node:path"
 import process from "node:process"
 import { fileURLToPath } from "node:url"
@@ -1159,6 +1160,83 @@ describe("TabulaGrid", () => {
 				await expect(valueAt(page, 20, "newPrice")).resolves.toBe("3")
 				// The rows in between, hidden, kept what they held.
 				await expect(valueAt(page, 3, "newPrice")).resolves.not.toBeNull()
+			})
+		})
+	})
+
+	describe("CSV", () => {
+		const size = (page: Page): Promise<number> => page.evaluate(() => window.__playground!.store.size)
+		const notice = (page: Page): Promise<string> => page.locator(".playground-imported span").innerText()
+
+		function importFile(page: Page, buffer: Buffer): Promise<void> {
+			return page
+				.locator(".playground-import-file")
+				.setInputFiles({ name: "fiyatlar.csv", mimeType: "text/csv", buffer })
+		}
+
+		it("imports a CSV as a Turkish Excel saves it, matching names to products, as one change", async () => {
+			await withPage(20, async page => {
+				const csv =
+					"\uFEFFÜrün;Yeni fiyat;Para birimi;Geçerlilik başlangıç tarihi (fiyat listesi);note;Renk;SKU\r\n" +
+					'Kupa;1.234,5;EUR;31.12.2026;"iki\r\nsatır";mavi;X\r\n' +
+					"Ürün 000500;12;TRY;;;;\r\n"
+
+				await importFile(page, Buffer.from(csv, "utf8"))
+
+				await expect.poll(() => size(page)).toBe(22)
+				await expect.poll(() => valueAt(page, 20, "productId")).toEqual({ id: 90_004, label: "Kupa" })
+				await expect(valueAt(page, 21, "productId")).resolves.toEqual({ id: 1499, label: "Ürün 000500" })
+				await expect(valueAt(page, 20, "newPrice")).resolves.toBe("1234.5")
+				await expect(valueAt(page, 20, "validFrom")).resolves.toBe("2026-12-31")
+				await expect(valueAt(page, 20, "note")).resolves.toBe("iki\nsatır")
+				await expect(notice(page)).resolves.toBe(
+					"2 satır içe aktarıldı. Eşleşmeyen kolonlar: Renk. Salt okunur kolonlar atlandı: SKU."
+				)
+
+				// The rows and the products matched in them go back together.
+				await press(page, "Control+Z")
+				await expect.poll(() => size(page)).toBe(20)
+			})
+		})
+
+		it("reads a file Excel saved in Windows-1254 rather than UTF-8", async () => {
+			await withPage(5, async page => {
+				// "Ürün;Not\r\nKupa;Çelik\r\n" in Windows-1254.
+				const bytes = [0xdc, 0x72, 0xfc, 0x6e, 0x3b, 0x6e, 0x6f, 0x74, 0x65, 0x0d, 0x0a]
+				const row = [0x4b, 0x75, 0x70, 0x61, 0x3b, 0xc7, 0x65, 0x6c, 0x69, 0x6b, 0x0d, 0x0a]
+
+				await importFile(page, Buffer.from([...bytes, ...row]))
+
+				await expect.poll(() => size(page)).toBe(6)
+				await expect(valueAt(page, 5, "note")).resolves.toBe("Çelik")
+				await expect(notice(page)).resolves.toBe("1 satır içe aktarıldı. Eksik zorunlu alanlar: Yeni fiyat.")
+			})
+		})
+
+		it("exports the rows and columns on screen for a Turkish Excel, and keeps a formula in text from running", async () => {
+			await withPage(20, async page => {
+				await header(page, 1).hover()
+				await header(page, 1).locator(".tabula-grid-th-menu").click()
+				await page.locator(".tabula-grid-menu-hide").click()
+				await page.evaluate(() => {
+					const { store } = window.__playground!
+
+					store.setCell(store.rowIdAt(0)!, "note", "=1+1")
+				})
+
+				const [download] = await Promise.all([
+					page.waitForEvent("download"),
+					page.locator(".playground-export").click()
+				])
+				const text = fs.readFileSync((await download.path()) as string, "utf8")
+				const lines = text.slice(1).split("\r\n")
+
+				expect(download.suggestedFilename()).toBe("product.price_update.csv")
+				expect(text.charAt(0)).toBe("\uFEFF")
+				expect(lines[0]?.startsWith("Ürün;Mevcut fiyat;Yeni fiyat;Değişim %;")).toBe(true)
+				expect(lines[0]?.endsWith(";Fark")).toBe(true)
+				expect(lines[1]).toBe("Ürün 000001;1571,41;1493,91;-4,9;EUR;28.12.2026;Evet;'=1+1;-77,5")
+				expect(lines).toHaveLength(22)
 			})
 		})
 	})
