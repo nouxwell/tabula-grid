@@ -798,6 +798,147 @@ describe("TabulaGrid", () => {
 		})
 	})
 
+	describe("the backend", () => {
+		const status = (page: Page): Promise<string> => page.locator(".playground-status").innerText()
+		const gutter = (page: Page, row: number): Locator => page.locator(".tabula-grid-rh").nth(row)
+		const items = (page: Page): Locator => page.locator(".tabula-issues-item")
+
+		async function type(page: Page, row: number, col: number, text: string): Promise<void> {
+			await cell(page, row, col).click()
+			await page.keyboard.type(text)
+			await press(page, "Enter")
+		}
+
+		it("checks the sheet with the backend and shows its issues on cells and in the list", async () => {
+			await withPage(20, async page => {
+				await page.locator(".playground-check").click()
+
+				await expect.poll(() => status(page)).toBe("Ön kontrol sorun buldu.")
+				await expect(cell(page, 8, 0).getAttribute("class")).resolves.toContain("is-error")
+				await expect(cell(page, 8, 0).getAttribute("title")).resolves.toBe("Ürün pasif; fiyatı güncellenemez.")
+				await expect(items(page).count()).resolves.toBe(2)
+				await expect(items(page).first().innerText()).resolves.toBe(
+					"Satır 9 · Ürün\nÜrün pasif; fiyatı güncellenemez."
+				)
+			})
+		})
+
+		it("marks a backend issue stale once its cell changes, and counts it apart until checked again", async () => {
+			await withPage(20, async page => {
+				await page.locator(".playground-check").click()
+				await expect.poll(() => status(page)).toBe("Ön kontrol sorun buldu.")
+
+				await type(page, 8, 0, "Ürün 999999")
+
+				await expect.poll(() => cell(page, 8, 0).getAttribute("class")).toContain("is-stale")
+				await expect(cell(page, 8, 0).getAttribute("title")).resolves.toBe(
+					"Değişti, yeniden kontrol edilmeli: Ürün pasif; fiyatı güncellenemez."
+				)
+				await expect(page.locator(".tabula-issues-count.is-stale").innerText()).resolves.toBe(
+					"1 yeniden kontrol"
+				)
+				await expect(page.locator(".tabula-issues-count.is-error").innerText()).resolves.toBe("1 hata")
+
+				// Checked again, the text is no product at all.
+				await page.locator(".playground-check").click()
+				await expect
+					.poll(() => cell(page, 8, 0).getAttribute("title"))
+					.toBe("“Ürün 999999” adında bir ürün bulunamadı.")
+			})
+		})
+
+		it("processes the sheet, shows each row's result by its number, and locks the rows that went through", async () => {
+			await withPage(20, async page => {
+				await type(page, 2, 8, "red alert")
+				await page.locator(".playground-process").click()
+
+				await expect.poll(() => status(page)).toBe("17 başarılı, 3 başarısız, 0 işlenmedi.")
+				await expect(gutter(page, 0).getAttribute("class")).resolves.toContain("is-succeeded")
+				await expect(gutter(page, 0).getAttribute("title")).resolves.toBe("İşlendi")
+				// Refused by a rule only a run applies: an issue about the row as a whole, on its number.
+				await expect(gutter(page, 2).getAttribute("class")).resolves.toContain("is-failed")
+				await expect(gutter(page, 2).getAttribute("title")).resolves.toBe(
+					"İşlenemedi\nSatır onay kuralına takıldı."
+				)
+				await expect(cell(page, 8, 0).getAttribute("class")).resolves.toContain("is-error")
+
+				// A processed row is shown, not changed.
+				const price = await valueAt(page, 0, "newPrice")
+
+				await type(page, 0, 3, "1")
+				await expect(valueAt(page, 0, "newPrice")).resolves.toBe(price)
+				await expect(cell(page, 0, 3).getAttribute("aria-readonly")).resolves.toBe("true")
+				// What was sent cannot be taken back in the sheet alone.
+				await expect(page.locator(".playground-undo").isDisabled()).resolves.toBe(true)
+			})
+		})
+
+		it("goes on with the rows that failed, and sends only those", async () => {
+			await withPage(8, async page => {
+				await type(page, 1, 8, "red")
+				await type(page, 4, 8, "red")
+				await page.locator(".playground-process").click()
+				await expect.poll(() => status(page)).toBe("6 başarılı, 2 başarısız, 0 işlenmedi.")
+
+				await page.locator(".playground-remove-done").click()
+				await expect.poll(() => page.evaluate(() => window.__playground!.store.size)).toBe(2)
+
+				await cell(page, 0, 8).click()
+				await press(page, "Shift+ArrowDown")
+				await press(page, "Delete")
+				await page.locator(".playground-process").click()
+
+				await expect.poll(() => status(page)).toBe("2 başarılı, 0 başarısız, 0 işlenmedi.")
+				await expect(page.evaluate(() => window.__playground!.session.state.run?.rows)).resolves.toBe(2)
+			})
+		})
+
+		it("sends the same run again after an answer is lost, and the backend does it once", async () => {
+			await withPage(8, async page => {
+				await page.evaluate(() => (window.__playground!.backend.loseNextAnswer = true))
+				await page.locator(".playground-process").click()
+
+				await expect.poll(() => status(page)).toContain("Yanıt gelmedi")
+				await expect(gutter(page, 0).getAttribute("class")).resolves.toContain("is-sending")
+
+				await page.locator(".playground-resend").click()
+
+				await expect.poll(() => status(page)).toBe("8 başarılı, 0 başarısız, 0 işlenmedi.")
+				await expect(page.evaluate(() => [...window.__playground!.backend.done.values()])).resolves.toEqual([1])
+			})
+		})
+
+		it("follows a slow run, showing how far it has got, to its end", async () => {
+			await withPage(8, async page => {
+				await page.evaluate(() => {
+					window.__playground!.backend.slow = true
+					window.__playground!.backend.delay = 200
+				})
+				await page.locator(".playground-process").click()
+
+				await expect.poll(() => status(page)).toMatch(/^İşleniyor \d\/8…$/)
+				await expect.poll(() => status(page), { timeout: 5000 }).toBe("8 başarılı, 0 başarısız, 0 işlenmedi.")
+			})
+		})
+
+		it("stops a slow run on request, and what was done stays done", async () => {
+			await withPage(8, async page => {
+				await page.evaluate(() => {
+					window.__playground!.backend.slow = true
+					window.__playground!.backend.delay = 200
+				})
+				await page.locator(".playground-process").click()
+				await expect.poll(() => status(page)).toMatch(/^İşleniyor/)
+
+				await page.locator(".playground-stop").click()
+
+				await expect.poll(() => status(page), { timeout: 5000 }).toBe("4 başarılı, 0 başarısız, 4 işlenmedi.")
+				await expect(gutter(page, 0).getAttribute("class")).resolves.toContain("is-succeeded")
+				await expect(gutter(page, 7).getAttribute("class")).resolves.toContain("is-skipped")
+			})
+		})
+	})
+
 	describe("theme", () => {
 		it("draws in the theme it is given", async () => {
 			await withPage(

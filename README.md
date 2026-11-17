@@ -7,8 +7,9 @@ templates and to import.
 
 > **Status: early.** A sheet can be drawn, navigated, typed into, copied from and pasted into;
 > what is typed is read the way nouxwell/tabula reads it, checked against the schema's rules as
-> the user types, and taken back with undo. The backend adapters come next. No release has been
-> made and none of the three packages is on npm; each is marked `private` until its first release.
+> the user types, taken back with undo, checked by a backend and sent to it to be processed. Drafts
+> and lookup search come next. No release has been made and none of the three packages is on npm;
+> each is marked `private` until its first release.
 
 ## Packages
 
@@ -147,7 +148,7 @@ checks only the cells the change touched.
 
 Each issue is bound to a row by its id and to a field by its key, never to a row number or a
 header, and carries a code and params rather than only a sentence. `TabulaIssues` lists them, with
-counts, Previous and Next; give it and the grid the same validator, and send its `select` to the
+counts, Previous and Next; give it and the grid the same issues, and send its `select` to the
 grid's `goTo`:
 
 ```vue
@@ -157,9 +158,9 @@ const grid = ref<InstanceType<typeof TabulaGrid>>()
 </script>
 
 <template>
-  <TabulaGrid ref="grid" :schema="schema" :store="store" :validator="validator" />
+  <TabulaGrid ref="grid" :schema="schema" :store="store" :issues="validator" />
   <TabulaIssues
-    :validator="validator"
+    :issues="validator"
     :schema="schema"
     :store="store"
     @select="issue => grid?.goTo(issue.rowId!, issue.field)"
@@ -197,6 +198,52 @@ const canUndo = computed(() => version.value >= 0 && history.canUndo)
 Under it, `RowStore.revert(change)` and `replay(change)` take any change back and make it again.
 Both refuse, with a `conflict` and without writing anything, a sheet that is no longer as the
 change left it or found it.
+
+## The backend
+
+`SheetSession` takes a sheet to the application's backend: a pre-flight check, and the run that
+processes it. It never makes a request itself. The application gives it adapters, which call the
+backend however the application does and answer in the package's shapes; a backend with answers of
+its own shape is adapted there.
+
+```ts
+const session = new SheetSession({
+  schema,
+  store,
+  history, // cleared when rows are sent: what the backend has cannot be undone in the sheet alone
+  adapters: {
+    preflight: (request, { signal }) => api.post("/price-updates/check", request, { signal }),
+    process: (request, { signal }) => api.post("/price-updates", request, { signal }),
+    processStatus: (query, { signal }) => api.get(`/price-updates/runs/${query.idempotencyKey}`, { signal })
+  }
+})
+
+await session.check() // { status: "valid" | "invalid" | "failed" | …, issues }
+await session.process() // { status: "succeeded" | "partial" | "blocked" | "unknown" | …, succeeded, failed, … }
+```
+
+A request carries the module, the schema version, the sheet's revision and its rows, each under
+its row id. Only fields with `submit` are sent, a lookup as its id. A pre-flight answer is a list
+of issues, each with a `code`, a fallback `message`, `params`, and the row and field it is about;
+an issue for a deleted row is dropped, one for an unknown field is kept as the row's. A run answers
+`succeeded`, `partial`, `failed` or `cancelled`, with each row's result and issues. When it answers
+`pending`, the session asks `processStatus` until it is done, showing how far it has got.
+
+- **Stale answers.** An answer is about the revision it was asked at. An issue on a cell changed
+  since, while the backend was checking or afterwards, is marked stale: not fixed, not blocking,
+  waiting to be checked again. The grid shows it with a grey corner, the panel apart.
+- **Failures apart from issues.** An adapter that throws, or answers in the wrong shape, is a
+  failure of the request, in `session.state.failure`. The issues of the data stay as they were.
+- **Processing.** Any error standing, the local checks' or the backend's, holds the run back.
+  Rows that went through are locked and are not sent again; the next run sends only the rest.
+  `removeSucceeded()` takes them out of the sheet in one change, so work goes on with the rest.
+- **No double runs.** Every run has an idempotency key. When no answer comes, the session goes
+  `unknown`, keeps the rows locked, and sends the same request again under the same key, or asks
+  `processStatus` how it went. It never sends those rows as a new run. A cancel asks the backend to
+  stop and takes nothing back: rows done before the stop stay done.
+
+Give the grid `:issues="session.issues"` and `:results="session.results"`, and the panel the same
+issues. Each row's number then shows its result, and a processed row can no longer be changed.
 
 ## Where the line is drawn
 

@@ -2,9 +2,9 @@
 import {
 	VALUE_SETTINGS,
 	type Issue,
+	type IssueSet,
 	type ModuleSchema,
 	type RowStore,
-	type SheetValidator,
 	type ValueSettings
 } from "@nouxwell/tabula-core"
 import { computed, shallowRef, toRaw, watch, type PropType } from "vue"
@@ -16,7 +16,8 @@ import type { GridTheme } from "./types"
  * `select`; the host hands it to the grid's `goTo()`, so the panel can sit anywhere on the page.
  */
 const props = defineProps({
-	validator: { type: Object as PropType<SheetValidator>, required: true },
+	/** A `SheetValidator`, or a `SheetSession`'s `issues`: the same the grid is given. */
+	issues: { type: Object as PropType<IssueSet>, required: true },
 	schema: { type: Object as PropType<ModuleSchema>, required: true },
 	/** For the row numbers shown, which follow the rows as they stand now. */
 	store: { type: Object as PropType<RowStore>, required: true },
@@ -34,37 +35,46 @@ const version = shallowRef(0)
 const current = shallowRef<string | null>(null)
 
 watch(
-	() => toRaw(props.validator),
-	(validator, _previous, onCleanup) => {
+	() => toRaw(props.issues),
+	(set, _previous, onCleanup) => {
 		version.value++
-		onCleanup(validator.subscribe(() => version.value++))
+		onCleanup(set.subscribe(() => version.value++))
 	},
 	{ immediate: true }
 )
 
-// Each reads the version itself. A computed handing back the validator would not do: it is the same
+// Each reads the version itself. A computed handing back the issue set would not do: it is the same
 // object every time, and Vue does not wake what depends on a value that did not change.
 const issues = computed(() => {
 	void version.value
 
-	return toRaw(props.validator).issues()
+	return toRaw(props.issues).issues()
 })
 
 const summary = computed(() => {
 	void version.value
 
-	return toRaw(props.validator).summary()
+	return toRaw(props.issues).summary()
 })
 const shown = computed(() => issues.value.slice(0, props.limit))
 const text = computed(() => PANEL_TEXT[props.locale])
 
+/** Where the issue is: the sheet, a row, or a row and a column. */
 function label(issue: Issue): string {
+	if (issue.rowId === null) {
+		return text.value.sheet ?? ""
+	}
+
 	const store = toRaw(props.store)
 	const schema = toRaw(props.schema)
-	const row = issue.rowId === null ? "" : `${text.value.row} ${store.indexOf(issue.rowId) + 1}`
+	const row = `${text.value.row} ${store.indexOf(issue.rowId) + 1}`
 	const field = issue.field !== null && schema.has(issue.field) ? schema.field(issue.field).label : ""
 
 	return [row, field].filter(Boolean).join(" · ")
+}
+
+function itemClass(issue: Issue): string[] {
+	return [issue.stale ? "is-stale" : `is-${issue.severity}`, issue.id === current.value ? "is-current" : ""]
 }
 
 function choose(issue: Issue): void {
@@ -100,6 +110,9 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 			<span v-if="summary.warnings > 0" class="tabula-issues-count is-warning">
 				{{ summary.warnings }} {{ text.warnings }}
 			</span>
+			<span v-if="summary.stale > 0" class="tabula-issues-count is-stale">
+				{{ summary.stale }} {{ text.stale }}
+			</span>
 			<span class="tabula-issues-rows">{{ summary.rows }} {{ text.rows }}</span>
 			<span class="tabula-issues-nav">
 				<button type="button" :disabled="issues.length === 0" @click="step(-1)">{{ text.previous }}</button>
@@ -109,14 +122,10 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 		<p v-if="issues.length === 0" class="tabula-issues-none">{{ text.none }}</p>
 		<ul v-else class="tabula-issues-list">
 			<li v-for="issue in shown" :key="issue.id">
-				<button
-					type="button"
-					class="tabula-issues-item"
-					:class="[`is-${issue.severity}`, { 'is-current': issue.id === current }]"
-					@click="choose(issue)"
-				>
+				<button type="button" class="tabula-issues-item" :class="itemClass(issue)" @click="choose(issue)">
 					<span class="tabula-issues-where">{{ label(issue) }}</span>
 					<span class="tabula-issues-text">{{ issueText(issue, locale, valueSettings) }}</span>
+					<span v-if="issue.stale" class="tabula-issues-recheck">{{ text.recheck }}</span>
 				</button>
 			</li>
 			<li v-if="issues.length > shown.length" class="tabula-issues-more">
@@ -250,6 +259,21 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 
 .tabula-issues-item.is-warning {
 	border-left-color: var(--tabula-issues-warning);
+}
+
+.tabula-issues-item.is-stale {
+	border-left-color: var(--tabula-issues-muted);
+	border-left-style: dashed;
+}
+
+.tabula-issues-item.is-stale .tabula-issues-text {
+	color: var(--tabula-issues-muted);
+}
+
+.tabula-issues-count.is-stale,
+.tabula-issues-recheck {
+	color: var(--tabula-issues-muted);
+	font-size: 12px;
 }
 
 .tabula-issues-item:hover {

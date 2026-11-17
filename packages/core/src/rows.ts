@@ -1,4 +1,5 @@
 import { TabulaError } from "./errors"
+import { sequence } from "./ids"
 import { Listeners } from "./listeners"
 import { sameValue, toCellValue, type CellValue } from "./value"
 
@@ -622,24 +623,7 @@ function blankRows(count: number): RowInit[] {
  *
  * The counter keeps them unique within the page. The random part keeps a row made today from taking
  * the id of a row in a draft saved yesterday, which would let yesterday's backend answer land on it.
- * It comes from `crypto.getRandomValues`, which, unlike `randomUUID`, also works on plain http.
  */
 function sessionRowIds(): () => RowId {
-	const prefix = randomPart()
-	let counter = 0
-
-	return () => `r_${prefix}_${(++counter).toString(36)}`
-}
-
-function randomPart(): string {
-	const scope = globalThis as { crypto?: { getRandomValues?: (array: Uint32Array) => Uint32Array } }
-	const word = new Uint32Array(1)
-
-	if (typeof scope.crypto?.getRandomValues === "function") {
-		scope.crypto.getRandomValues(word)
-	} else {
-		word[0] = Math.floor(Math.random() * 2 ** 32)
-	}
-
-	return (word[0] ?? 0).toString(36).padStart(7, "0")
+	return sequence("r")
 }

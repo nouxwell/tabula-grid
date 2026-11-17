@@ -1,5 +1,5 @@
 export { default as TabulaGrid } from "./TabulaGrid.vue"
 export { default as TabulaIssues } from "./TabulaIssues.vue"
-export { dateExample, issueText, PANEL_TEXT } from "./messages"
+export { dateExample, GRID_TEXT, issueText, PANEL_TEXT } from "./messages"
 export type { GridLocale } from "./messages"
 export type { GridTheme } from "./types"

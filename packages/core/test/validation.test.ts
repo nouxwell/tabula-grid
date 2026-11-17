@@ -48,7 +48,7 @@ describe("SheetValidator", () => {
 		const { validator } = sheet(3)
 
 		expect(validator.issues()).toEqual([])
-		expect(validator.summary()).toEqual({ errors: 0, warnings: 0, rows: 0 })
+		expect(validator.summary()).toEqual({ errors: 0, warnings: 0, stale: 0, rows: 0 })
 	})
 
 	it("reports an empty required cell", () => {
@@ -66,6 +66,8 @@ describe("SheetValidator", () => {
 				targets: [],
 				code: "required",
 				severity: "error",
+				blocking: true,
+				stale: false,
 				message: "This field is required and cannot be left empty.",
 				params: { field: "price", type: "money" }
 			}
@@ -178,7 +180,7 @@ describe("SheetValidator", () => {
 			"row_1.note.min_length",
 			"row_3.price.required"
 		])
-		expect(validator.summary()).toEqual({ errors: 4, warnings: 0, rows: 3 })
+		expect(validator.summary()).toEqual({ errors: 4, warnings: 0, stale: 0, rows: 3 })
 	})
 
 	it("tells its listeners once per change and moves its version", () => {
@@ -245,7 +247,7 @@ describe("SheetValidator", () => {
 
 		store.setCells(store.rowIds().map(rowId => ({ rowId, field: "code", value: "SAME" })))
 
-		expect(validator.summary()).toEqual({ errors: 50_000, warnings: 0, rows: 50_000 })
+		expect(validator.summary()).toEqual({ errors: 50_000, warnings: 0, stale: 0, rows: 50_000 })
 		expect(validator.issues()).toHaveLength(50_000)
 	})
 })

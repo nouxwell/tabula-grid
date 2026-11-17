@@ -21,9 +21,11 @@ import {
 	type ColumnSizing,
 	type Direction,
 	type FieldSchema,
-	type ModuleSchema,
-	type RowStore,
 	type Issue,
+	type IssueSet,
+	type ModuleSchema,
+	type RowResults,
+	type RowStore,
 	type StoreChange,
 	type ValueSettings
 } from "@nouxwell/tabula-core"
@@ -40,7 +42,7 @@ import {
 	type PropType
 } from "vue"
 import { alignmentOf } from "./alignment"
-import { issueText, type GridLocale } from "./messages"
+import { GRID_TEXT, issueText, type GridLocale } from "./messages"
 import { horizontalPadding, textMeasurer, type Measure } from "./measure"
 import type { GridTheme } from "./types"
 
@@ -64,11 +66,17 @@ const props = defineProps({
 	/** Pixels. */
 	rowHeight: { type: Number, default: 30 },
 	/**
-	 * The checks to show. Pass the one an issue panel shows too, so both tell the same story; left
-	 * out, the grid checks the sheet against the schema on its own. A validator passed in belongs to
-	 * the host: the grid neither changes its settings nor disposes of it.
+	 * The issues to show: a `SheetValidator`, or a `SheetSession`'s `issues` with the backend's in
+	 * them. Pass what an issue panel shows too, so both tell the same story; left out, the grid checks
+	 * the sheet against the schema on its own. Issues passed in belong to the host: the grid neither
+	 * changes their settings nor disposes of them.
 	 */
-	validator: { type: Object as PropType<SheetValidator>, default: undefined },
+	issues: { type: Object as PropType<IssueSet>, default: undefined },
+	/**
+	 * Each row's result from the backend, such as a `SheetSession`'s `results`: shown by the row's
+	 * number, and a row it locks cannot be changed.
+	 */
+	results: { type: Object as PropType<RowResults>, default: undefined },
 	/**
 	 * Undo and redo for the store. Pass one to show its state elsewhere, such as on toolbar buttons;
 	 * left out, the grid keeps its own. One passed in belongs to the host, which disposes of it.
@@ -367,33 +375,108 @@ function text(row: number, col: number): string {
 		: formatCell(field, store.value.get(rowId, field.key), props.valueSettings)
 }
 
-/** The issues on a cell, as the validator has them now. */
+/** The issues on a cell, as the issue set has them now. */
 function issuesAt(row: number, col: number): readonly Issue[] {
 	void issueVersion.value
 
 	const rowId = store.value.rowIdAt(row)
 	const field = fields.value[col]
 
-	return rowId === undefined || field === undefined ? [] : validator.value.issuesAt(rowId, field.key)
+	return rowId === undefined || field === undefined ? [] : issueSet.value.issuesAt(rowId, field.key)
+}
+
+/** An error or a warning standing on the cell; failing those, an issue waiting to be checked again. */
+function severityClass(issues: readonly Issue[]): string | undefined {
+	const standing = issues.filter(issue => !issue.stale)
+
+	if (standing.length > 0) {
+		return standing.some(issue => issue.severity === "error") ? "is-error" : "is-warning"
+	}
+
+	return issues.length > 0 ? "is-stale" : undefined
 }
 
 function issueClass(row: number, col: number): string | undefined {
-	const issues = issuesAt(row, col)
+	return severityClass(issuesAt(row, col))
+}
 
-	if (issues.length === 0) {
+/** Every issue in the user's language, one per line; a stale one says it waits to be checked again. */
+function issueLines(issues: readonly Issue[]): string | undefined {
+	return issues.length === 0
+		? undefined
+		: issues
+				.map(issue => {
+					const text = issueText(issue, props.locale, props.valueSettings)
+
+					return issue.stale ? `${GRID_TEXT[props.locale].recheck}: ${text}` : text
+				})
+				.join("\n")
+}
+
+function issueTitle(row: number, col: number): string | undefined {
+	return issueLines(issuesAt(row, col))
+}
+
+// ---------------------------------------------------------------- rows
+
+/** Whether the backend's results lock the row: processed, or on its way to be. */
+function isLockedRow(rowId: string): boolean {
+	return results.value?.isLocked(rowId) ?? false
+}
+
+function rowLocked(row: number): boolean {
+	void resultVersion.value
+
+	const rowId = store.value.rowIdAt(row)
+
+	return rowId !== undefined && isLockedRow(rowId)
+}
+
+/** Where the row stands with the backend: on its way, or its last result. Null before it was ever sent. */
+function rowStatus(rowId: string): "sending" | "succeeded" | "failed" | "skipped" | null {
+	const result = results.value?.resultOf(rowId) ?? null
+
+	// Locked without having gone through: it is being sent, whatever an earlier run said.
+	if (results.value?.isLocked(rowId) && result?.outcome !== "succeeded") {
+		return "sending"
+	}
+
+	return result?.outcome ?? null
+}
+
+/** The row number's classes: where the row stands with the backend, and any issue about the row as a whole. */
+function rowClass(row: number): string[] {
+	void resultVersion.value
+	void issueVersion.value
+
+	const rowId = store.value.rowIdAt(row)
+
+	if (rowId === undefined) {
+		return []
+	}
+
+	const status = rowStatus(rowId)
+	const severity = severityClass(issueSet.value.rowIssues(rowId))
+
+	return [status ? `is-${status}` : "", severity ?? ""].filter(Boolean)
+}
+
+/** The row number's tooltip: where the row stands, then the issues about the row as a whole. */
+function rowTitle(row: number): string | undefined {
+	void resultVersion.value
+	void issueVersion.value
+
+	const rowId = store.value.rowIdAt(row)
+
+	if (rowId === undefined) {
 		return undefined
 	}
 
-	return issues.some(issue => issue.severity === "error") ? "is-error" : "is-warning"
-}
+	const status = rowStatus(rowId)
+	const lines = [status ? GRID_TEXT[props.locale][status] : undefined, issueLines(issueSet.value.rowIssues(rowId))]
+	const text = lines.filter(Boolean).join("\n")
 
-/** Every issue on the cell in the user's language, one per line, for its tooltip. */
-function issueTitle(row: number, col: number): string | undefined {
-	const issues = issuesAt(row, col)
-
-	return issues.length === 0
-		? undefined
-		: issues.map(issue => issueText(issue, props.locale, props.valueSettings)).join("\n")
+	return text === "" ? undefined : text
 }
 
 /** Reads text into a field's type: its value, or the text itself when it cannot be read. */
@@ -526,7 +609,7 @@ function beginEdit(mode: EditState["mode"]): boolean {
 	const field = cell ? fields.value[cell.col] : undefined
 	const rowId = cell ? store.value.rowIdAt(cell.row) : undefined
 
-	if (!cell || !isEditable(field) || rowId === undefined) {
+	if (!cell || !isEditable(field) || rowId === undefined || rowLocked(cell.row)) {
 		return false
 	}
 
@@ -947,7 +1030,7 @@ function onPaste(event: ClipboardEvent): void {
 					const field = cols[area.left + step]
 					const value = fill ? block[0]?.[0] : block[offset]?.[step]
 
-					if (rowId !== undefined && isEditable(field) && value !== undefined) {
+					if (rowId !== undefined && isEditable(field) && value !== undefined && !isLockedRow(rowId)) {
 						rows.setCell(rowId, field.key, valueOf(field, value))
 					}
 				}
@@ -978,7 +1061,7 @@ function clearRange(origin: string): void {
 				for (let col = area.left; col <= area.right; col++) {
 					const field = fields.value[col]
 
-					if (rowId !== undefined && isEditable(field)) {
+					if (rowId !== undefined && isEditable(field) && !isLockedRow(rowId)) {
 						rows.setCell(rowId, field.key, null)
 					}
 				}
@@ -1192,29 +1275,46 @@ watch(
 	}
 )
 
-// The validator: the host's when given, otherwise one of the grid's own for this schema and store,
-// made again when either is replaced.
-const validator = shallowRef<SheetValidator>(
-	toRaw(props.validator) ?? new SheetValidator(schema.value, store.value, props.valueSettings)
+// The issues: the host's when given, otherwise those of a validator of the grid's own for this schema
+// and store, made again when either is replaced.
+const issueSet = shallowRef<IssueSet>(
+	toRaw(props.issues) ?? new SheetValidator(schema.value, store.value, props.valueSettings)
 )
 const issueVersion = shallowRef(0)
-let ownValidator: SheetValidator | null = props.validator ? null : validator.value
+let ownValidator: SheetValidator | null = props.issues ? null : (issueSet.value as SheetValidator)
 
 watch(
-	() => [toRaw(props.validator), schema.value, store.value] as const,
+	() => [toRaw(props.issues), schema.value, store.value] as const,
 	([given, nextSchema, nextStore], previous, onCleanup) => {
 		if (given) {
 			ownValidator?.dispose()
 			ownValidator = null
-			validator.value = given
+			issueSet.value = given
 		} else if (!ownValidator || previous !== undefined) {
 			ownValidator?.dispose()
 			ownValidator = new SheetValidator(nextSchema, nextStore, props.valueSettings)
-			validator.value = ownValidator
+			issueSet.value = ownValidator
 		}
 
 		issueVersion.value++
-		onCleanup(validator.value.subscribe(() => issueVersion.value++))
+		onCleanup(issueSet.value.subscribe(() => issueVersion.value++))
+	},
+	{ immediate: true }
+)
+
+// The backend's results, when the host gives them.
+const results = shallowRef<RowResults | undefined>(toRaw(props.results))
+const resultVersion = shallowRef(0)
+
+watch(
+	() => toRaw(props.results),
+	(given, _previous, onCleanup) => {
+		results.value = given
+		resultVersion.value++
+
+		if (given) {
+			onCleanup(given.subscribe(() => resultVersion.value++))
+		}
 	},
 	{ immediate: true }
 )
@@ -1365,7 +1465,8 @@ defineExpose({
 						v-for="r in visibleRows"
 						:key="r % rowPool"
 						class="tabula-grid-rh"
-						:class="{ 'is-selected': rowSelected(r) }"
+						:class="[{ 'is-selected': rowSelected(r) }, rowClass(r)]"
+						:title="rowTitle(r)"
 						:style="{ transform: `translateY(${r * rowHeight}px)` }"
 						@mousedown="onGutterDown($event, r)"
 					>
@@ -1389,6 +1490,7 @@ defineExpose({
 						v-for="r in visibleRows"
 						:key="r % rowPool"
 						class="tabula-grid-row"
+						:class="{ 'is-locked': rowLocked(r) }"
 						role="row"
 						:aria-rowindex="r + 2"
 						:style="{ transform: `translateY(${r * rowHeight}px)` }"
@@ -1401,7 +1503,7 @@ defineExpose({
 							role="gridcell"
 							:aria-colindex="c + 1"
 							:aria-selected="inRange(r, c)"
-							:aria-readonly="!isEditable(fields[c]) || undefined"
+							:aria-readonly="!isEditable(fields[c]) || rowLocked(r) || undefined"
 							:aria-invalid="issueClass(r, c) === 'is-error' ? 'true' : undefined"
 							:class="[cellClasses[c], issueClass(r, c)]"
 							:style="cellStyles[c]"
@@ -1453,6 +1555,9 @@ defineExpose({
 	--tabula-warning-bg: #fdf1dc;
 	--tabula-error-mark: #c0392b;
 	--tabula-warning-mark: #c27c0e;
+	--tabula-stale-mark: #8a93a8;
+	--tabula-success-bg: #e3f4e8;
+	--tabula-success-mark: #1e8a4c;
 	--tabula-font-size: 13px;
 
 	position: relative;
@@ -1487,6 +1592,9 @@ defineExpose({
 	--tabula-warning-bg: #3a2c12;
 	--tabula-error-mark: #ff8a80;
 	--tabula-warning-mark: #f0b860;
+	--tabula-stale-mark: #7d869c;
+	--tabula-success-bg: #1d3427;
+	--tabula-success-mark: #6fd39a;
 
 	color-scheme: dark;
 }
@@ -1508,6 +1616,9 @@ defineExpose({
 		--tabula-warning-bg: #3a2c12;
 		--tabula-error-mark: #ff8a80;
 		--tabula-warning-mark: #f0b860;
+		--tabula-stale-mark: #7d869c;
+		--tabula-success-bg: #1d3427;
+		--tabula-success-mark: #6fd39a;
 
 		color-scheme: dark;
 	}
@@ -1676,6 +1787,52 @@ defineExpose({
 
 .tabula-grid-cell.is-warning::after {
 	border-right-color: var(--tabula-warning-mark);
+}
+
+/* A backend's issue on a cell changed since: no tint, a grey corner, until it is checked again. */
+.tabula-grid-cell.is-stale::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	right: 0;
+	border-width: 0 7px 7px 0;
+	border-style: solid;
+	border-color: transparent var(--tabula-stale-mark) transparent transparent;
+}
+
+/* A row the backend processed, or one on its way: shown, not changed. */
+.tabula-grid-row.is-locked .tabula-grid-cell {
+	color: var(--tabula-muted);
+}
+
+/* Where each row stands with the backend, as a bar on its number. */
+.tabula-grid-rh.is-succeeded {
+	background: var(--tabula-success-bg);
+	box-shadow: inset 3px 0 0 var(--tabula-success-mark);
+}
+
+.tabula-grid-rh.is-failed {
+	background: var(--tabula-error-bg);
+	box-shadow: inset 3px 0 0 var(--tabula-error-mark);
+}
+
+.tabula-grid-rh.is-skipped {
+	box-shadow: inset 3px 0 0 var(--tabula-stale-mark);
+}
+
+.tabula-grid-rh.is-sending {
+	box-shadow: inset 3px 0 0 var(--tabula-accent);
+}
+
+/* An issue about the row as a whole is on its number. */
+.tabula-grid-rh.is-error {
+	color: var(--tabula-error-mark);
+	font-weight: 600;
+}
+
+.tabula-grid-rh.is-warning {
+	color: var(--tabula-warning-mark);
+	font-weight: 600;
 }
 
 .tabula-grid-cell.is-readonly {

@@ -7,6 +7,7 @@ export type TabulaErrorCode =
 	| "invalid_argument"
 	| "invalid_value"
 	| "conflict"
+	| "invalid_response"
 
 /**
  * The one error class this package throws.

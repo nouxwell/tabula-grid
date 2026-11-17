@@ -11,15 +11,17 @@ import { VALUE_SETTINGS, type ValueSettings } from "./values/settings"
  * What is wrong in a sheet, bound to rows by id and to fields by key, never to a row number or a
  * column header: a sort or a renamed header moves nothing.
  *
- * The shape is the one a backend's answers will take too. For now the issues are local: the
- * schema's own rules, checked in the browser as the user types. A backend still checks everything
- * again; passing here promises nothing.
+ * Local issues are the schema's own rules, checked in the browser as the user types. A backend's
+ * answers arrive in the same shape (see `SheetSession`). A backend still checks everything again;
+ * passing here promises nothing.
  */
 
 export type LocalIssueCode =
 	ValueProblemCode | "required" | "min_value" | "max_value" | "min_length" | "max_length" | "not_unique"
 
 export type IssueSeverity = "error" | "warning"
+
+export type IssueScope = "cell" | "row" | "sheet" | "workbook"
 
 export interface IssueTarget {
 	readonly rowId: RowId
@@ -29,8 +31,8 @@ export interface IssueTarget {
 export interface Issue {
 	/** Stable while the problem stands: the same issue on the same cell keeps its id. */
 	readonly id: string
-	readonly scope: "cell" | "row" | "sheet" | "workbook"
-	/** Who found it. `local` is this package; a backend's answers will carry their own. */
+	readonly scope: IssueScope
+	/** Who found it: `local` is this package, `preflight` and `process` are the backend's checks. */
 	readonly source: string
 	readonly rowId: RowId | null
 	readonly field: string | null
@@ -39,16 +41,44 @@ export interface Issue {
 	/** Never renamed: what an application words its messages from. */
 	readonly code: string
 	readonly severity: IssueSeverity
-	/** English, for a developer or as a last resort. An interface words its own from code and params. */
+	/** Whether it stops the sheet from being processed. Every local error does; no warning does. */
+	readonly blocking: boolean
+	/**
+	 * A backend found it, and a cell it is about has changed since. It is not taken as fixed: only
+	 * checking again can say. A stale issue counts apart, and blocks nothing.
+	 */
+	readonly stale: boolean
+	/** A sentence to show when an interface has no wording of its own for the code. */
 	readonly message: string
 	readonly params: Readonly<Record<string, string>>
 }
 
 export interface IssueSummary {
+	/** Errors still standing; stale ones are counted apart. */
 	readonly errors: number
 	readonly warnings: number
+	/** Issues waiting for the backend to check again. */
+	readonly stale: number
 	/** Rows with at least one issue. */
 	readonly rows: number
+}
+
+/**
+ * Issues a view can show: a validator's own, or those merged with a backend's answers. The grid and
+ * the issue panel read either through this.
+ */
+export interface IssueSet {
+	/** Moves on every change, for a view to redraw by. */
+	readonly version: number
+	/** The issues on one cell. */
+	issuesAt(rowId: RowId, field: string): readonly Issue[]
+	/** The issues about a row as a whole rather than one of its cells. */
+	rowIssues(rowId: RowId): readonly Issue[]
+	/** Every issue: those about the whole sheet first, then by row as the rows stand, then by column. */
+	issues(): Issue[]
+	summary(): IssueSummary
+	/** Called after each change. Returns the way to stop. */
+	subscribe(listener: () => void): () => void
 }
 
 type CellIssues = Map<string, readonly Issue[]>
@@ -66,7 +96,7 @@ const MAX_TARGETS = 10
  * A field with a `unique` rule is the one exception that looks across rows: changing one value can
  * clear or raise the issue on every other row holding it, and only those rows are touched.
  */
-export class SheetValidator {
+export class SheetValidator implements IssueSet {
 	readonly #schema: ModuleSchema
 	readonly #store: RowStore
 	#settings: ValueSettings
@@ -109,6 +139,11 @@ export class SheetValidator {
 		return shared ? [...own, shared] : own
 	}
 
+	/** None: the schema's rules are all about single cells. */
+	rowIssues(): readonly Issue[] {
+		return []
+	}
+
 	/** Every issue, in sheet order: by row as the rows stand now, then by column. */
 	issues(): Issue[] {
 		const result: Issue[] = []
@@ -126,9 +161,8 @@ export class SheetValidator {
 	summary(): IssueSummary {
 		let errors = 0
 		let warnings = 0
-		const rows = new Set<RowId>()
 
-		for (const [rowId, cells] of this.#cells) {
+		for (const cells of this.#cells.values()) {
 			for (const issues of cells.values()) {
 				for (const issue of issues) {
 					if (issue.severity === "error") {
@@ -138,15 +172,26 @@ export class SheetValidator {
 					}
 				}
 			}
-
-			rows.add(rowId)
 		}
 
 		for (const groups of this.#groups.values()) {
 			for (const group of groups.values()) {
 				if (group.size > 1) {
 					errors += group.size
+				}
+			}
+		}
 
+		return { errors, warnings, stale: 0, rows: this.affectedRows().size }
+	}
+
+	/** The rows with at least one issue. */
+	affectedRows(): Set<RowId> {
+		const rows = new Set(this.#cells.keys())
+
+		for (const groups of this.#groups.values()) {
+			for (const group of groups.values()) {
+				if (group.size > 1) {
 					for (const rowId of group) {
 						rows.add(rowId)
 					}
@@ -154,7 +199,30 @@ export class SheetValidator {
 			}
 		}
 
-		return { errors, warnings, rows: rows.size }
+		return rows
+	}
+
+	/** Whether any error stands on the row: such a row is not sent to be processed. */
+	hasErrors(rowId: RowId): boolean {
+		const cells = this.#cells.get(rowId)
+
+		if (cells) {
+			for (const issues of cells.values()) {
+				if (issues.some(issue => issue.severity === "error")) {
+					return true
+				}
+			}
+		}
+
+		for (const [field, keys] of this.#keys) {
+			const key = keys.get(rowId)
+
+			if (key !== undefined && (this.#groups.get(field)?.get(key)?.size ?? 0) > 1) {
+				return true
+			}
+		}
+
+		return false
 	}
 
 	/** Settings decide which text reads as a value, so changing them checks every cell again. */
@@ -334,6 +402,8 @@ export class SheetValidator {
 			targets: Object.freeze(others.map(other => Object.freeze({ rowId: other, field }))),
 			code: "not_unique",
 			severity: "error",
+			blocking: true,
+			stale: false,
 			message: `"${value}" appears ${group.size} times in this column; it may appear once.`,
 			params
 		})
@@ -444,6 +514,8 @@ function cellIssue(
 		targets: Object.freeze([]),
 		code,
 		severity: "error",
+		blocking: true,
+		stale: false,
 		message,
 		params: Object.freeze({ field: field.key, type: field.type, ...params })
 	})

@@ -52,6 +52,8 @@ describe("issueText", () => {
 			targets: [],
 			code: "product_inactive",
 			severity: "error",
+			blocking: true,
+			stale: false,
 			message: "Ürün pasif durumda.",
 			params: {}
 		}

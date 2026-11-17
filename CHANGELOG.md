@@ -63,3 +63,19 @@ The three packages are versioned together.
 - **`TabulaGrid`** undoes with Ctrl+Z and redoes with Ctrl+Y or Ctrl+Shift+Z, selecting and
   scrolling to what changed, whoever asked for the step. It keeps a history of its own or takes
   one as `history`, and exposes `undo()` and `redo()`.
+- **`SheetSession`** checks a sheet with the backend and sends it to be processed, through the
+  adapters an application gives it (`SheetAdapters`: `preflight`, `process`, `processStatus`,
+  `cancelProcess`). The backend's issues are merged with the local ones; an issue on a cell changed
+  since its answer was asked for is marked stale, not fixed. Rows that went through are locked and
+  not sent again, `removeSucceeded()` leaves the rest. A run with no answer goes `unknown` and is
+  sent again under the same idempotency key, or asked about, never run twice. A `pending` run is
+  followed to its end, and a failed request is kept apart from the issues of the data.
+- **The contract**: `SheetRequest`, `ProcessRequest`, `CheckResponse`, `ProcessResponse` and
+  `IssueInput`, with `readCheckResponse` and `readProcessResponse` to check an answer against it.
+  Only fields with `submit` are sent, a lookup as its id.
+- **Issues** carry `blocking` and `stale`, and the summary counts stale ones apart. `IssueSet` is
+  what the grid and the panel read: a `SheetValidator`, or a session's `issues`.
+- **`TabulaGrid` and `TabulaIssues`** take `issues` instead of `validator`. The grid takes
+  `results`: each row's number shows its result, an issue about a whole row is shown there, and a
+  processed row cannot be changed. A stale issue has a grey corner, and the panel lists it apart.
+- New error code `invalid_response`, for an answer that is not in the contract's shape.

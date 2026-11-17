@@ -46,29 +46,56 @@ export const PANEL_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, str
 		title: "Sorunlar",
 		errors: "hata",
 		warnings: "uyarı",
+		stale: "yeniden kontrol",
 		rows: "satır",
 		none: "Sorun yok.",
 		previous: "Önceki",
 		next: "Sonraki",
 		row: "Satır",
+		sheet: "Sayfa",
+		recheck: "Değişti, yeniden kontrol edilmeli",
 		more: "sorun daha"
 	},
 	en: {
 		title: "Issues",
 		errors: "errors",
 		warnings: "warnings",
+		stale: "to check again",
 		rows: "rows",
 		none: "No issues.",
 		previous: "Previous",
 		next: "Next",
 		row: "Row",
+		sheet: "Sheet",
+		recheck: "Changed, to be checked again",
 		more: "more issues"
 	}
 }
 
-/** The issue in the user's language, or its own message for a code this table does not know. */
+/** The grid's own words: what a row's result is, and what a changed issue waits for. */
+export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, string>>>> = {
+	tr: {
+		succeeded: "İşlendi",
+		failed: "İşlenemedi",
+		skipped: "İşlenmedi",
+		sending: "Gönderiliyor",
+		recheck: "Değişti, yeniden kontrol edilmeli"
+	},
+	en: {
+		succeeded: "Processed",
+		failed: "Failed",
+		skipped: "Not processed",
+		sending: "Being sent",
+		recheck: "Changed, to be checked again"
+	}
+}
+
+/**
+ * The issue in the user's language, or its own message for a code this table does not know. A
+ * backend's code is worded by the backend: the table only holds this package's own.
+ */
 export function issueText(issue: Issue, locale: GridLocale, settings: ValueSettings): string {
-	const wording = ISSUES[locale][issue.code]
+	const wording = issue.source === "local" ? ISSUES[locale][issue.code] : undefined
 
 	return wording ? wording(issue.params, settings) : issue.message
 }
