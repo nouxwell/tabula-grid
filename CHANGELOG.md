@@ -96,6 +96,13 @@ The three packages are versioned together.
   never picked.
 - **`UndoHistory`** keeps a lookup's matches in the step of the edit they came from (`joins`), and
   `RowStore.revert` and `replay` take several changes as one.
+- **`RowView`**, the rows on screen: all of them, or those a filter keeps (`rowsWithIssues`,
+  `rowsWithResult`, or any predicate), applied at a moment and again on `refresh()`. Rows added
+  while it filters are shown, and `show(rowId)` brings back one it left out. `IssueSet` gains
+  `hasIssues(rowId)`.
+- **`TabulaGrid`** takes a `view`: row numbers stay the sheet's, a paste writes only into the rows
+  shown, and `goTo` shows a row the filter left out. **`TabulaIssues`** has a switch for only the
+  rows with issues, bound with `v-model:only-issue-rows`, and a Refresh button (`refresh-rows`).
 - **`DraftSaver`** saves a sheet a moment after the user stops changing it, and when asked, one
   save at a time, under an id made in the browser so a save repeated is the same draft. A failed
   save leaves the sheet as it is and says so. New error code `invalid_draft`.

@@ -3,6 +3,7 @@ import type {
 	LookupResolver,
 	ModuleSchema,
 	RowStore,
+	RowView,
 	Selection,
 	SheetSession,
 	SheetValidator,
@@ -22,6 +23,7 @@ export interface PlaygroundHandle {
 	/** Null while a stored draft waits to be reviewed. */
 	readonly saver: DraftSaver | null
 	readonly lookups: LookupResolver
+	readonly view: RowView
 	readonly widths: () => Readonly<Record<string, number>>
 }
 

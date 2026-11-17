@@ -8,6 +8,7 @@ import {
 	parseTsv,
 	readInput,
 	REDO_ORIGIN,
+	RowView,
 	resolveColumnSizing,
 	Selection,
 	SheetValidator,
@@ -79,6 +80,11 @@ const props = defineProps({
 	 * number, and a row it locks cannot be changed.
 	 */
 	results: { type: Object as PropType<RowResults>, default: undefined },
+	/**
+	 * The rows to show, such as a `RowView` filtered to the rows with issues. Left out, every row is.
+	 * Row numbers stay the rows' numbers in the sheet, filtered or not.
+	 */
+	view: { type: Object as PropType<RowView>, default: undefined },
 	/**
 	 * Searches a lookup's records as the user types into one, such as a `LookupResolver`: the editor
 	 * then lists them to pick from. Left out, a lookup takes only names, matched to records elsewhere.
@@ -266,12 +272,13 @@ function autoFit(col: number): void {
 		(field.required ? measureHeader(" *") : 0) +
 		RESIZE_HANDLE
 
-	const rows = store.value
+	const rows = view.value
 	const step = Math.max(1, Math.ceil(rows.size / AUTOFIT_SAMPLE))
 
 	for (let row = 0; row < rows.size; row += step) {
 		const rowId = rows.rowIdAt(row)
-		const text = rowId === undefined ? "" : formatCell(field, rows.get(rowId, field.key), props.valueSettings)
+		const text =
+			rowId === undefined ? "" : formatCell(field, store.value.get(rowId, field.key), props.valueSettings)
 
 		if (text !== "") {
 			content = Math.max(content, measureCell(text) + cellPadding)
@@ -379,7 +386,7 @@ function text(row: number, col: number): string {
 	// Read so the render depends on it: the store itself is not reactive.
 	void dataVersion.value
 
-	const rowId = store.value.rowIdAt(row)
+	const rowId = view.value.rowIdAt(row)
 	const field = fields.value[col]
 
 	return rowId === undefined || field === undefined
@@ -391,7 +398,7 @@ function text(row: number, col: number): string {
 function issuesAt(row: number, col: number): readonly Issue[] {
 	void issueVersion.value
 
-	const rowId = store.value.rowIdAt(row)
+	const rowId = view.value.rowIdAt(row)
 	const field = fields.value[col]
 
 	return rowId === undefined || field === undefined ? [] : issueSet.value.issuesAt(rowId, field.key)
@@ -439,7 +446,7 @@ function isLockedRow(rowId: string): boolean {
 function rowLocked(row: number): boolean {
 	void resultVersion.value
 
-	const rowId = store.value.rowIdAt(row)
+	const rowId = view.value.rowIdAt(row)
 
 	return rowId !== undefined && isLockedRow(rowId)
 }
@@ -461,7 +468,7 @@ function rowClass(row: number): string[] {
 	void resultVersion.value
 	void issueVersion.value
 
-	const rowId = store.value.rowIdAt(row)
+	const rowId = view.value.rowIdAt(row)
 
 	if (rowId === undefined) {
 		return []
@@ -478,7 +485,7 @@ function rowTitle(row: number): string | undefined {
 	void resultVersion.value
 	void issueVersion.value
 
-	const rowId = store.value.rowIdAt(row)
+	const rowId = view.value.rowIdAt(row)
 
 	if (rowId === undefined) {
 		return undefined
@@ -497,7 +504,7 @@ function valueOf(field: FieldSchema, input: string) {
 }
 
 function isBlank(row: number, col: number): boolean {
-	const rowId = store.value.rowIdAt(row)
+	const rowId = view.value.rowIdAt(row)
 	const field = fields.value[col]
 
 	return rowId === undefined || field === undefined || store.value.get(rowId, field.key) === null
@@ -619,7 +626,7 @@ function onRootFocus(event: FocusEvent): void {
 function beginEdit(mode: EditState["mode"]): boolean {
 	const cell = selection.active
 	const field = cell ? fields.value[cell.col] : undefined
-	const rowId = cell ? store.value.rowIdAt(cell.row) : undefined
+	const rowId = cell ? view.value.rowIdAt(cell.row) : undefined
 
 	if (!cell || !isEditable(field) || rowId === undefined || rowLocked(cell.row)) {
 		return false
@@ -711,7 +718,7 @@ function commitEdit(refocus = true): void {
 	editing.value = null
 	draft.value = ""
 
-	const rowId = store.value.rowIdAt(state.row)
+	const rowId = view.value.rowIdAt(state.row)
 	const field = fields.value[state.col]
 
 	if (rowId !== undefined && field !== undefined && text !== state.original) {
@@ -912,7 +919,7 @@ function pick(index: number): boolean {
 		return false
 	}
 
-	const rowId = store.value.rowIdAt(state.row)
+	const rowId = view.value.rowIdAt(state.row)
 	const field = fields.value[state.col]
 
 	editing.value = null
@@ -1190,7 +1197,7 @@ function step(direction: "undo" | "redo"): boolean {
  * view, as Excel does: what the user cannot see changing back, they cannot trust changed back.
  */
 function showChange(change: StoreChange): void {
-	const rows = store.value
+	const rows = view.value
 	const columns = new Map(fields.value.map((field, index) => [field.key, index]))
 	const cells = { top: Infinity, left: Infinity, bottom: -1, right: -1 }
 	const added = { top: Infinity, bottom: -1 }
@@ -1307,14 +1314,16 @@ function onPaste(event: ClipboardEvent): void {
 
 	rows.transact(
 		() => {
-			const missing = area.top + height - rows.size
-
-			if (missing > 0) {
-				rows.appendRows(missing)
-			}
+			// Rows a paste adds go at the end of the sheet, so they show after every row shown now,
+			// filtered or not; the view takes them in once the paste is done.
+			const shown = view.value.size
+			const missing = area.top + height - shown
+			const added = missing > 0 ? rows.appendRows(missing) : []
+			const rowAt = (position: number): string | undefined =>
+				position < shown ? view.value.rowIdAt(position) : added[position - shown]
 
 			for (let offset = 0; offset < height; offset++) {
-				const rowId = rows.rowIdAt(area.top + offset)
+				const rowId = rowAt(area.top + offset)
 
 				for (let step = 0; step < width && area.left + step < cols.length; step++) {
 					const field = cols[area.left + step]
@@ -1346,7 +1355,7 @@ function clearRange(origin: string): void {
 	rows.transact(
 		() => {
 			for (let row = area.top; row <= area.bottom; row++) {
-				const rowId = rows.rowIdAt(row)
+				const rowId = view.value.rowIdAt(row)
 
 				for (let col = area.left; col <= area.right; col++) {
 					const field = fields.value[col]
@@ -1508,7 +1517,7 @@ function onResizeStart(event: MouseEvent, col: number): void {
 // ---------------------------------------------------------------- wiring
 
 function syncSize(): void {
-	rowCount.value = store.value.size
+	rowCount.value = view.value.size
 	selection.resize(rowCount.value, fields.value.length)
 	updateWindow()
 }
@@ -1516,6 +1525,12 @@ function syncSize(): void {
 const stopSelection = selection.subscribe(() => {
 	selectionVersion.value++
 })
+
+// The rows on screen: the host's view when given, otherwise one of the grid's own over the store.
+// Made before the grid follows the store, so the view has taken in a change when the grid hears of it.
+let ownView: RowView | null = null
+const view = shallowRef<RowView>(toRaw(props.view) ?? (ownView = new RowView(store.value)))
+const viewVersion = shallowRef(0)
 
 watch(
 	() => toRaw(props.store),
@@ -1529,7 +1544,7 @@ watch(
 			next.subscribe(change => {
 				dataVersion.value++
 
-				if (next.size !== rowCount.value) {
+				if (view.value.size !== rowCount.value) {
 					syncSize()
 				}
 
@@ -1541,6 +1556,48 @@ watch(
 	},
 	{ immediate: true }
 )
+
+watch(
+	() => [toRaw(props.view), store.value] as const,
+	([given, nextStore], previous, onCleanup) => {
+		if (given) {
+			ownView?.dispose()
+			ownView = null
+			view.value = given
+		} else if (!ownView || previous !== undefined) {
+			ownView?.dispose()
+			ownView = new RowView(nextStore)
+			view.value = ownView
+		}
+
+		viewVersion.value++
+		syncSize()
+		onCleanup(
+			view.value.subscribe(() => {
+				viewVersion.value++
+				dataVersion.value++
+				syncSize()
+			})
+		)
+	},
+	{ immediate: true }
+)
+
+/** Whether a filter leaves rows out, for the row numbers to say so. */
+const filtered = computed(() => {
+	void viewVersion.value
+
+	return view.value.filtered
+})
+
+/** A row's number in the sheet: its place among all the rows, which a filter does not change. */
+function sheetRow(row: number): number {
+	void viewVersion.value
+
+	const rowId = filtered.value ? view.value.rowIdAt(row) : undefined
+
+	return rowId === undefined ? row + 1 : store.value.indexOf(rowId) + 1
+}
 
 // The undo history: the host's when given, otherwise one of the grid's own for the store, made again
 // when the store is replaced.
@@ -1643,6 +1700,7 @@ onBeforeUnmount(() => {
 	stopSearch()
 	ownValidator?.dispose()
 	ownHistory?.dispose()
+	ownView?.dispose()
 	resizeObserver?.disconnect()
 	stopDrag?.()
 	stopSelection()
@@ -1650,11 +1708,15 @@ onBeforeUnmount(() => {
 
 /**
  * Goes to a row, and to one of its fields when given: selects the cell, scrolls it into view and
- * gives the grid the keyboard. An issue's rowId and field are what it takes. False when the row is
- * no longer there.
+ * gives the grid the keyboard. An issue's rowId and field are what it takes. A row a filter left
+ * out is shown, in its place. False when the row is no longer there.
  */
 function goTo(rowId: string, field?: string | null): boolean {
-	const row = store.value.indexOf(rowId)
+	if (!view.value.show(rowId)) {
+		return false
+	}
+
+	const row = view.value.indexOf(rowId)
 
 	if (row < 0) {
 		return false
@@ -1700,6 +1762,7 @@ defineExpose({
 		role="grid"
 		:tabindex="active ? -1 : 0"
 		:data-tabula-theme="theme"
+		:class="{ 'is-filtered': filtered }"
 		:style="{ '--tabula-row-height': `${rowHeight}px` }"
 		:aria-rowcount="rowCount + 1"
 		:aria-colcount="fields.length"
@@ -1761,7 +1824,7 @@ defineExpose({
 						:style="{ transform: `translateY(${r * rowHeight}px)` }"
 						@mousedown="onGutterDown($event, r)"
 					>
-						{{ r + 1 }}
+						{{ sheetRow(r) }}
 					</div>
 				</div>
 				<div
@@ -2146,6 +2209,11 @@ defineExpose({
 
 .tabula-grid-rh.is-sending {
 	box-shadow: inset 3px 0 0 var(--tabula-accent);
+}
+
+/* While a filter leaves rows out, the row numbers, which then skip, say so, as a spreadsheet's do. */
+.tabula-grid.is-filtered .tabula-grid-rh {
+	color: var(--tabula-accent);
 }
 
 /* An issue about the row as a whole is on its number. */

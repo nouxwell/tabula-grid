@@ -74,6 +74,8 @@ export interface IssueSet {
 	issuesAt(rowId: RowId, field: string): readonly Issue[]
 	/** The issues about a row as a whole rather than one of its cells. */
 	rowIssues(rowId: RowId): readonly Issue[]
+	/** Whether any issue is on the row, on one of its cells or about it as a whole. */
+	hasIssues(rowId: RowId): boolean
 	/** Every issue: those about the whole sheet first, then by row as the rows stand, then by column. */
 	issues(): Issue[]
 	summary(): IssueSummary
@@ -200,6 +202,11 @@ export class SheetValidator implements IssueSet {
 		}
 
 		return rows
+	}
+
+	hasIssues(rowId: RowId): boolean {
+		// Every local issue is an error.
+		return this.hasErrors(rowId)
 	}
 
 	/** Whether any error stands on the row: such a row is not sent to be processed. */

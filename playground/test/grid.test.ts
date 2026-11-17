@@ -1062,6 +1062,95 @@ describe("TabulaGrid", () => {
 		})
 	})
 
+	describe("only the rows with issues", () => {
+		const numbers = (page: Page): Promise<string[]> => page.locator(".tabula-grid-rh").allInnerTexts()
+		const toggle = (page: Page): Locator => page.locator(".tabula-issues-filter input")
+
+		/** Empties the new price, which is required, on these rows of the sheet. */
+		async function breakRows(page: Page, rows: readonly number[]): Promise<void> {
+			for (const row of rows) {
+				await cell(page, row, 3).click()
+				await press(page, "Delete")
+			}
+		}
+
+		it("shows only the rows with issues, under their numbers in the sheet", async () => {
+			await withPage(20, async page => {
+				await breakRows(page, [2, 7])
+				await toggle(page).check()
+
+				await expect.poll(() => numbers(page)).toEqual(["3", "8"])
+				await expect(page.locator(".tabula-grid").getAttribute("class")).resolves.toContain("is-filtered")
+				await expect(page.locator(".playground-size").innerText()).resolves.toBe("2 / 20 satır")
+				// The first row on screen is the sheet's third.
+				await expect(cell(page, 0, 0).innerText()).resolves.toBe("Ürün 000003")
+
+				await toggle(page).uncheck()
+
+				await expect.poll(() => numbers(page).then(list => list.slice(0, 3))).toEqual(["1", "2", "3"])
+				await expect(page.locator(".tabula-grid").getAttribute("class")).resolves.not.toContain("is-filtered")
+			})
+		})
+
+		it("keeps a row the user fixes on screen until the filter is applied again", async () => {
+			await withPage(20, async page => {
+				await breakRows(page, [2, 7])
+				await toggle(page).check()
+				await expect.poll(() => numbers(page)).toEqual(["3", "8"])
+
+				await cell(page, 0, 3).click()
+				await page.keyboard.type("10")
+				await press(page, "Enter")
+
+				await expect.poll(() => valueAt(page, 2, "newPrice")).toBe("10")
+				await expect(numbers(page)).resolves.toEqual(["3", "8"])
+
+				await page.locator(".tabula-issues-filter button").click()
+
+				await expect.poll(() => numbers(page)).toEqual(["8"])
+			})
+		})
+
+		it("goes to an issue on a row the filter left out, and shows that row in its place", async () => {
+			await withPage(20, async page => {
+				await breakRows(page, [2, 7])
+				await toggle(page).check()
+				await expect.poll(() => numbers(page)).toEqual(["3", "8"])
+
+				// An issue appears on a row the filter left out.
+				await page.evaluate(() => {
+					const { store } = window.__playground!
+
+					store.setCell(store.rowIdAt(5)!, "newPrice", null)
+				})
+
+				await page.locator(".tabula-issues-item", { hasText: "Satır 6" }).click()
+
+				await expect.poll(() => numbers(page)).toEqual(["3", "6", "8"])
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 1, col: 3 } })
+			})
+		})
+
+		it("pastes into the rows shown, never into one the filter hides, and adds rows past the last", async () => {
+			await withPage(20, async page => {
+				await breakRows(page, [2, 7])
+				await toggle(page).check()
+				await expect.poll(() => numbers(page)).toEqual(["3", "8"])
+
+				await cell(page, 0, 3).click()
+				await clipboard(page, "1\r\n2\r\n3\r\n")
+				await press(page, "Control+V")
+
+				await expect.poll(() => numbers(page)).toEqual(["3", "8", "21"])
+				await expect(valueAt(page, 2, "newPrice")).resolves.toBe("1")
+				await expect(valueAt(page, 7, "newPrice")).resolves.toBe("2")
+				await expect(valueAt(page, 20, "newPrice")).resolves.toBe("3")
+				// The rows in between, hidden, kept what they held.
+				await expect(valueAt(page, 3, "newPrice")).resolves.not.toBeNull()
+			})
+		})
+	})
+
 	describe("drafts", () => {
 		const KEY = "tabula-grid.playground.draft"
 		const draftStatus = (page: Page): Promise<string> => page.locator(".playground-draft").innerText()

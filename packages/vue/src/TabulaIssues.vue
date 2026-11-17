@@ -28,7 +28,14 @@ const props = defineProps({
 	limit: { type: Number, default: 500 }
 })
 
-const emit = defineEmits<{ select: [issue: Issue] }>()
+const emit = defineEmits<{ select: [issue: Issue]; refreshRows: [] }>()
+
+/**
+ * Whether only the rows with issues are shown. Bound with `v-model:only-issue-rows`, it puts a switch
+ * in the panel's head, and a button that emits `refresh-rows` while it is on; the host filters its
+ * `RowView` by them. Left unbound, there is no switch.
+ */
+const onlyIssueRows = defineModel<boolean>("onlyIssueRows")
 
 const version = shallowRef(0)
 /** The issue chosen last, so Previous and Next have somewhere to start. */
@@ -117,6 +124,15 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 			<span class="tabula-issues-nav">
 				<button type="button" :disabled="issues.length === 0" @click="step(-1)">{{ text.previous }}</button>
 				<button type="button" :disabled="issues.length === 0" @click="step(1)">{{ text.next }}</button>
+			</span>
+			<span v-if="onlyIssueRows !== undefined" class="tabula-issues-filter">
+				<label>
+					<input v-model="onlyIssueRows" type="checkbox" />
+					{{ text.onlyIssueRows }}
+				</label>
+				<button v-if="onlyIssueRows" type="button" :title="text.refreshHint" @click="emit('refreshRows')">
+					{{ text.refresh }}
+				</button>
 			</span>
 		</header>
 		<p v-if="issues.length === 0" class="tabula-issues-none">{{ text.none }}</p>
@@ -215,7 +231,22 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 	margin-left: auto;
 }
 
-.tabula-issues-nav button {
+.tabula-issues-filter {
+	display: flex;
+	flex-basis: 100%;
+	gap: 8px;
+	align-items: center;
+}
+
+.tabula-issues-filter label {
+	display: inline-flex;
+	gap: 5px;
+	align-items: center;
+	cursor: pointer;
+}
+
+.tabula-issues-nav button,
+.tabula-issues-filter button {
 	padding: 2px 9px;
 	border: 1px solid var(--tabula-issues-line);
 	border-radius: 4px;

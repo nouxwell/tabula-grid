@@ -171,6 +171,31 @@ const grid = ref<InstanceType<typeof TabulaGrid>>()
 These are the browser's checks, for the user's sake. Passing them promises nothing: the backend
 checks everything again before it writes.
 
+### Only the rows with issues
+
+A `RowView` decides which rows are on screen. Give it to the grid, and bind the panel's switch:
+
+```vue
+<script setup lang="ts">
+const view = new RowView(store)
+const onlyIssueRows = ref(false)
+
+watch(onlyIssueRows, only => (only ? view.filter(rowsWithIssues(issues)) : view.clear()))
+</script>
+
+<template>
+  <TabulaGrid :schema="schema" :store="store" :issues="issues" :view="view" />
+  <TabulaIssues :issues="issues" v-model:only-issue-rows="onlyIssueRows" @refresh-rows="view.refresh()" />
+</template>
+```
+
+A filter applies at a moment, as a spreadsheet's does: a row the user fixes stays on screen until
+the filter is applied again (the panel's Refresh). Row numbers stay the rows' numbers in the
+sheet. A paste writes only into the rows shown, never into one the filter hides, and rows it adds
+past the last are shown. Going to an issue on a row the filter left out shows that row in its
+place. `rowsWithResult(session.results, ["failed"])` filters by the backend's results instead, and
+any `(rowId) => boolean` will do.
+
 ## Undo
 
 `UndoHistory` makes every change to a store a step, whoever made it: one transaction is one step,

@@ -6,6 +6,8 @@ import {
 	openDraft,
 	readDraft,
 	RowStore,
+	rowsWithIssues,
+	RowView,
 	SheetSession,
 	SheetValidator,
 	UndoHistory,
@@ -85,6 +87,14 @@ const session = new SheetSession({
 // Names typed or pasted into the product column become products, many in one request; the editor
 // lists the catalog as the user types.
 const lookups = new LookupResolver({ schema, store, adapters: backend.lookups })
+
+// The rows on screen: all of them, or only those with issues when the panel's switch says so.
+const view = new RowView(store)
+const onlyIssueRows = ref(false)
+const shownRows = shallowRef(view.size)
+
+view.subscribe(() => (shownRows.value = view.size))
+watch(onlyIssueRows, only => (only ? view.filter(rowsWithIssues(session.issues)) : view.clear()))
 
 if (opened) {
 	void lookups.resolveAll()
@@ -347,6 +357,7 @@ onBeforeUnmount(() => {
 	window.removeEventListener("pagehide", flush)
 	saver?.dispose()
 	lookups.dispose()
+	view.dispose()
 	session.dispose()
 	validator.dispose()
 	history.dispose()
@@ -396,6 +407,7 @@ onMounted(() => {
 		backend,
 		saver,
 		lookups,
+		view,
 		widths: () => widths.value
 	}
 	grid.value?.focus()
@@ -414,7 +426,10 @@ onMounted(() => {
 					{{ words.redo }}
 				</button>
 			</span>
-			<span>{{ size.toLocaleString("tr-TR") }} satır</span>
+			<span class="playground-size">
+				{{ onlyIssueRows ? `${shownRows.toLocaleString("tr-TR")} / ` : ""
+				}}{{ size.toLocaleString("tr-TR") }} satır
+			</span>
 			<span>Seçim {{ position }}</span>
 			<span>Sürüm {{ revision }}</span>
 			<label>
@@ -494,11 +509,13 @@ onMounted(() => {
 				:results="session.results"
 				:history="history"
 				:lookups="lookups"
+				:view="view"
 				:theme="theme"
 				:locale="language"
 				:value-settings="valueSettings"
 			/>
 			<TabulaIssues
+				v-model:only-issue-rows="onlyIssueRows"
 				class="playground-issues"
 				:issues="session.issues"
 				:schema="schema"
@@ -507,6 +524,7 @@ onMounted(() => {
 				:locale="language"
 				:value-settings="valueSettings"
 				@select="goTo"
+				@refresh-rows="view.refresh()"
 			/>
 		</main>
 	</div>

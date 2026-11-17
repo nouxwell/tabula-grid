@@ -56,7 +56,10 @@ export const PANEL_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, str
 		row: "Satır",
 		sheet: "Sayfa",
 		recheck: "Değişti, yeniden kontrol edilmeli",
-		more: "sorun daha"
+		more: "sorun daha",
+		onlyIssueRows: "Yalnız sorunlu satırlar",
+		refresh: "Yenile",
+		refreshHint: "Süzgeci tablonun şimdiki hâline yeniden uygula"
 	},
 	en: {
 		title: "Issues",
@@ -70,7 +73,10 @@ export const PANEL_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, str
 		row: "Row",
 		sheet: "Sheet",
 		recheck: "Changed, to be checked again",
-		more: "more issues"
+		more: "more issues",
+		onlyIssueRows: "Only rows with issues",
+		refresh: "Refresh",
+		refreshHint: "Apply the filter again to the sheet as it is now"
 	}
 }
 

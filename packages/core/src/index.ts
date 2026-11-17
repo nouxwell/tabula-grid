@@ -61,6 +61,9 @@ export type {
 	LookupSearchResponse
 } from "./lookup"
 
+export { RowView, rowsWithIssues, rowsWithResult } from "./view"
+export type { RowFilter } from "./view"
+
 export { Selection } from "./selection"
 export type { CellPosition, CellRange, Direction, IsBlank, MoveOptions } from "./selection"
 

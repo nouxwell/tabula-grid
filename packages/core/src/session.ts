@@ -946,6 +946,12 @@ class MergedIssues implements IssueSet {
 		return this.#indexed().rows.get(rowId) ?? []
 	}
 
+	hasIssues(rowId: RowId): boolean {
+		const index = this.#indexed()
+
+		return this.#local.hasIssues(rowId) || index.rows.has(rowId) || index.cells.has(rowId)
+	}
+
 	issues(): Issue[] {
 		const index = this.#indexed()
 		const result: Issue[] = [...index.sheet]
