@@ -471,6 +471,22 @@ describe("TabulaGrid", () => {
 		const panel = (page: Page): Locator => page.locator(".tabula-issues")
 		const items = (page: Page): Locator => panel(page).locator(".tabula-issues-item")
 
+		it("closes a closable panel from its head, and has no close button otherwise", async () => {
+			await withPage(20, async page => {
+				await expect.poll(() => panel(page).count()).toBe(1)
+				await expect(panel(page).getByRole("button", { name: "Kapat" }).count()).resolves.toBe(0)
+			})
+			await withPage(
+				20,
+				async page => {
+					await panel(page).getByRole("button", { name: "Kapat" }).click()
+
+					await expect.poll(() => panel(page).count()).toBe(0)
+				},
+				"&closable=1"
+			)
+		})
+
 		it("starts with no issues on a sheet that keeps its rules", async () => {
 			await withPage(20, async page => {
 				await expect.poll(() => panel(page).locator(".tabula-issues-none").innerText()).toBe("Sorun yok.")

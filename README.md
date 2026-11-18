@@ -358,7 +358,8 @@ server found it, so the user knows which they can fix themselves. Give it and th
 issues, and send its `select` to the grid's `goTo`. On a phone, `variant="sheet"` makes it a bar
 with the counts that opens the list from the bottom of the screen; choosing an issue closes it,
 `v-model:open` opens it from elsewhere, and its `actions` slot takes a button such as "Check
-again":
+again". `closable` gives the panel a close button too, which emits `close`, for a host that
+shows it only while there are issues:
 
 ```vue
 <script setup lang="ts">

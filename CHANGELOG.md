@@ -7,6 +7,24 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+### Added
+
+- **A closable issues panel.** `TabulaIssues` takes `closable`: the `panel` variant then has a
+  close button in its head, as the `sheet` variant has, and both emit `close` when it is pressed.
+  A host can show the panel only while there are issues.
+
+### Changed
+
+- **The example's toolbar and sheet are in cards, on one edge** (canvas items 74, 75, 77–81 and
+  83–87, designs T, W, X and Y). The toolbar is two rows in a card: on top undo, redo, Dosya
+  (import and export), Toplu düzenle (percent, amount, round, delete rows), the template joined
+  with Kurallar, and the issues switch; under it the row filter, Sütunlar, the view and the search.
+  Nothing scrolls sideways: on a narrower screen the file menu and Kurallar go under ⋯, and a
+  phone has its tools in a sheet from the bottom. The draft's Kaydet sits beside its save status.
+  The sheet's card has the formula bar on top and the sheet tabs and status under it. The issues
+  panel is there only while there are issues: it comes in with the first, goes with the last, and
+  the switch closes it until the next check.
+
 ## [0.3.0] — 2026-11-18
 
 Several sheets of one module kept together, as a spreadsheet keeps its tabs: a workbook in the

@@ -42,9 +42,13 @@
 			</div>
 		</header>
 
-		<div class="flex flex-none flex-col gap-3 px-4 pt-4 md:px-6">
-			<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-				<h1 class="m-0 font-display text-xl font-semibold md:text-2xl">{{ input?.title }}</h1>
+		<!--
+			One edge for everything: the title row, the toolbar's card and the sheet's card start and end
+			at the page's padding, and inside each card the controls start 12px in.
+		-->
+		<div class="flex min-h-0 flex-1 flex-col gap-3 px-4 py-3 md:px-6 md:py-4">
+			<div class="flex flex-none flex-wrap items-center gap-x-3 gap-y-1 lg:min-h-8 lg:flex-nowrap">
+				<h1 class="m-0 truncate font-display text-xl font-semibold md:text-2xl">{{ input?.title }}</h1>
 				<AppTooltip :content-style="FIT_TOOLTIP_STYLE">
 					<template #trigger>
 						<span><AppTag>Taslak</AppTag></span>
@@ -53,21 +57,23 @@
 						text="Bir taslak üzerinde çalışıyorsunuz: Değişiklikleri uygula'ya basana kadar hiçbir kayıt değişmez. Taslak bu tarayıcıda saklanır."
 					/>
 				</AppTooltip>
-				<span v-if="sheet" class="hidden text-sm text-muted md:inline">
+				<span v-if="sheet" class="hidden text-sm whitespace-nowrap text-muted xl:inline">
 					<AppNumberAnimation :from="0" :to="rowCount" locale="tr-TR" />
 					satır
 				</span>
-				<span class="flex w-full items-center gap-1.5 text-sm text-muted md:ml-auto md:w-auto" role="status">
-					<AppIcon name="saved" :size="16" class="text-primary-text" />
+				<!-- The draft saves itself; Kaydet is there for whoever wants it now. -->
+				<span
+					class="flex w-full min-w-0 items-center gap-1.5 text-sm text-muted md:ml-auto md:w-auto"
+					role="status"
+				>
+					<AppIcon name="saved" :size="16" class="flex-none text-primary-text" />
 					<Transition name="fade" mode="out-in">
-						<span :key="savedText">{{ savedText }}</span>
+						<span :key="savedText" class="truncate">{{ savedText }}</span>
 					</Transition>
+					<AppButton text type="primary" :disabled="!sheet" @click="saveDraft">Kaydet</AppButton>
 				</span>
-				<div class="hidden items-center gap-2 md:flex">
-					<AppButton :disabled="!sheet" @click="saveDraft">
-						<template #icon><AppIcon name="save" :size="16" /></template>
-						Taslağı kaydet
-					</AppButton>
+				<!-- Wrapped under the title on a tablet, they keep to the right edge. -->
+				<div class="hidden flex-none items-center gap-2 md:ml-auto md:flex lg:ml-0">
 					<AppButton :disabled="!sheet" :loading="phase === 'checking'" @click="check">
 						<template #icon><AppIcon name="check" :size="16" /></template>
 						Kontrol et
@@ -91,9 +97,13 @@
 				</div>
 			</div>
 
-			<!-- On a narrow screen the toolbar scrolls sideways, under a bar that stays clear of its buttons. -->
-			<AppScrollbar x-scrollable trigger="none">
-				<div role="toolbar" aria-label="Tablo araçları" class="flex w-max min-w-full items-center gap-2 pb-2">
+			<!--
+				The toolbar: on top what changes the data, under it what is seen of it. Nothing scrolls
+				sideways; on a narrower screen what does not fit goes under ⋯, and a phone has its tools in
+				a sheet from the bottom.
+			-->
+			<AppCard class="flex-none" content-class="p-0!">
+				<div role="toolbar" aria-label="Tablo araçları" class="flex min-h-12 items-center gap-2 px-3 py-1.5">
 					<AppTooltip>
 						<template #trigger>
 							<AppButton
@@ -120,320 +130,321 @@
 						</template>
 						Yinele (Ctrl+Y)
 					</AppTooltip>
-					<span class="mx-1 hidden h-5 w-px bg-divider md:block" aria-hidden="true" />
-					<AppDropdown :options="importOptions" @select="chooseImport">
+					<span class="mx-1 hidden h-5 w-px flex-none bg-divider md:block" aria-hidden="true" />
+					<!--
+						On plain elements: Naive UI's styles are not in a CSS layer, so they win over Tailwind's
+						display utilities set on Naive UI's own components.
+					-->
+					<span class="hidden lg:inline-flex">
+						<AppDropdown :options="fileOptions" @select="chooseFile">
+							<AppButton :disabled="!sheet" :loading="importing">
+								<template #icon><AppIcon name="file" /></template>
+								Dosya
+								<AppIcon name="chevronDown" :size="14" class="ml-1" />
+							</AppButton>
+						</AppDropdown>
+					</span>
+					<span class="hidden md:inline-flex">
+						<AppDropdown :options="bulkOptions" @select="chooseBulk">
+							<AppButton :disabled="!sheet">
+								<template #icon><AppIcon name="edit" /></template>
+								Toplu düzenle
+								<AppIcon name="chevronDown" :size="14" class="ml-1" />
+							</AppButton>
+						</AppDropdown>
+					</span>
+					<span class="mx-1 hidden h-5 w-px flex-none bg-divider md:block" aria-hidden="true" />
+					<!-- The template and the rules written on it, joined: Kurallar edits the template chosen. -->
+					<span class="hidden min-w-0 md:inline-flex">
+						<AppDropdown :options="templateOptions" @select="chooseTemplate">
+							<AppButton :disabled="!sheet" class="min-w-0 lg:rounded-r-none!">
+								<template #icon><AppIcon name="template" /></template>
+								<span class="hidden text-muted xl:inline">Şablon:&nbsp;</span>
+								<span class="max-w-32 truncate lg:max-w-48">{{ templateLabel }}</span>
+								<AppIcon name="chevronDown" :size="14" class="ml-1" />
+							</AppButton>
+						</AppDropdown>
+						<span class="hidden lg:inline-flex">
+							<AppTooltip :disabled="Boolean(sheet?.template)">
+								<template #trigger>
+									<span class="inline-flex">
+										<AppButton
+											:disabled="!drawerTemplate"
+											class="-ml-px rounded-l-none!"
+											@click="rulesOpen = true"
+										>
+											<template #icon><AppIcon name="rules" /></template>
+											Kurallar
+										</AppButton>
+									</span>
+								</template>
+								Şablon seçili değil: yazdığınız kurallar ve formüller kaydedilince yeni bir şablon olur.
+							</AppTooltip>
+						</span>
+					</span>
+					<span class="hidden md:inline-flex lg:hidden">
+						<AppDropdown :options="moreOptions" @select="chooseMore">
+							<AppButton icon="more" aria-label="Diğer araçlar" :disabled="!sheet" :loading="importing" />
+						</AppDropdown>
+					</span>
+					<span class="flex min-w-0 flex-1 md:hidden">
 						<AppButton
 							:size="controlSize"
+							class="min-h-11 w-full!"
 							:disabled="!sheet"
-							:loading="importing"
-							class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+							@click="toolsOpen = true"
 						>
-							<template #icon><AppIcon name="upload" /></template>
-							<span class="hidden md:inline">İçe aktar</span>
-							<span class="sr-only md:hidden">İçe aktar</span>
-							<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
+							<template #icon><AppIcon name="edit" /></template>
+							Araçlar
+							<AppIcon name="chevronDown" :size="14" class="ml-1" />
 						</AppButton>
-					</AppDropdown>
-					<AppDropdown :options="exportOptions" @select="chooseExport">
+					</span>
+					<!-- The issues panel's switch, over the panel: green with none, red with their count. -->
+					<span class="ml-auto hidden flex-none md:inline-flex">
 						<AppButton
-							:size="controlSize"
+							secondary
+							:type="issueCount > 0 ? 'error' : 'primary'"
 							:disabled="!sheet"
-							class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+							:aria-pressed="panelShown"
+							:aria-label="issueCount > 0 ? `Sorunlar: ${issueCount}` : 'Sorun yok'"
+							@click="togglePanel"
 						>
-							<template #icon><AppIcon name="download" /></template>
-							<span class="hidden md:inline">Dışa aktar</span>
-							<span class="sr-only md:hidden">Dışa aktar</span>
-							<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
-						</AppButton>
-					</AppDropdown>
-					<AppButton
-						:size="controlSize"
-						class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
-						@click="columnsOpen = true"
-					>
-						<template #icon><AppIcon name="columns" /></template>
-						<span class="hidden md:inline">Sütunlar</span>
-						<span class="sr-only md:hidden">Sütunlar</span>
-					</AppButton>
-					<AppDropdown :options="templateOptions" @select="chooseTemplate">
-						<AppButton
-							:size="controlSize"
-							:disabled="!sheet"
-							class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
-						>
-							<template #icon><AppIcon name="template" /></template>
-							<span class="hidden md:inline">{{ templateLabel }}</span>
-							<span class="sr-only md:hidden">Şablon: {{ templateLabel }}</span>
-							<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
-						</AppButton>
-					</AppDropdown>
-					<AppTooltip :disabled="Boolean(sheet?.template)">
-						<template #trigger>
-							<span>
-								<AppButton
-									:size="controlSize"
-									:disabled="!drawerTemplate"
-									class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
-									@click="rulesOpen = true"
+							<template #icon><AppIcon :name="issueCount > 0 ? 'alert' : 'saved'" /></template>
+							<template v-if="issueCount > 0">
+								Sorunlar
+								<span
+									class="ml-1.5 inline-flex min-w-5 justify-center rounded-full bg-error px-1.5 text-xs leading-5 font-bold text-white tabular-nums"
 								>
-									<template #icon><AppIcon name="rules" /></template>
-									<span class="hidden md:inline">Kurallar</span>
-									<span class="sr-only md:hidden">Kurallar</span>
-								</AppButton>
-							</span>
-						</template>
-						Şablon seçili değil: yazdığınız kurallar ve formüller kaydedilince yeni bir şablon olur.
-					</AppTooltip>
-					<AppDropdown :options="viewOptions" @select="chooseView">
-						<AppButton
-							:size="controlSize"
-							:disabled="!sheet"
-							class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
-						>
-							<template #icon><AppIcon name="views" /></template>
-							<span class="hidden md:inline">{{ viewLabel }}</span>
-							<span class="sr-only md:hidden">Görünüm: {{ viewLabel }}</span>
-							<span v-if="viewModified" class="ml-1.5 hidden text-muted md:inline">· değişti</span>
-							<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
+									<AppNumberAnimation :to="issueCount" locale="tr-TR" />
+								</span>
+							</template>
+							<template v-else>Sorun yok</template>
 						</AppButton>
-					</AppDropdown>
-					<span class="mx-1 hidden h-5 w-px bg-divider md:block" aria-hidden="true" />
-					<AppTooltip>
-						<template #trigger>
-							<AppButton
-								:size="controlSize"
-								:disabled="!sheet"
-								class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
-								@click="openAdjust('percent')"
-							>
-								<template #icon><AppIcon name="percent" /></template>
-								<span class="hidden md:inline">Yüzde uygula</span>
-								<span class="sr-only md:hidden">Yüzde uygula</span>
-							</AppButton>
-						</template>
-						Seçili sayıları bir oranda artırır ya da azaltır.
-					</AppTooltip>
-					<AppTooltip>
-						<template #trigger>
-							<AppButton
-								:size="controlSize"
-								:disabled="!sheet"
-								class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
-								@click="openAdjust('add')"
-							>
-								<template #icon><AppIcon name="plus" /></template>
-								<span class="hidden md:inline">Tutar ekle</span>
-								<span class="sr-only md:hidden">Tutar ekle</span>
-							</AppButton>
-						</template>
-						Seçili sayılara bir tutar ekler; eksi tutar düşer.
-					</AppTooltip>
-					<AppDropdown :options="roundOptions" @select="chooseRound">
-						<AppButton
-							:size="controlSize"
-							:disabled="!sheet"
-							class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
-						>
-							<template #icon><AppIcon name="round" /></template>
-							<span class="hidden md:inline">Yuvarla</span>
-							<span class="sr-only md:hidden">Yuvarla</span>
-							<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
-						</AppButton>
-					</AppDropdown>
-					<AppTooltip>
-						<template #trigger>
-							<AppButton
-								:size="controlSize"
-								:disabled="!sheet"
-								class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
-								@click="removeRows"
-							>
-								<template #icon><AppIcon name="trash" /></template>
-								<span class="hidden md:inline">Satırları sil</span>
-								<span class="sr-only md:hidden">Satırları sil</span>
-							</AppButton>
-						</template>
-						Seçimin geçtiği satırları siler (Ctrl+−); Ctrl+Z geri getirir.
-					</AppTooltip>
+					</span>
 					<input ref="csvInput" type="file" accept=".csv,text/csv" hidden @change="importChosen" />
 				</div>
-			</AppScrollbar>
 
-			<!-- Which rows: all, or the changed ones; and the search, on the right. -->
-			<div v-if="sheet" class="flex flex-wrap items-center gap-2 pb-2 text-sm">
-				<div class="flex flex-wrap items-center gap-2" role="group" aria-label="Satırlar">
-					<button
-						type="button"
-						class="flex items-center gap-1.5 rounded-app border px-2.5 py-1"
-						:class="
-							onlyChanged
-								? 'border-divider text-muted'
-								: 'border-primary bg-primary/10 font-semibold text-primary-text'
-						"
-						:aria-pressed="!onlyChanged"
-						@click="onlyChanged = false"
-					>
-						Tüm satırlar
-						<span class="rounded-full bg-surface-alt px-1.5 text-xs tabular-nums">
-							<AppNumberAnimation :to="rowCount" locale="tr-TR" />
-						</span>
-					</button>
-					<button
-						type="button"
-						class="flex items-center gap-1.5 rounded-app border px-2.5 py-1"
-						:class="
-							onlyChanged
-								? 'border-primary bg-primary/10 font-semibold text-primary-text'
-								: 'border-divider text-muted'
-						"
-						:aria-pressed="onlyChanged"
-						:title="onlyChanged ? 'Yeniden basınca süzgeç tablonun şimdiki hâline uygulanır' : undefined"
-						@click="showChanged"
-					>
-						Değişenler
-						<span class="rounded-full bg-surface-alt px-1.5 text-xs tabular-nums">
-							<AppNumberAnimation :to="changeSummary.rows" locale="tr-TR" />
-						</span>
-					</button>
-					<Transition name="fade">
-						<span v-if="changeSummary.missing > 0" class="text-muted">
-							·
-							<AppNumberAnimation :to="changeSummary.missing" locale="tr-TR" />
-							satır silindi
-						</span>
-					</Transition>
-				</div>
-				<div class="w-full md:ml-auto md:w-72">
-					<AppInput
-						v-model:value="searchText"
-						:size="narrow ? 'large' : 'small'"
-						clearable
-						placeholder="Ürün, SKU veya not ara…"
-						aria-label="Tabloda ara"
-					>
-						<template #prefix><AppIcon name="search" :size="16" class="text-muted" /></template>
-					</AppInput>
-				</div>
-			</div>
-
-			<TabulaFormulaBar :grid="grid" :theme="theme" :locale="locale" />
-		</div>
-
-		<main class="flex min-h-0 flex-1 flex-col gap-3 px-4 py-3 md:flex-row md:px-6">
-			<AppCard class="min-h-[320px] min-w-0 flex-1 overflow-hidden" content-class="flex min-h-0 flex-col p-0!">
-				<Transition name="fade" mode="out-in">
-					<TabulaGrid
+				<!-- Which rows, and how they are seen: the columns, the view, the search. -->
+				<div
+					class="flex flex-wrap items-center gap-2 border-t border-divider px-3 py-2 md:min-h-12 md:flex-nowrap md:py-1.5"
+				>
+					<div
 						v-if="sheet"
-						:key="sheetKey"
-						ref="grid"
-						v-model:columns="columns"
-						v-model:column-widths="widths"
-						v-model:filters="filters"
-						v-model:sort="sort"
-						class="min-h-0 flex-1 rounded-none! border-0!"
-						:schema="sheet.schema"
-						:store="sheet.store"
-						:issues="sheet.session.issues"
-						:results="sheet.session.results"
-						:history="sheet.history"
-						:lookups="sheet.lookups"
-						:view="sheet.view"
-						:changes="sheet.changes"
-						column-letters
-						:menu-items="menuItems"
+						class="flex flex-none items-center gap-2 text-sm"
+						role="group"
+						aria-label="Satırlar"
+					>
+						<span class="inline-flex overflow-hidden rounded-app border border-divider">
+							<button
+								type="button"
+								class="flex items-center gap-1.5 px-2.5 py-1"
+								:class="onlyChanged ? 'text-muted' : 'bg-primary/10 font-semibold text-primary-text'"
+								:aria-pressed="!onlyChanged"
+								@click="onlyChanged = false"
+							>
+								Tüm satırlar
+								<span
+									class="rounded-full bg-surface-alt px-1.5 text-xs font-normal text-text tabular-nums"
+								>
+									<AppNumberAnimation :to="rowCount" locale="tr-TR" />
+								</span>
+							</button>
+							<button
+								type="button"
+								class="flex items-center gap-1.5 border-l border-divider px-2.5 py-1"
+								:class="onlyChanged ? 'bg-primary/10 font-semibold text-primary-text' : 'text-muted'"
+								:aria-pressed="onlyChanged"
+								:title="
+									onlyChanged ? 'Yeniden basınca süzgeç tablonun şimdiki hâline uygulanır' : undefined
+								"
+								@click="showChanged"
+							>
+								Değişenler
+								<span
+									class="rounded-full bg-surface-alt px-1.5 text-xs font-normal text-text tabular-nums"
+								>
+									<AppNumberAnimation :to="changeSummary.rows" locale="tr-TR" />
+								</span>
+							</button>
+						</span>
+						<Transition name="fade">
+							<span v-if="changeSummary.missing > 0" class="whitespace-nowrap text-muted">
+								·
+								<AppNumberAnimation :to="changeSummary.missing" locale="tr-TR" />
+								satır silindi
+							</span>
+						</Transition>
+					</div>
+					<div class="flex w-full min-w-0 items-center gap-2 md:ml-auto md:w-auto">
+						<span class="hidden md:inline-flex">
+							<AppTooltip :disabled="!narrowToolbar">
+								<template #trigger>
+									<AppButton :disabled="!sheet" aria-label="Sütunlar" @click="columnsOpen = true">
+										<template #icon><AppIcon name="columns" /></template>
+										<span class="hidden lg:inline">Sütunlar</span>
+									</AppButton>
+								</template>
+								Sütunlar
+							</AppTooltip>
+						</span>
+						<span class="hidden md:inline-flex">
+							<AppDropdown :options="viewOptions" @select="chooseView">
+								<AppButton :disabled="!sheet" :aria-label="`Görünüm: ${viewLabel}`">
+									<template #icon><AppIcon name="views" /></template>
+									<span class="hidden max-w-48 truncate lg:inline">{{ viewLabel }}</span>
+									<span v-if="viewModified" class="ml-1.5 hidden text-muted xl:inline">
+										· değişti
+									</span>
+									<AppIcon name="chevronDown" :size="14" class="ml-1" />
+								</AppButton>
+							</AppDropdown>
+						</span>
+						<div class="min-w-0 flex-1 md:w-56 md:flex-none xl:w-72">
+							<AppInput
+								v-model:value="searchText"
+								:size="narrow ? 'large' : 'small'"
+								:disabled="!sheet"
+								clearable
+								placeholder="Ürün, SKU veya not ara…"
+								aria-label="Tabloda ara"
+							>
+								<template #prefix><AppIcon name="search" :size="16" class="text-muted" /></template>
+							</AppInput>
+						</div>
+					</div>
+				</div>
+			</AppCard>
+
+			<main class="flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
+				<!-- The sheet's card: the formula bar on top, the workbook's tabs and the status under it. -->
+				<AppCard
+					class="min-h-[320px] min-w-0 flex-1 overflow-hidden"
+					content-class="flex min-h-0 flex-col p-0!"
+				>
+					<TabulaFormulaBar
+						class="flex-none border-b border-divider px-3 py-2"
+						:grid="grid"
 						:theme="theme"
 						:locale="locale"
-						:value-settings="valueSettings"
-						:row-height="narrow ? 40 : 30"
-						@menu="onMenu"
 					/>
-					<!-- Only the part that waits spins; the rest of the page is there and works. -->
-					<div
-						v-else
-						class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-muted"
-						role="status"
-					>
-						<template v-if="rowsError">
-							<span>Satırlar yüklenemedi.</span>
-							<AppButton icon="refresh" @click="loadRows">Yeniden dene</AppButton>
-						</template>
-						<template v-else>
-							<AppSpin />
-							<span>Tablo hazırlanıyor…</span>
-						</template>
-					</div>
-				</Transition>
-			</AppCard>
-			<!-- On a phone the issues are a bar opening a sheet, not a card. -->
-			<component
-				:is="narrow ? 'div' : AppCard"
-				v-if="sheet"
-				class="md:w-[340px]! md:flex-none"
-				v-bind="narrow ? {} : { contentClass: 'flex min-h-0 flex-col p-0!' }"
-			>
-				<TabulaIssues
-					v-model:only-issue-rows="onlyIssueRows"
-					v-model:open="issuesOpen"
-					:class="narrow ? '' : 'min-h-0 flex-1 rounded-none! border-0! bg-transparent!'"
-					:variant="narrow ? 'sheet' : 'panel'"
-					:issues="sheet.session.issues"
-					:schema="sheet.schema"
-					:store="sheet.store"
-					:theme="theme"
-					:locale="locale"
-					:value-settings="valueSettings"
-					:address-of="addressOf"
-					name-field="productId"
-					@select="issue => grid?.goTo(issue.rowId!, issue.field)"
-					@refresh-rows="sheet.view.refresh()"
-				>
-					<template v-if="narrow || errors > 0" #actions>
-						<p
-							v-if="errors > 0"
-							class="m-0 flex w-full items-center gap-2 rounded-app bg-error/10 px-3 py-2.5 text-sm text-error"
+					<Transition name="fade" mode="out-in">
+						<TabulaGrid
+							v-if="sheet"
+							:key="sheetKey"
+							ref="grid"
+							v-model:columns="columns"
+							v-model:column-widths="widths"
+							v-model:filters="filters"
+							v-model:sort="sort"
+							class="min-h-0 flex-1 rounded-none! border-0!"
+							:schema="sheet.schema"
+							:store="sheet.store"
+							:issues="sheet.session.issues"
+							:results="sheet.session.results"
+							:history="sheet.history"
+							:lookups="sheet.lookups"
+							:view="sheet.view"
+							:changes="sheet.changes"
+							column-letters
+							:menu-items="menuItems"
+							:theme="theme"
+							:locale="locale"
+							:value-settings="valueSettings"
+							:row-height="narrow ? 40 : 30"
+							@menu="onMenu"
+						/>
+						<!-- Only the part that waits spins; the rest of the page is there and works. -->
+						<div
+							v-else
+							class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-muted"
 							role="status"
 						>
-							{{ blockedText }}
-						</p>
-						<AppButton
-							v-if="narrow"
-							type="primary"
-							size="large"
-							icon="refresh"
-							block
-							:loading="phase === 'checking'"
-							@click="check"
+							<template v-if="rowsError">
+								<span>Satırlar yüklenemedi.</span>
+								<AppButton icon="refresh" @click="loadRows">Yeniden dene</AppButton>
+							</template>
+							<template v-else>
+								<AppSpin />
+								<span>Tablo hazırlanıyor…</span>
+							</template>
+						</div>
+					</Transition>
+					<div class="flex flex-none items-stretch border-t border-divider">
+						<TabulaSheetTabs
+							v-if="workbook"
+							v-model:active="openTab"
+							class="min-w-0 flex-1"
+							:tabs="sheetTabs"
+							:disabled="tabsBusy"
+							:theme="theme"
+							:locale="locale"
+							@add="addTab"
+							@rename="renameTab"
+							@duplicate="duplicateTab"
+							@remove="askRemoveTab"
+							@move="moveTab"
+						/>
+						<div class="hidden flex-none md:block">
+							<TabulaStatusBar :grid="grid" :theme="theme" :locale="locale" />
+						</div>
+					</div>
+				</AppCard>
+				<!--
+					Beside the sheet while there are issues, and gone with the last one; the Sorunlar switch
+					closes and opens it. On a phone the issues are a bar opening a sheet, not a card.
+				-->
+				<Transition name="panel">
+					<component
+						:is="narrow ? 'div' : AppCard"
+						v-if="sheet && (narrow || panelShown)"
+						class="md:w-[340px]! md:flex-none md:overflow-hidden"
+						v-bind="narrow ? {} : { contentClass: 'flex min-h-0 flex-col p-0!' }"
+					>
+						<TabulaIssues
+							v-model:only-issue-rows="onlyIssueRows"
+							v-model:open="issuesOpen"
+							:class="narrow ? '' : 'min-h-0 flex-1 rounded-none! border-0! bg-transparent!'"
+							:variant="narrow ? 'sheet' : 'panel'"
+							:closable="!narrow"
+							:issues="sheet.session.issues"
+							:schema="sheet.schema"
+							:store="sheet.store"
+							:theme="theme"
+							:locale="locale"
+							:value-settings="valueSettings"
+							:address-of="addressOf"
+							name-field="productId"
+							@close="closePanel"
+							@select="issue => grid?.goTo(issue.rowId!, issue.field)"
+							@refresh-rows="sheet.view.refresh()"
 						>
-							Yeniden kontrol et
-						</AppButton>
-					</template>
-				</TabulaIssues>
-			</component>
-		</main>
-
-		<!-- The workbook's sheets, as a spreadsheet's tabs, and on a wide screen the status beside them. -->
-		<div class="flex flex-none items-stretch border-t border-divider bg-surface">
-			<TabulaSheetTabs
-				v-if="workbook"
-				v-model:active="openTab"
-				class="min-w-0 flex-1 px-2"
-				:tabs="sheetTabs"
-				:disabled="tabsBusy"
-				:theme="theme"
-				:locale="locale"
-				@add="addTab"
-				@rename="renameTab"
-				@duplicate="duplicateTab"
-				@remove="askRemoveTab"
-				@move="moveTab"
-			/>
-			<div class="hidden flex-none md:block">
-				<TabulaStatusBar :grid="grid" :theme="theme" :locale="locale" />
-			</div>
+							<template v-if="narrow || errors > 0" #actions>
+								<p
+									v-if="errors > 0"
+									class="m-0 flex w-full items-center gap-2 rounded-app bg-error/10 px-3 py-2.5 text-sm text-error"
+									role="status"
+								>
+									{{ blockedText }}
+								</p>
+								<AppButton
+									v-if="narrow"
+									type="primary"
+									size="large"
+									icon="refresh"
+									block
+									:loading="phase === 'checking'"
+									@click="check"
+								>
+									Yeniden kontrol et
+								</AppButton>
+							</template>
+						</TabulaIssues>
+					</component>
+				</Transition>
+			</main>
 		</div>
 
 		<div class="flex flex-none gap-2 border-t border-divider bg-surface px-4 py-3 md:hidden">
-			<AppButton size="large" class="flex-1" :disabled="!sheet" @click="saveDraft">Taslağı kaydet</AppButton>
 			<AppButton size="large" class="flex-1" :disabled="!sheet" :loading="phase === 'checking'" @click="check">
 				Kontrol et
 			</AppButton>
@@ -474,6 +485,49 @@
 						</label>
 					</li>
 				</ul>
+			</AppDrawerContent>
+		</AppDrawer>
+
+		<!-- A phone's tools: the toolbar's, grouped and named, in a sheet from the bottom. -->
+		<AppDrawer v-model:show="toolsOpen" placement="bottom" height="min(82vh, 680px)">
+			<AppDrawerContent title="Araçlar">
+				<nav class="flex flex-col pb-2" aria-label="Araçlar">
+					<template v-for="group in toolGroups" :key="group.title">
+						<p class="m-0 px-2 pt-3 pb-1 text-xs font-semibold text-muted">{{ group.title }}</p>
+						<template v-for="item in group.items" :key="item.key">
+							<AppDropdown
+								v-if="item.menu"
+								:options="item.menu"
+								placement="top"
+								@select="(choice: string | number) => chooseTool(item.key, choice)"
+							>
+								<button
+									type="button"
+									class="flex min-h-12 w-full items-center gap-3 rounded-app px-2 text-left text-base hover:bg-surface-alt disabled:opacity-50"
+									:disabled="!sheet"
+								>
+									<AppIcon :name="item.icon" />
+									<span class="flex-1">{{ item.label }}</span>
+									<span v-if="item.value" class="max-w-40 truncate text-sm text-muted">
+										{{ item.value }}
+									</span>
+									<AppIcon name="chevronRight" :size="16" class="text-muted" />
+								</button>
+							</AppDropdown>
+							<button
+								v-else
+								type="button"
+								class="flex min-h-12 w-full items-center gap-3 rounded-app px-2 text-left text-base hover:bg-surface-alt disabled:opacity-50"
+								:class="item.danger ? 'text-error' : ''"
+								:disabled="!sheet || item.disabled"
+								@click="chooseTool(item.key)"
+							>
+								<AppIcon :name="item.icon" />
+								<span class="flex-1">{{ item.label }}</span>
+							</button>
+						</template>
+					</template>
+				</nav>
 			</AppDrawerContent>
 		</AppDrawer>
 
@@ -733,10 +787,10 @@ import {
 	type TabulaGrid as Grid
 } from "@nouxwell/tabula-vue"
 import { useMessage, type DropdownOption } from "naive-ui"
-import { refDebounced, useEventListener } from "@vueuse/core"
-import { h } from "vue"
+import { refDebounced, useEventListener, useMediaQuery } from "@vueuse/core"
+import { h, type VNode } from "vue"
 import AppCard from "~/components/atoms/AppCard.vue"
-import AppIcon from "~/components/atoms/AppIcon.vue"
+import AppIcon, { type IconName } from "~/components/atoms/AppIcon.vue"
 import { localeMenu, type Locale } from "~/utils/locales"
 import type { ImportResult, Sheet } from "~/utils/sheet"
 import { loadWorkbook, newId, storeWorkbook } from "~/utils/workbook"
@@ -789,6 +843,10 @@ const { views, currentId: viewId, current: currentView, modified: viewModified }
 const columnsOpen = ref(false)
 const onlyIssueRows = ref(false)
 const issuesOpen = ref(false)
+/** Below a wide screen the second row's buttons show their icons only, and say their names in a tooltip. */
+const narrowToolbar = useMediaQuery("(max-width: 1023px)")
+/** A phone's tools sheet. */
+const toolsOpen = ref(false)
 const csvInput = ref<HTMLInputElement | null>(null)
 const importOpen = ref(false)
 /** A file being read: the İçe aktar button spins until its rows are in. */
@@ -1267,14 +1325,56 @@ function pickLocale(key: string | number): void {
 	locale.value = key === "en" ? "en" : "tr"
 }
 
-const importOptions: DropdownOption[] = [
-	{ label: "CSV dosyası", key: "csv" },
-	{ label: "Excel dosyası (sunucuda okunur)", key: "xlsx", disabled: true }
+/** A menu item's icon, as Naive UI's menus take it. */
+function menuIcon(name: IconName): () => VNode {
+	return () => h(AppIcon, { name, size: 16 })
+}
+
+/** Reading a file in and writing one out, under one button. */
+const fileOptions: DropdownOption[] = [
+	{
+		type: "group",
+		label: "İçe aktar",
+		key: "import",
+		children: [
+			{ label: "CSV dosyası", key: "import:csv", icon: menuIcon("upload") },
+			{ label: "Excel dosyası (sunucuda okunur)", key: "import:xlsx", disabled: true }
+		]
+	},
+	{ type: "divider", key: "file-line" },
+	{
+		type: "group",
+		label: "Dışa aktar",
+		key: "export",
+		children: [
+			{ label: "CSV dosyası", key: "export:csv", icon: menuIcon("download") },
+			{ label: "Excel dosyası (sunucuda yazılır)", key: "export:xlsx", disabled: true }
+		]
+	}
 ]
-const exportOptions: DropdownOption[] = [
-	{ label: "CSV dosyası", key: "csv" },
-	{ label: "Excel dosyası (sunucuda yazılır)", key: "xlsx", disabled: true }
-]
+
+function chooseFile(key: string | number): void {
+	if (key === "import:csv") {
+		chooseImport()
+	} else if (key === "export:csv") {
+		chooseExport()
+	}
+}
+
+/** Below a wide screen, what the first row has no room for: the file menu and the rules. */
+const moreOptions = computed<DropdownOption[]>(() => [
+	...fileOptions,
+	{ type: "divider", key: "more-line" },
+	{ label: "Kurallar", key: "rules", icon: menuIcon("rules"), disabled: !drawerTemplate.value }
+])
+
+function chooseMore(key: string | number): void {
+	if (key === "rules") {
+		rulesOpen.value = true
+	} else {
+		chooseFile(key)
+	}
+}
 
 function chooseImport(): void {
 	csvInput.value?.click()
@@ -1659,6 +1759,10 @@ async function saveDraft(): Promise<void> {
 async function check(): Promise<void> {
 	const outcome = await sheet.value?.session.check()
 
+	if (outcome?.status === "valid" || outcome?.status === "invalid") {
+		showIssues()
+	}
+
 	if (outcome?.status === "valid") {
 		message.success("Sunucu sorun bulmadı.")
 	} else if (outcome?.status === "invalid") {
@@ -1666,6 +1770,56 @@ async function check(): Promise<void> {
 	} else if (outcome) {
 		message.error("Kontrol yapılamadı.")
 	}
+}
+
+// ---------------------------------------------------------------- the issues panel
+
+/** Everything the panel lists: errors, warnings, and those waiting to be checked again. */
+const issueCount = computed(() => {
+	const summary = version.value >= 0 ? grid.value?.issueSummary : undefined
+
+	return summary ? summary.errors + summary.warnings + summary.stale : 0
+})
+/** The panel beside the sheet. Without issues the sheet takes the whole width. */
+const panelOpen = ref(false)
+/** The user closed it: it stays closed until the next check, however many issues come. */
+let panelClosed = false
+const panelShown = computed(() => panelOpen.value && sheet.value !== null)
+
+// Issues coming open the panel, and its going away closes it; the last one fixed closes it too.
+watch(issueCount, (count, before) => {
+	if (count === 0) {
+		panelOpen.value = false
+	} else if (!before && !panelClosed) {
+		panelOpen.value = true
+	}
+})
+
+// The issue-rows filter goes with the panel, so a closed panel leaves no rows hidden.
+watch(panelShown, shown => {
+	if (!shown && !narrow.value) {
+		onlyIssueRows.value = false
+	}
+})
+
+function togglePanel(): void {
+	panelOpen.value = !panelOpen.value
+	panelClosed = !panelOpen.value
+}
+
+/** The panel's own close button: closed by the user, it stays closed until the next check. */
+function closePanel(): void {
+	if (!narrow.value) {
+		panelOpen.value = false
+		panelClosed = true
+	}
+}
+
+/** After a check or a stopped run: what it found is shown, even where the user closed the panel. */
+function showIssues(): void {
+	panelClosed = false
+	panelOpen.value = issueCount.value > 0
+	issuesOpen.value = narrow.value && issueCount.value > 0
 }
 
 /** Why the changes cannot go yet: the errors standing. */
@@ -1773,6 +1927,119 @@ function chooseRound(key: string): void {
 	adjust({ kind: "round", step, mode: mode as "half" | "up" | "down" })
 }
 
+/** The bulk changes under one button, each on the cells selected; the grid's menu has them too. */
+const bulkOptions: DropdownOption[] = [
+	{
+		type: "group",
+		label: "Seçili hücrelere uygulanır",
+		key: "bulk",
+		children: [
+			{ label: "Yüzde uygula…", key: "percent", icon: menuIcon("percent") },
+			{ label: "Tutar ekle…", key: "add", icon: menuIcon("plus") },
+			{ label: "Yuvarla", key: "round", icon: menuIcon("round"), children: roundOptions }
+		]
+	},
+	{ type: "divider", key: "bulk-line" },
+	{
+		label: () =>
+			h("span", { class: "flex w-full items-center justify-between gap-6" }, [
+				"Satırları sil",
+				h("span", { class: "text-xs text-muted" }, "Ctrl+−")
+			]),
+		key: "remove",
+		icon: menuIcon("trash")
+	}
+]
+
+function chooseBulk(key: string | number): void {
+	const chosen = String(key)
+
+	if (chosen === "percent" || chosen === "add") {
+		openAdjust(chosen)
+	} else if (chosen === "remove") {
+		removeRows()
+	} else {
+		chooseRound(chosen)
+	}
+}
+
+/** One of a phone's tools. One with a `menu` opens it; one with a `value` shows it beside its name. */
+interface Tool {
+	readonly key: string
+	readonly label: string
+	readonly icon: IconName
+	readonly menu?: DropdownOption[]
+	readonly value?: string
+	readonly danger?: boolean
+	readonly disabled?: boolean
+}
+
+/** A phone's tools, in the toolbar's groups. */
+const toolGroups = computed<{ readonly title: string; readonly items: readonly Tool[] }[]>(() => [
+	{
+		title: "Dosya",
+		items: [
+			{ key: "import", label: "CSV içe aktar", icon: "upload" },
+			{ key: "export", label: "CSV olarak dışa aktar", icon: "download" }
+		]
+	},
+	{
+		title: "Seçili hücreler",
+		items: [
+			{ key: "percent", label: "Yüzde uygula…", icon: "percent" },
+			{ key: "add", label: "Tutar ekle…", icon: "plus" },
+			{ key: "round", label: "Yuvarla", icon: "round", menu: roundOptions },
+			{ key: "remove", label: "Satırları sil", icon: "trash", danger: true }
+		]
+	},
+	{
+		title: "Sayfa",
+		items: [
+			{ key: "columns", label: "Sütunlar", icon: "columns" },
+			{
+				key: "view",
+				label: "Görünüm",
+				icon: "views",
+				value: viewLabel.value,
+				menu: viewOptions.value
+			},
+			{
+				key: "template",
+				label: "Şablon",
+				icon: "template",
+				value: templateLabel.value,
+				menu: templateOptions.value
+			},
+			{ key: "rules", label: "Kurallar", icon: "rules", disabled: !drawerTemplate.value }
+		]
+	}
+])
+
+/** A tool chosen in the phone's sheet, which steps aside for what it opens. */
+function chooseTool(key: string, choice?: string | number): void {
+	toolsOpen.value = false
+
+	if (key === "import") {
+		chooseImport()
+	} else if (key === "export") {
+		chooseExport()
+	} else if (key === "percent" || key === "add") {
+		openAdjust(key)
+	} else if (key === "round" && choice !== undefined) {
+		chooseRound(String(choice))
+	} else if (key === "remove") {
+		removeRows()
+	} else if (key === "columns") {
+		columnsOpen.value = true
+	} else if (key === "view" && choice !== undefined) {
+		chooseView(choice)
+	} else if (key === "template" && choice !== undefined) {
+		chooseTemplate(choice)
+	} else if (key === "rules") {
+		rulesOpen.value = true
+	}
+}
+
 /** The page's own items in the grid's right-click menu: the bulk changes, each with its window. */
 const menuItems = computed<GridMenuItem[]>(() => [
 	{ key: "percent", label: "Yüzde uygula…" },
@@ -1868,7 +2135,7 @@ async function process(): Promise<void> {
 
 	if (blocked > 0) {
 		message.warning(`${blocked} satırda düzeltilmesi gereken hata var.`)
-		issuesOpen.value = narrow.value
+		showIssues()
 
 		return
 	}
@@ -1901,7 +2168,7 @@ async function run(): Promise<void> {
 
 	if (outcome.status === "blocked") {
 		message.warning(`${outcome.blocked} satırda düzeltilmesi gereken hata var.`)
-		issuesOpen.value = narrow.value
+		showIssues()
 	} else if (outcome.status === "succeeded" || outcome.status === "partial" || outcome.status === "failed") {
 		message.info(`${outcome.succeeded} satır uygulandı, ${outcome.failed} satır uygulanamadı.`)
 	} else if (outcome.status === "nothing") {

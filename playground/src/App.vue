@@ -55,6 +55,9 @@ const rowCount = Number(params.get("rows") ?? 10_000)
 const initialTheme = params.get("theme")
 // `?issues=sheet`: the issues as a phone shows them, a bar that opens a sheet from the bottom.
 const issueVariant = params.get("issues") === "sheet" ? "sheet" : "panel"
+// `?closable=1`: the panel has a close button, and goes when it is pressed.
+const issuesClosable = params.get("closable") === "1"
+const issuesShown = ref(true)
 
 // `?channels=1`: a multi-select column of sales channels after the others.
 const channels = params.get("channels") === "1"
@@ -796,8 +799,10 @@ onMounted(() => {
 				@menu="onMenu"
 			/>
 			<TabulaIssues
+				v-if="issuesShown"
 				v-model:only-issue-rows="onlyIssueRows"
 				class="playground-issues"
+				:closable="issuesClosable"
 				:issues="session.issues"
 				:schema="schema"
 				:store="store"
@@ -807,6 +812,7 @@ onMounted(() => {
 				:variant="issueVariant"
 				@select="goTo"
 				@refresh-rows="view.refresh()"
+				@close="issuesShown = false"
 			/>
 		</main>
 		<TabulaSheetTabs

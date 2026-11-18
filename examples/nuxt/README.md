@@ -59,8 +59,13 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
   the schema lost, mapped to a new one (the likely one suggested) or dropped, with its first
   values and what would be lost. "Taslağı aç" opens the draft so mapped and saves it under the new
   schema; "Taslağı sil, sunucudan aç" lets it go. Nothing is saved while the window is open.
+- **One edge, two cards.** The toolbar is a card of two rows: what changes the data on top
+  (Dosya, Toplu düzenle, the template with Kurallar, the issues switch), what is seen under it. The
+  sheet is a card with the formula bar on top and the tabs under it, the whole width until an
+  issue comes; then the issues panel comes in beside it, and goes with the last issue. On a narrower
+  screen what does not fit goes under ⋯; a phone has Araçlar, a sheet of the tools.
 - **Working on many rows.** "Yüzde uygula", "Tutar ekle" and "Yuvarla" change the numbers
-  selected in one step, from the toolbar or the grid's right-click menu; "Satırları sil" and Ctrl+− take rows out. Cells changed since the rows
+  selected in one step, from Toplu düzenle or the grid's right-click menu; "Satırları sil" and Ctrl+− take rows out. Cells changed since the rows
   were loaded are marked, "Değişenler" shows only their rows, and the search finds a product, a
   code or a note as the cells show them.
 - **A backend.** [server/api](server/api) answers in the grid's contract: the module schema, the

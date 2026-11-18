@@ -87,17 +87,23 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 
 1. **Top bar**: logo, where the page is (Ürünler / Toplu işlemler), theme switch, language select
    with flags.
+   Everything keeps to one edge (designs X and Y): the title row, the toolbar's card and the sheet's
+   card start and end at the page's padding, 24px, and inside a card the controls start 12px in, each
+   row 48px with 32px controls.
+
 2. **Page header**: title, "Taslak" tag (its tooltip says nothing is written before the changes
-   are applied), the row count (counting up), the save status, then Taslağı kaydet · Kontrol et ·
-   **Değişiklikleri uygula** (primary). While an error stands it is held back, its tooltip and the
+   are applied), the row count (counting up), the save status with a small **Kaydet** beside it
+   (the draft saves itself), then Kontrol et · **Değişiklikleri uygula** (primary). While an error stands it is held back, its tooltip and the
    foot of the issues saying "Uygulamadan önce N hatayı düzeltin."
-3. **Toolbar**: undo and redo (icon buttons with tooltips), İçe aktar ▾, Dışa aktar ▾, Sütunlar,
-   the template ▾, **Kurallar** (with no template chosen, what is written there is saved as a new template, named
-   in a small window), the view ▾,
-   then the bulk edits on what is selected: Yüzde uygula and Tutar ekle (each a small window with
-   the amount), Yuvarla ▾ (to 0,05, whole, whole up or down, or tens), and Satırları sil (Ctrl+−).
-   Under the toolbar, "Tüm satırlar" and "Değişenler" with their counts, and the search on the
-   right.
+3. **Toolbar** (design T), two rows in a card. On top what changes the data: undo and redo (icon
+   buttons with tooltips), **Dosya ▾** (import and export), **Toplu düzenle ▾** (on what is
+   selected: Yüzde uygula and Tutar ekle, each a small window with the amount, Yuvarla ▸ to 0,05,
+   whole, whole up or down, or tens, and Satırları sil, Ctrl+−), the template ▾ joined with
+   **Kurallar** (with no template chosen, what is written there is saved as a new template, named
+   in a small window), and on the right the issues switch: green "Sorun yok", or red "Sorunlar"
+   with their count. Under it what is seen: "Tüm satırlar" and "Değişenler" with their counts, and
+   on the right Sütunlar, the view ▾ and the search. Nothing scrolls sideways: under 1024px Dosya
+   and Kurallar go under ⋯, and the second row's buttons show their icons only.
    - **The rules drawer** (design E, 560px, on the right) has no mask: the sheet stays in view and in
      reach while a rule is written. Each rule is a card with its sentence and how many rows it
      catches now; one at a time opens as a form (field, what it must be, against what, Ne zaman,
@@ -110,14 +116,17 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
      the one being written in bold and what the function does. Under it, the values on the first
      rows and how many rows fail, as it is typed. A column kept shows in the sheet at once, marked
      as not saved in the footer; Vazgeç and closing the drawer put the sheet back as saved.
-4. **Formula bar** (`TabulaFormulaBar`): address and value of the active cell; a formula by the
-   fields' names, each in the colour its column takes in the sheet while the cell is active.
+4. **Formula bar** (`TabulaFormulaBar`), the top of the sheet's card: address and value of the
+   active cell; a formula by the fields' names, each in the colour its column takes in the sheet
+   while the cell is active.
 5. **The sheet** (`TabulaGrid`, with column letters, and the user's changed cells marked in the top
-   left corner in the info colour) and, on its right, **the issues** (`TabulaIssues`, 340px, each
-   with the cell's address, "D8", and the product). A right click opens the grid's menu: cut,
+   left corner in the info colour), the whole width while there are no issues. **The issues**
+   (`TabulaIssues`, 340px, each with the cell's address, "D8", and the product) come in on its
+   right with the first issue, typed or found by a check, and go with the last; their close button
+   or the switch closes them until the next check. A right click opens the grid's menu: cut,
    copy, paste, clear, fill, add and take out rows, the page's Yüzde uygula, Tutar ekle and
    Yuvarla ▸, filter by the value and sort, each with its keys on the right.
-6. **Sheet tabs** (`TabulaSheetTabs`, design R) on the left of the bottom bar: the open one white
+6. **Sheet tabs** (`TabulaSheetTabs`, design R) at the foot of the sheet's card, on the left: the open one white
    with the accent under it, each with its errors in red or a tick, + to add one; a double click
    renames, a right click opens rename, duplicate, move left or right and delete; a tab is dragged
    to another place, an accent line showing where it lands. Then the **status bar**
@@ -127,13 +136,14 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 
 1. **App bar**: logo, theme switch, ⋯ (language, with flags).
 2. Title, "Taslak", save status.
-3. **Icon toolbar**, every button 44px, scrolling sideways when it must.
+3. **Toolbar**: undo, redo and **Araçlar**, which opens the tools as a sheet from the bottom
+   (design W): Dosya, Seçili hücreler and Sayfa, each tool named, 48px a row.
 4. Formula bar.
 5. The sheet, rows 40px high.
 6. **Issues bar** (`TabulaIssues variant="sheet"`): the counts; it opens the issues as a sheet
    from the bottom, with "Yeniden kontrol et"; choosing an issue closes it and goes to the cell.
-7. **Action bar** at the bottom: Taslağı kaydet · Kontrol et · Uygula, Uygula disabled while an
-   error stands. The search takes the whole width under the row filter.
+7. **Action bar** at the bottom: Kontrol et · Uygula, Uygula disabled while an error stands; the
+   draft's Kaydet is beside its save status. The search takes the whole width under the row filter.
 
 ### The parts, as decided
 
@@ -213,6 +223,21 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 71  | A tab's menu: rename, duplicate, delete             | package     | done               |
 | 72  | Tabs reordered by dragging                          | package     | done               |
 | 73  | Formulas reading another sheet                      | package     | asked about        |
+| 74  | The toolbar in two rows by purpose (T)              | application | done               |
+| 75  | Toplu düzenle: the bulk edits in one menu           | application | done               |
+| 76  | A bar over the selection with the bulk edits (U)    | package     | not chosen         |
+| 77  | Dosya: import and export in one menu                | application | done               |
+| 78  | The template joined with Kurallar                   | application | done               |
+| 79  | Kaydet beside the save status                       | application | done               |
+| 80  | The formula bar on top of the sheet's card          | application | done               |
+| 81  | What does not fit goes under ⋯                      | application | done               |
+| 82  | An icon-only toolbar in one row (V)                 | application | not chosen         |
+| 83  | A phone's tools in a sheet from the bottom (W)      | application | done               |
+| 84  | Toolbar and sheet in cards, on one edge (X)         | application | done               |
+| 85  | The sheet the whole width without issues            | application | done               |
+| 86  | The issues panel comes and goes with the issues (Y) | application | done               |
+| 87  | The issues switch with their count                  | both        | done               |
+| 88  | The panel opening only after a check                | application | not chosen         |
 | —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
 | —   | Saved views (personal views)                        | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)      | both        | done (phase two)   |

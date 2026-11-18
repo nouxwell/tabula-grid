@@ -40,10 +40,20 @@ const props = defineProps({
 		default: undefined
 	},
 	/** A field that names a row, such as its product, shown on each issue about the row. */
-	nameField: { type: String as PropType<string | null>, default: null }
+	nameField: { type: String as PropType<string | null>, default: null },
+	/**
+	 * A close button in the `panel` variant's head too, as the `sheet` variant has. It emits `close`,
+	 * for a host that shows the panel only while it is wanted.
+	 */
+	closable: { type: Boolean, default: false }
 })
 
-const emit = defineEmits<{ select: [issue: Issue]; refreshRows: [] }>()
+const emit = defineEmits<{
+	select: [issue: Issue]
+	refreshRows: []
+	/** The close button was pressed: the `sheet` variant's, or a `closable` panel's. */
+	close: []
+}>()
 
 /**
  * Whether only the rows with issues are shown. Bound with `v-model:only-issue-rows`, it puts a switch
@@ -56,6 +66,11 @@ const onlyIssueRows = defineModel<boolean>("onlyIssueRows")
 const open = defineModel<boolean>("open", { default: false })
 
 const sheet = computed(() => props.variant === "sheet")
+
+function close(): void {
+	open.value = false
+	emit("close")
+}
 
 const version = shallowRef(0)
 /** The issue chosen last, so Previous and Next have somewhere to start. */
@@ -223,11 +238,11 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 						<button type="button" :disabled="issues.length === 0" @click="step(1)">{{ text.next }}</button>
 					</span>
 					<button
-						v-if="sheet"
+						v-if="sheet || closable"
 						type="button"
 						class="tabula-issues-close"
 						:aria-label="text.close"
-						@click="open = false"
+						@click="close"
 					>
 						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
 					</button>
@@ -669,6 +684,18 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 	background: transparent;
 	color: inherit;
 	cursor: pointer;
+}
+
+.tabula-issues:not(.is-sheet) .tabula-issues-close {
+	width: 28px;
+	height: 28px;
+	margin-left: 2px;
+	color: var(--tabula-muted);
+}
+
+.tabula-issues:not(.is-sheet) .tabula-issues-close:hover {
+	background: var(--tabula-issues-hover);
+	color: var(--tabula-fg);
 }
 
 .tabula-issues.is-sheet .tabula-issues-item {

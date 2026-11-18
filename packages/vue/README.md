@@ -33,7 +33,8 @@ const validator = new SheetValidator(schema, store, VALUE_SETTINGS.tr)
   right-click menu of its own, to which the host adds items.
 - **`TabulaIssues`** lists the sheet's issues as cards, with counts, Previous and Next, the cell's
   address and the row's name, says whether the browser or the server found each, and filters the sheet to the rows that have them. On a
-  phone it is a bar that opens the list from the bottom of the screen (`variant="sheet"`).
+  phone it is a bar that opens the list from the bottom of the screen (`variant="sheet"`);
+  `closable` gives the panel a close button that emits `close`.
 - **`TabulaFormulaBar`** shows the active cell's address and value, goes to an address typed into
   it, and writes a value typed there, as a spreadsheet's formula bar. A formula shows by the fields'
   names, each in the colour its column takes in the sheet.
