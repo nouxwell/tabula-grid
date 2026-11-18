@@ -81,6 +81,25 @@ export function filterKey(field: FieldSchema, value: CellValue): string {
 	return typeof value === "string" ? `text:${value}` : `json:${JSON.stringify(value)}`
 }
 
+/**
+ * The keys a cell is filtered by: its value's, or for a cell of several options one per option, so
+ * a filter keeping "Web" keeps every row that holds it, whatever else it holds. "" for an empty cell.
+ */
+export function filterKeys(field: FieldSchema, value: CellValue): string[] {
+	return eachValue(field, value).map(([key]) => key)
+}
+
+/** A cell's values with their keys: one, or one per option of a multi-select cell. */
+function eachValue(field: FieldSchema, value: CellValue): (readonly [string, CellValue])[] {
+	if (field.type === "options" && field.multiple && Array.isArray(value)) {
+		const items = [...new Set(value as readonly CellValue[])]
+
+		return items.length === 0 ? [["", null]] : items.map(item => [filterKey(field, item), item] as const)
+	}
+
+	return [[filterKey(field, value), value]]
+}
+
 /** Shows the rows that meet every column's condition; a key the schema no longer has is passed over. */
 export function rowsMatching(store: RowStore, schema: ModuleSchema, filters: ColumnFilters): RowFilter {
 	const tests: ((rowId: RowId) => boolean)[] = []
@@ -95,7 +114,7 @@ export function rowsMatching(store: RowStore, schema: ModuleSchema, filters: Col
 		if (condition.kind === "values") {
 			const keys = new Set(condition.keys)
 
-			tests.push(rowId => keys.has(filterKey(field, store.get(rowId, key))))
+			tests.push(rowId => filterKeys(field, store.get(rowId, key)).some(each => keys.has(each)))
 		} else {
 			tests.push(rowId => inRange(field, store.get(rowId, key), condition.from, condition.to))
 		}
@@ -267,13 +286,16 @@ export function distinctValues(
 
 	for (const rowId of rowIds) {
 		const value = store.get(rowId, field.key)
-		const key = filterKey(field, value)
-		const entry = found.get(key)
 
-		if (entry) {
-			entry.count++
-		} else {
-			found.set(key, { value, count: 1 })
+		// A cell holding several options counts once under each of them.
+		for (const [key, each] of eachValue(field, value)) {
+			const entry = found.get(key)
+
+			if (entry) {
+				entry.count++
+			} else {
+				found.set(key, { value: each, count: 1 })
+			}
 		}
 	}
 

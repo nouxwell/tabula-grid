@@ -60,11 +60,38 @@ export const priceUpdate: ModuleSchemaInput = {
 	]
 }
 
+/**
+ * The channels a product is sold through, several at once: a multi-select column, added after the
+ * others with `?channels=1` so the sheet the other tests know stays as it is.
+ */
+export function withChannels(input: ModuleSchemaInput): ModuleSchemaInput {
+	return {
+		...input,
+		fields: [
+			...input.fields,
+			{
+				key: "channels",
+				type: "options",
+				label: "Kanallar",
+				multiple: true,
+				options: [
+					{ value: "store", label: "Mağaza" },
+					{ value: "web", label: "Web" },
+					{ value: "market", label: "Pazar yeri" }
+				]
+			}
+		]
+	}
+}
+
+/** A row's channels by its place, never by chance, so the other columns' values stay the same. */
+const CHANNELS = [["store"], ["web"], ["store", "web"], []]
+
 const NOTES = ["Kampanya sonrası fiyat", "Tedarikçi zammı", "Kur farkı"]
 const CURRENCIES = ["TRY", "TRY", "TRY", "USD", "EUR"]
 
 /** The same rows on every load, so a test can name what it expects. */
-export function sampleRows(count: number): RowInit[] {
+export function sampleRows(count: number, options: { readonly channels?: boolean } = {}): RowInit[] {
 	const random = seeded(1)
 	const rows: RowInit[] = []
 
@@ -84,7 +111,8 @@ export function sampleRows(count: number): RowInit[] {
 				currency: CURRENCIES[Math.floor(random() * CURRENCIES.length)],
 				validFrom: `2026-12-${String(1 + Math.floor(random() * 28)).padStart(2, "0")}`,
 				active: random() < 0.9,
-				note
+				note,
+				...(options.channels ? { channels: CHANNELS[index % CHANNELS.length] } : {})
 			}
 		})
 	}

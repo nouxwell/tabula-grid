@@ -33,7 +33,7 @@ import { TabulaFormulaBar, TabulaGrid, TabulaIssues, TabulaStatusBar, type GridT
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
 import { FakeBackend } from "./backend"
 import { clearStoredDraft, loadStoredDraft, storeDraft } from "./drafts"
-import { priceUpdate, sampleRows } from "./sample"
+import { priceUpdate, sampleRows, withChannels } from "./sample"
 
 const params = new URLSearchParams(location.search)
 const rowCount = Number(params.get("rows") ?? 10_000)
@@ -41,7 +41,9 @@ const initialTheme = params.get("theme")
 // `?issues=sheet`: the issues as a phone shows them, a bar that opens a sheet from the bottom.
 const issueVariant = params.get("issues") === "sheet" ? "sheet" : "panel"
 
-const schema = ModuleSchema.from(priceUpdate)
+// `?channels=1`: a multi-select column of sales channels after the others.
+const channels = params.get("channels") === "1"
+const schema = ModuleSchema.from(channels ? withChannels(priceUpdate) : priceUpdate)
 
 // A draft left from last time is opened, unless the schema has moved on since: then the user sees
 // what changed and decides. `accept=1` is that decision, taken from the address once it is used.
@@ -67,7 +69,7 @@ if (params.has("accept")) {
 const opened = opening?.status === "opened" ? opening : null
 const review = opening?.status === "review" ? opening.changes : null
 // Formula fields worked out before the store exists: opening the sheet is no change of the user's.
-const store = new RowStore({ rows: opened ? opened.rows : applyFormulas(schema, sampleRows(rowCount)) })
+const store = new RowStore({ rows: opened ? opened.rows : applyFormulas(schema, sampleRows(rowCount, { channels })) })
 // Keeps them worked out as the sheet changes; what it writes joins the edit's undo step.
 const formulas = new FormulaEngine({ schema, store })
 

@@ -167,6 +167,13 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
   The user's arrangement is a `ColumnLayout`, `{ order, hidden, pinned }` by field key; bind it
   with `v-model:columns` to keep it, as a draft does. Hiding a column relaxes nothing: its issues
   are still listed, going to one shows the column again, and a paste passes over it.
+- **Several options in a cell.** A field with `"multiple": true` is edited in a list of its
+  options to tick, under the cell: typing finds them, Space or a click ticks the one highlighted,
+  Enter ticks what a search found, and Enter with nothing typed writes what is ticked, in the
+  options' own order. F2, a double click and Alt+Down start with the cell's options ticked; typing
+  replaces them, as anywhere; Escape leaves the cell as it was. The cell reads "Mağaza, Web", and
+  that text pastes back as the same options. Its filter lists each option once, and keeps a row
+  holding any option ticked, whatever else it holds.
 - **Sorting and filtering.** The same menu sorts the rows by the column and filters it: tick the
   values to keep, or give a range of numbers or dates. A sorted header shows its arrow, a filtered
   one a funnel (see below).

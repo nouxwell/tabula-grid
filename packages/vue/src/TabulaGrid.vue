@@ -809,10 +809,19 @@ function beginEdit(mode: EditState["mode"]): boolean {
 	}
 
 	measureDraft = cellProbe.value ? textMeasurer(cellProbe.value) : null
+
+	const current = store.value.get(rowId, field.key)
+
+	// Several options: ticked in a list rather than typed. Typing replaces the cell, as anywhere,
+	// so it starts with none ticked; F2, a double click or Alt+Down start with what is there.
+	picked.value =
+		field.type === "options" && field.multiple
+			? new Set(mode === "enter" || !Array.isArray(current) ? [] : current.map(item => String(item)))
+			: null
 	editing.value = {
 		row: cell.row,
 		col: cell.col,
-		original: editText(field, store.value.get(rowId, field.key), props.valueSettings),
+		original: editText(field, current, props.valueSettings),
 		mode
 	}
 	reveal()
@@ -826,7 +835,7 @@ function startEdit(): void {
 		return
 	}
 
-	draft.value = editing.value?.original ?? ""
+	draft.value = picked.value ? "" : (editing.value?.original ?? "")
 
 	void nextTick(() => {
 		const input = editor.value
@@ -890,14 +899,24 @@ function commitEdit(refocus = true): void {
 	}
 
 	const text = draft.value
+	const ticked = picked.value
 
 	editing.value = null
 	draft.value = ""
+	picked.value = null
 
 	const rowId = view.value.rowIdAt(state.row)
 	const field = fields.value[state.col]
 
-	if (rowId !== undefined && field !== undefined && text !== state.original) {
+	if (rowId !== undefined && field?.type === "options" && ticked && text.trim() === "") {
+		// In the options' own order, whatever order they were ticked in.
+		const values = field.options.filter(option => ticked.has(String(option.value))).map(option => option.value)
+		const value = values.length === 0 ? null : Object.freeze(values)
+
+		if (JSON.stringify(value) !== JSON.stringify(store.value.get(rowId, field.key))) {
+			store.value.setCell(rowId, field.key, value)
+		}
+	} else if (rowId !== undefined && field !== undefined && text !== state.original) {
 		store.value.setCell(rowId, field.key, valueOf(field, text))
 	}
 
@@ -909,6 +928,7 @@ function commitEdit(refocus = true): void {
 function cancelEdit(): void {
 	editing.value = null
 	draft.value = ""
+	picked.value = null
 	focusInput()
 }
 
@@ -939,11 +959,17 @@ let searchController: AbortController | null = null
 
 const listOpen = computed(() => editing.value !== null && (suggestions.value.length > 0 || listNote.value !== null))
 
+/**
+ * The options ticked while a multi-select cell is edited, by value as text; null for any other edit.
+ * The list stays open while they are ticked, and the edit writes them when it ends.
+ */
+const picked = shallowRef<ReadonlySet<string> | null>(null)
+
 /** The field being edited, when it offers a list: a single-choice options field, or a lookup with a search. */
 const listField = computed<FieldSchema | null>(() => {
 	const field = editing.value ? fields.value[editing.value.col] : undefined
 
-	if (field?.type === "options" && !field.multiple) {
+	if (field?.type === "options") {
 		return field
 	}
 
@@ -988,7 +1014,8 @@ function preferred(list: readonly Suggestion[], query: string): number {
 
 function showSuggestions(list: readonly Suggestion[], query: string, note: (typeof listNote)["value"]): void {
 	suggestions.value = list
-	highlighted.value = preferred(list, query)
+	// Ticking several: the first entry is always the one Space or Enter ticks.
+	highlighted.value = picked.value && list.length > 0 ? Math.max(0, preferred(list, query)) : preferred(list, query)
 	listNote.value = note
 	void nextTick(placeList)
 }
@@ -1086,13 +1113,34 @@ function moveHighlight(by: 1 | -1): void {
 	}
 }
 
-/** Puts the entry in the cell being edited, and ends the edit. */
+/**
+ * Puts the entry in the cell being edited, and ends the edit. In a multi-select cell it ticks the
+ * entry, or takes the tick away, and the edit goes on with the search cleared.
+ */
 function pick(index: number): boolean {
 	const item = suggestions.value[index]
 	const state = editing.value
 
 	if (!item || item.disabled || !state) {
 		return false
+	}
+
+	if (picked.value) {
+		const next = new Set(picked.value)
+
+		if (!next.delete(item.key)) {
+			next.add(item.key)
+		}
+
+		picked.value = next
+
+		if (draft.value !== "") {
+			draft.value = ""
+		} else {
+			highlighted.value = index
+		}
+
+		return true
 	}
 
 	const rowId = view.value.rowIdAt(state.row)
@@ -1144,6 +1192,10 @@ function onListKeydown(event: KeyboardEvent): boolean {
 		return true
 	}
 
+	if (picked.value) {
+		return onPickKeydown(event)
+	}
+
 	if (event.key === "Escape") {
 		closeList()
 
@@ -1163,12 +1215,31 @@ function onListKeydown(event: KeyboardEvent): boolean {
 	return false
 }
 
+/**
+ * Keys while ticking options. Space ticks the highlighted option while nothing is typed; Enter ticks
+ * the one a search found. Enter with nothing typed, Tab and leaving the cell write what is ticked;
+ * Escape leaves the cell as it was.
+ */
+function onPickKeydown(event: KeyboardEvent): boolean {
+	const searching = draft.value.trim() !== ""
+
+	if (event.key === " " && !searching && highlighted.value >= 0) {
+		return pick(highlighted.value)
+	}
+
+	if (event.key === "Enter" && searching && highlighted.value >= 0) {
+		return pick(highlighted.value)
+	}
+
+	return false
+}
+
 /** Alt+Down on an options cell: an edit that starts with every option listed. */
 function openList(): boolean {
 	const cell = selection.active
 	const field = cell ? fields.value[cell.col] : undefined
 
-	if (field?.type !== "options" || field.multiple || !beginEdit("edit")) {
+	if (field?.type !== "options" || !beginEdit("edit")) {
 		return false
 	}
 
@@ -2315,9 +2386,14 @@ let stopFilterPanel: (() => void) | null = null
 function valueLabel(entry: DistinctValue): string {
 	const field = filterPanel.value?.field
 
-	return entry.key === "" || !field
-		? (GRID_TEXT[props.locale].empty ?? "")
-		: formatCell(field, entry.value, props.valueSettings)
+	if (entry.key === "" || !field) {
+		return GRID_TEXT[props.locale].empty ?? ""
+	}
+
+	// A multi-select column lists its options one by one: each written as a cell holding it alone.
+	const one = field.type === "options" && field.multiple && !Array.isArray(entry.value) ? [entry.value] : entry.value
+
+	return formatCell(field, one as CellValue, props.valueSettings)
 }
 
 /** The values the search leaves in the list. */
@@ -2985,6 +3061,7 @@ defineExpose({
 						:aria-expanded="listField ? listOpen : undefined"
 						:aria-controls="listField ? listId : undefined"
 						:aria-activedescendant="listOpen && highlighted >= 0 ? `${listId}-${highlighted}` : undefined"
+						:placeholder="picked ? `${picked.size} ${GRID_TEXT[locale].picked}` : undefined"
 						autocomplete="off"
 						spellcheck="false"
 						@keydown="onInputKeydown"
@@ -3002,7 +3079,9 @@ defineExpose({
 			:id="listId"
 			ref="suggestionList"
 			class="tabula-grid-list tabula-scroll"
+			:class="{ 'is-multiple': picked }"
 			role="listbox"
+			:aria-multiselectable="picked ? 'true' : undefined"
 			:style="
 				listPlace
 					? { left: `${listPlace.left}px`, top: `${listPlace.top}px`, minWidth: `${listPlace.width}px` }
@@ -3014,17 +3093,23 @@ defineExpose({
 				:id="`${listId}-${index}`"
 				:key="item.key"
 				class="tabula-grid-option"
-				:class="{ 'is-highlighted': index === highlighted, 'is-disabled': item.disabled }"
+				:class="{
+					'is-highlighted': index === highlighted,
+					'is-disabled': item.disabled,
+					'is-picked': picked?.has(item.key)
+				}"
 				role="option"
-				:aria-selected="index === highlighted"
+				:aria-selected="picked ? picked.has(item.key) : index === highlighted"
 				:aria-disabled="item.disabled || undefined"
 				@mousedown.prevent="pick(index)"
 				@mousemove="item.disabled || (highlighted = index)"
 			>
+				<span v-if="picked" class="tabula-grid-option-check" aria-hidden="true" />
 				<span class="tabula-grid-option-label">{{ item.label }}</span>
 				<span v-if="item.description" class="tabula-grid-option-description">{{ item.description }}</span>
 			</li>
 			<li v-if="listNote" class="tabula-grid-list-note" role="presentation">{{ GRID_TEXT[locale][listNote] }}</li>
+			<li v-if="picked" class="tabula-grid-list-note" role="presentation">{{ GRID_TEXT[locale].pickHint }}</li>
 		</ul>
 		<ScrollThumbs v-if="listOpen" :target="suggestionList" :layer="5" />
 		<div
@@ -3823,6 +3908,49 @@ defineExpose({
 .tabula-grid-option.is-highlighted {
 	background: var(--tabula-range-bg);
 	box-shadow: inset 2px 0 0 var(--tabula-accent);
+}
+
+/* Several options: each a box to tick, before its label. */
+.tabula-grid-list.is-multiple .tabula-grid-option {
+	align-items: center;
+	justify-content: flex-start;
+}
+
+.tabula-grid-option-check {
+	position: relative;
+	box-sizing: border-box;
+	flex: none;
+	width: 14px;
+	height: 14px;
+	border: 1px solid var(--tabula-head-line);
+	border-radius: var(--tabula-radius-small);
+	background: var(--tabula-bg);
+}
+
+.tabula-grid-option.is-picked .tabula-grid-option-check {
+	border-color: var(--tabula-accent);
+	background: var(--tabula-accent);
+}
+
+.tabula-grid-option.is-picked .tabula-grid-option-check::after {
+	position: absolute;
+	top: 1px;
+	left: 4px;
+	width: 3px;
+	height: 7px;
+	border: solid var(--tabula-bg);
+	border-width: 0 2px 2px 0;
+	transform: rotate(45deg);
+	content: "";
+}
+
+.tabula-grid-list.is-multiple .tabula-grid-option-label {
+	flex: 1;
+}
+
+/* The keys' hint reads in two lines, however narrow the cell. */
+.tabula-grid-list.is-multiple .tabula-grid-list-note {
+	min-width: 210px;
 }
 
 .tabula-grid-option.is-disabled {

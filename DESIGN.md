@@ -142,6 +142,7 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 23  | A rule's own words, Turkish and English             | both        | done (phase two)   |
 | 24  | Field limits tab in the rules drawer                | application | not chosen (later) |
 | 25  | Comparison with a worked-out value                  | package     | not chosen         |
+| —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
 | —   | Saved views (personal views)                        | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)      | both        | done (phase two)   |
 

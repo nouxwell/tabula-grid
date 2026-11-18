@@ -2081,3 +2081,134 @@ describe("scroll bars", () => {
 		})
 	})
 })
+
+describe("a multi-select cell", () => {
+	/** The Kanallar column's place: it comes after the others. */
+	async function channelsCol(page: Page): Promise<number> {
+		return Number(await page.locator(".tabula-grid-th", { hasText: "Kanallar" }).getAttribute("aria-colindex")) - 1
+	}
+
+	const options = (page: Page) => page.locator(".tabula-grid-list .tabula-grid-option")
+
+	async function picked(page: Page): Promise<string[]> {
+		return page.locator('.tabula-grid-list .tabula-grid-option[aria-selected="true"]').allInnerTexts()
+	}
+
+	it("shows its options as the sheet writes them, and ticks them in a list from F2", async () => {
+		await withPage(
+			20,
+			async page => {
+				const col = await channelsCol(page)
+
+				await expect(cell(page, 2, col).innerText()).resolves.toBe("Mağaza, Web")
+
+				await cell(page, 0, col).click()
+				await press(page, "F2")
+
+				await expect.poll(() => options(page).allInnerTexts()).toEqual(["Mağaza", "Web", "Pazar yeri"])
+				await expect(page.locator(".tabula-grid-list").getAttribute("aria-multiselectable")).resolves.toBe(
+					"true"
+				)
+				await expect(picked(page)).resolves.toEqual(["Mağaza"])
+
+				// Space unticks the highlighted one; down and Space tick the next.
+				await press(page, "Space")
+				await press(page, "ArrowDown")
+				await press(page, "Space")
+				await expect(picked(page)).resolves.toEqual(["Web"])
+
+				await press(page, "Enter")
+
+				await expect.poll(() => valueAt(page, 0, "channels")).toEqual(["web"])
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 1, col } })
+			},
+			"&channels=1"
+		)
+	})
+
+	it("finds options by what is typed, ticks each with Enter, and writes them in their own order", async () => {
+		await withPage(
+			20,
+			async page => {
+				const col = await channelsCol(page)
+
+				await cell(page, 3, col).click()
+				await page.keyboard.type("paz")
+				await expect.poll(() => options(page).allInnerTexts()).toEqual(["Pazar yeri"])
+				await press(page, "Enter")
+				await page.keyboard.type("we")
+				await press(page, "Enter")
+				await expect(picked(page)).resolves.toEqual(["Web", "Pazar yeri"])
+
+				// Nothing typed: Enter writes what is ticked.
+				await press(page, "Enter")
+
+				await expect.poll(() => valueAt(page, 3, "channels")).toEqual(["web", "market"])
+				await expect(cell(page, 3, col).innerText()).resolves.toBe("Web, Pazar yeri")
+			},
+			"&channels=1"
+		)
+	})
+
+	it("leaves the cell as it was on Escape, and writes a click's tick when the cell is left", async () => {
+		await withPage(
+			20,
+			async page => {
+				const col = await channelsCol(page)
+
+				await cell(page, 2, col).click()
+				await press(page, "F2")
+				await press(page, "Space")
+				await press(page, "Escape")
+
+				await expect(valueAt(page, 2, "channels")).resolves.toEqual(["store", "web"])
+
+				await press(page, "Alt+ArrowDown")
+				await options(page).filter({ hasText: "Pazar yeri" }).click()
+				await expect(picked(page)).resolves.toEqual(["Mağaza", "Web", "Pazar yeri"])
+				await cell(page, 5, 0).click()
+
+				await expect.poll(() => valueAt(page, 2, "channels")).toEqual(["store", "web", "market"])
+			},
+			"&channels=1"
+		)
+	})
+
+	it("filters by each option, keeping the rows that hold it whatever else they hold", async () => {
+		await withPage(
+			20,
+			async page => {
+				const col = await channelsCol(page)
+				const panel = page.locator(".tabula-grid-filter")
+
+				await header(page, col).hover()
+				await header(page, col).locator(".tabula-grid-th-menu").click()
+				await page.locator(".tabula-grid-menu-filter").click()
+
+				// Each option once, by its label; a cell of two counts under both. No row holds Pazar yeri.
+				await expect
+					.poll(() => panel.locator(".tabula-grid-filter-value").allInnerTexts())
+					.toEqual(["Mağaza", "Web", "(Boş)"])
+				await expect(panel.locator(".tabula-grid-filter-count").allInnerTexts()).resolves.toEqual([
+					"10",
+					"10",
+					"5"
+				])
+
+				await panel.locator(".tabula-grid-filter-all").click()
+				await panel.locator(".tabula-grid-filter-list label", { hasText: "Web" }).click()
+				await panel.locator(".tabula-grid-filter-apply").click()
+
+				const shown = await page.evaluate(() => {
+					const { view, store } = window.__playground!
+
+					return Array.from({ length: view.size }, (_, index) => store.get(view.rowIdAt(index)!, "channels"))
+				})
+
+				expect(shown).toHaveLength(10)
+				expect(shown.every(value => Array.isArray(value) && value.includes("web"))).toBe(true)
+			},
+			"&channels=1"
+		)
+	})
+})

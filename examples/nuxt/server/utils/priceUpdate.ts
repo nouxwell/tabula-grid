@@ -58,7 +58,19 @@ export const PRICE_UPDATE: ModuleSchemaInput = {
 		},
 		{ key: "validFrom", type: "date", label: "Geçerlilik" },
 		{ key: "active", type: "bool", label: "Aktif" },
-		{ key: "note", type: "string", label: "Not", rules: [{ rule: "maxLength", value: 60 }] }
+		{ key: "note", type: "string", label: "Not", rules: [{ rule: "maxLength", value: 60 }] },
+		// Several at once: ticked in a list in the cell, filtered by each.
+		{
+			key: "channels",
+			type: "options",
+			label: "Kanallar",
+			multiple: true,
+			options: [
+				{ value: "store", label: "Mağaza" },
+				{ value: "web", label: "Web" },
+				{ value: "market", label: "Pazar yeri" }
+			]
+		}
 	]
 }
 
@@ -131,6 +143,9 @@ export const CATALOG: readonly LookupItem[] = [
 ]
 
 /** The same rows on every load. */
+/** The channels each product starts with, by its place: most are sold in the store and online. */
+const CHANNELS = [["store", "web"], ["store"], ["web", "market"], ["store", "web", "market"], ["web"]]
+
 export function startingRows(): RowInit[] {
 	const random = seeded(7)
 	const currencies = ["TRY", "TRY", "TRY", "USD", "EUR"]
@@ -148,7 +163,8 @@ export function startingRows(): RowInit[] {
 				newPrice: next.toFixed(2),
 				currency: currencies[Math.floor(random() * currencies.length)] ?? "TRY",
 				validFrom: "2026-12-01",
-				active: true
+				active: true,
+				channels: CHANNELS[index % CHANNELS.length]
 			}
 		}
 	})

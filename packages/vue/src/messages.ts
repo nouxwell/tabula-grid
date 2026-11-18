@@ -218,7 +218,9 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		cancel: "Vazgeç",
 		moreValues: "değer listede yok; arayarak bulun",
 		badBound: "Bu değer okunamadı; sütunun yazdığı gibi yazın.",
-		fillHandle: "Doldurmak için sürükleyin; çift tıklayınca yandaki sütun bitene dek aşağı doldurur."
+		fillHandle: "Doldurmak için sürükleyin; çift tıklayınca yandaki sütun bitene dek aşağı doldurur.",
+		picked: "seçili · aramak için yazın",
+		pickHint: "Boşluk ya da tık seçer; Enter yazar, Esc vazgeçer."
 	},
 	en: {
 		succeeded: "Processed",
@@ -252,7 +254,9 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		cancel: "Cancel",
 		moreValues: "more values not listed; search to find them",
 		badBound: "This value cannot be read; write it as the column does.",
-		fillHandle: "Drag to fill; double-click to fill down as far as the column beside goes."
+		fillHandle: "Drag to fill; double-click to fill down as far as the column beside goes.",
+		picked: "picked · type to search",
+		pickHint: "Space or a click ticks; Enter writes, Esc cancels."
 	}
 }
 

@@ -17,6 +17,12 @@ The three packages are versioned together.
   column beside goes. Ctrl+D and Ctrl+R copy the selection's first row down or first column across.
   A fill is one step to undo, writes only into the rows shown and passes over columns that cannot
   be edited. Not drawn on a touch screen.
+- **Multi-select cells**: a field of several options is edited in a list of them to tick, under
+  the cell. Typing finds them, Space or a click ticks, Enter ticks what a search found and, with
+  nothing typed, writes what is ticked in the options' own order; Escape leaves the cell as it was.
+  Its filter lists each option once and keeps the rows holding any option ticked (`filterKeys` in
+  the core gives a cell's keys, one per option). The example has a Kanallar column; the playground
+  one with `?channels=1`.
 - **A rules drawer in the example** (design E): the template's row checks as sentences with the
   rows each catches now, and a form to write one: the field, what it must be, against a value or
   another field, when, Hata or Uyarı, and its own Turkish and English words. The count follows

@@ -82,7 +82,7 @@ export type { FormulaErrorCode, FormulaErrorValue } from "./formula/error.js"
 export { RowView, rowsWithIssues, rowsWithResult } from "./view.js"
 export type { RowFilter, RowOrder } from "./view.js"
 export { summarizeCells } from "./summary.js"
-export { compareValues, distinctValues, filterKey, hasRange, rowOrder, rowsMatching } from "./filters.js"
+export { compareValues, distinctValues, filterKey, filterKeys, hasRange, rowOrder, rowsMatching } from "./filters.js"
 export { fillValues } from "./fill.js"
 export { breaksCheck, checkFields, COMPARISONS, CONDITION_OPS, rowsBreaking } from "./checks.js"
 export type {

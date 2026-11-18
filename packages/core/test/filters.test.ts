@@ -228,3 +228,61 @@ describe("RowView with names and a sort", () => {
 		expect(names(view)).toEqual(["Çay", "ürün 9", "Zeytin"])
 	})
 })
+
+describe("a multi-select column", () => {
+	const multi = ModuleSchema.from({
+		module: "channels",
+		schemaVersion: 1,
+		fields: [
+			{
+				key: "channels",
+				type: "options",
+				multiple: true,
+				options: [
+					{ value: "store", label: "Mağaza" },
+					{ value: "web", label: "Web" },
+					{ value: "market", label: "Pazar yeri" }
+				]
+			}
+		]
+	})
+	const field = multi.field("channels")
+
+	function sheet() {
+		let next = 0
+
+		return new RowStore({
+			createRowId: () => `r${++next}`,
+			rows: [
+				{ values: { channels: ["web", "store"] } },
+				{ values: { channels: ["web"] } },
+				{ values: { channels: [] } },
+				{ values: {} },
+				{ values: { channels: ["market"] } }
+			]
+		})
+	}
+
+	it("lists each option once, with the rows that hold it, and the empty cells", () => {
+		const store = sheet()
+		const { values } = distinctValues(store, field, store.rowIds())
+
+		expect(values.map(entry => [entry.value, entry.count])).toEqual([
+			["store", 1],
+			["market", 1],
+			["web", 2],
+			[null, 2]
+		])
+	})
+
+	it("keeps a row that holds any option ticked, whatever else it holds", () => {
+		const store = sheet()
+		const keep = rowsMatching(store, multi, { channels: { kind: "values", keys: [filterKey(field, "web")] } })
+
+		expect(store.rowIds().filter(keep)).toEqual(["r1", "r2"])
+
+		const empty = rowsMatching(store, multi, { channels: { kind: "values", keys: [""] } })
+
+		expect(store.rowIds().filter(empty)).toEqual(["r3", "r4"])
+	})
+})
