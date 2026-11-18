@@ -5,6 +5,7 @@ import {
 	clampColumnWidth,
 	distinctValues,
 	editText,
+	fillValues,
 	formatCell,
 	hasRange,
 	headerDisplayText,
@@ -31,6 +32,7 @@ import {
 	type ColumnSort,
 	type DistinctValue,
 	type Direction,
+	type FillMode,
 	type CellValue,
 	type ColumnLayout,
 	type FieldSchema,
@@ -679,15 +681,41 @@ function box(area: CellRange, shift = 0): Record<string, string> {
 	}
 }
 
-/** The selected range, split where the pinned columns end: each part is drawn with its columns. */
-const rangeParts = computed(() => {
-	const area = range.value
+/** A range split where the pinned columns end: each part is drawn with its columns. */
+function parts(area: CellRange | null) {
 	const pinned = pinnedCount.value
 
 	return {
 		pinned: area && area.left < pinned ? box({ ...area, right: Math.min(area.right, pinned - 1) }) : null,
 		free: area && area.right >= pinned ? box({ ...area, left: Math.max(area.left, pinned) }) : null
 	}
+}
+
+const rangeParts = computed(() => parts(range.value))
+
+/**
+ * The fill handle, on the selection's bottom right corner with the columns that corner is drawn
+ * with, kept inside the sheet at its last row and column. None while a cell is edited, or where
+ * nothing can be changed.
+ */
+const fillHandle = computed(() => {
+	const area = range.value
+
+	if (!area || props.readonly || editing.value) {
+		return null
+	}
+
+	const x = Math.min(offsets.value[area.right + 1] ?? 0, totalWidth.value - 4)
+	const y = Math.min((area.bottom + 1) * props.rowHeight, totalHeight.value - 4)
+
+	return { pinned: area.right < pinnedCount.value, style: { transform: `translate(${x}px, ${y}px)` } }
+})
+
+/** Where a fill would go while the handle is dragged: the selection and the cells it would fill. */
+const fillParts = computed(() => {
+	const dragging = fillDrag.value
+
+	return dragging?.target ? parts(grown(dragging.source, dragging.target)) : null
 })
 
 const activePinned = computed(() => active.value !== null && active.value.col < pinnedCount.value)
@@ -1295,6 +1323,15 @@ function handleShortcut(event: KeyboardEvent, mod: boolean): boolean {
 		return true
 	}
 
+	// Taken from the browser's bookmark and reload only where the grid can fill.
+	const key = event.key.toLowerCase()
+
+	if (mod && !altGr && !event.shiftKey && (key === "d" || key === "r") && !props.readonly) {
+		fillFromEdge(key === "d" ? "down" : "right")
+
+		return true
+	}
+
 	return false
 }
 
@@ -1515,19 +1552,284 @@ function clearRange(origin: string): void {
 	)
 }
 
+// ---------------------------------------------------------------- fill
+
+/** Kinds of field whose values mean the same in any column of the kind. */
+const PLAIN_TYPES: ReadonlySet<FieldSchema["type"]> = new Set([
+	"string",
+	"integer",
+	"decimal",
+	"money",
+	"quantity",
+	"percent",
+	"bool",
+	"date",
+	"datetime"
+])
+
+/** How far a fill reaches past the selection, and which way. */
+interface FillTarget {
+	readonly direction: Direction
+	readonly count: number
+}
+
+/** A fill handle being dragged: the cells it fills from, and where it would fill now. */
+const fillDrag = shallowRef<{ readonly source: CellRange; readonly target: FillTarget | null } | null>(null)
+
+/**
+ * A value made in one column, as another column holds it: as it is in its own column or one of the
+ * same plain kind; otherwise through its text, as copying and pasting would carry it.
+ */
+function carry(from: FieldSchema, to: FieldSchema, value: CellValue): CellValue {
+	if (value === null || from.key === to.key || (from.type === to.type && PLAIN_TYPES.has(to.type))) {
+		return value
+	}
+
+	return valueOf(to, formatCell(from, value, props.valueSettings))
+}
+
+function grown(area: CellRange, target: FillTarget): CellRange {
+	switch (target.direction) {
+		case "down":
+			return { ...area, bottom: area.bottom + target.count }
+		case "up":
+			return { ...area, top: area.top - target.count }
+		case "right":
+			return { ...area, right: area.right + target.count }
+		case "left":
+			return { ...area, left: area.left - target.count }
+	}
+}
+
+/**
+ * Where dragging the handle to a cell fills, as in Excel: along the way the pointer has gone
+ * further past the selection, down or up when it is as far either way; nowhere inside it.
+ */
+function fillTarget(source: CellRange, over: CellPosition): FillTarget | null {
+	const down = over.row - source.bottom
+	const up = source.top - over.row
+	const right = over.col - source.right
+	const left = source.left - over.col
+	const rows = Math.max(down, up)
+	const cols = Math.max(right, left)
+
+	if (rows <= 0 && cols <= 0) {
+		return null
+	}
+
+	if (rows >= cols) {
+		return down > 0 ? { direction: "down", count: down } : { direction: "up", count: up }
+	}
+
+	return right > 0 ? { direction: "right", count: right } : { direction: "left", count: left }
+}
+
+/**
+ * Fills cells past `source` from the cells in it, as a spreadsheet's fill handle does: numbers,
+ * dates and numbered names go on as a series, anything else repeats (`fillValues` in the core).
+ *
+ * Down or up, each column fills from its own cells. Right or left, each row fills from its cells
+ * across: columns of one plain kind can make a series, and values carried into a column of another
+ * kind go through their text, as a paste would read them. As a paste, it writes only into the rows
+ * shown, and passes over a column that cannot be edited and a locked row. One step to undo.
+ */
+function fillRange(source: CellRange, target: FillTarget, mode: FillMode): void {
+	if (props.readonly || target.count <= 0) {
+		return
+	}
+
+	const rows = store.value
+	const shown = view.value
+	const cols = fields.value
+	const options = { backward: target.direction === "up" || target.direction === "left", mode }
+
+	rows.transact(
+		() => {
+			if (target.direction === "down" || target.direction === "up") {
+				for (let col = source.left; col <= source.right; col++) {
+					const field = cols[col]
+
+					if (!isEditable(field)) {
+						continue
+					}
+
+					const from = span(source.top, source.bottom).map(row => {
+						const rowId = shown.rowIdAt(row)
+
+						return rowId === undefined ? null : rows.get(rowId, field.key)
+					})
+
+					fillValues(field, from, target.count, options).forEach((value, index) => {
+						const rowId = shown.rowIdAt(
+							options.backward ? source.top - 1 - index : source.bottom + 1 + index
+						)
+
+						if (rowId !== undefined && !isLockedRow(rowId)) {
+							rows.setCell(rowId, field.key, value)
+						}
+					})
+				}
+
+				return
+			}
+
+			const from = cols.slice(source.left, source.right + 1)
+			const first = from[0]
+			const series =
+				first && PLAIN_TYPES.has(first.type) && from.every(field => field.type === first.type) ? first : null
+			// Values that only repeat are picked by their place, so each is carried from its own column.
+			const picks = fillValues(
+				null,
+				from.map((_, index) => index),
+				target.count,
+				options
+			) as number[]
+
+			for (let row = source.top; row <= source.bottom; row++) {
+				const rowId = shown.rowIdAt(row)
+
+				if (rowId === undefined || isLockedRow(rowId)) {
+					continue
+				}
+
+				const values = from.map(field => rows.get(rowId, field.key))
+				const made = series ? fillValues(series, values, target.count, options) : null
+
+				for (let index = 0; index < target.count; index++) {
+					const to = cols[options.backward ? source.left - 1 - index : source.right + 1 + index]
+					const pick = picks[index] ?? 0
+					const origin = series ?? from[pick]
+
+					if (isEditable(to) && origin) {
+						rows.setCell(
+							rowId,
+							to.key,
+							carry(origin, to, made ? (made[index] ?? null) : (values[pick] ?? null))
+						)
+					}
+				}
+			}
+		},
+		{ origin: "fill" }
+	)
+}
+
+function selectArea(area: CellRange): void {
+	selection.moveTo(area.top, area.left)
+	selection.moveTo(area.bottom, area.right, { extend: true })
+	reveal()
+}
+
+/**
+ * Dragging the handle on the selection's corner. Let go, it fills to where it was dragged and
+ * selects all of it; Ctrl or Alt held when letting go turns a series into copies, or one number
+ * into a count, as Ctrl and Option do in Excel.
+ */
+function onFillDown(event: MouseEvent): void {
+	const source = selection.range
+
+	if (event.button !== 0 || !source || props.readonly) {
+		return
+	}
+
+	takeFocus(event)
+	fillDrag.value = { source, target: null }
+	drag(
+		move => {
+			const over = cellAt(move)
+
+			if (over) {
+				fillDrag.value = { source, target: fillTarget(source, over) }
+			}
+		},
+		release => {
+			const target = fillDrag.value?.target ?? null
+
+			fillDrag.value = null
+
+			if (release && target) {
+				fillRange(source, target, release.ctrlKey || release.altKey ? "alternate" : "auto")
+				selectArea(grown(source, target))
+			}
+		}
+	)
+}
+
+/**
+ * Double-clicking the handle fills down as far as the column beside the selection holds values,
+ * the one on its left first, as in Excel: a new price typed at the top of a list goes down the list.
+ */
+function onFillDouble(): void {
+	const source = selection.range
+
+	if (!source || props.readonly) {
+		return
+	}
+
+	const beside = [source.left - 1, source.right + 1].find(
+		col => col >= 0 && col < fields.value.length && !isBlank(source.bottom + 1, col)
+	)
+
+	if (beside === undefined) {
+		return
+	}
+
+	let last = source.bottom + 1
+
+	while (last + 1 < rowCount.value && !isBlank(last + 1, beside)) {
+		last++
+	}
+
+	const target: FillTarget = { direction: "down", count: last - source.bottom }
+
+	fillRange(source, target, "auto")
+	selectArea(grown(source, target))
+}
+
+/**
+ * Ctrl+D and Ctrl+R, as in Excel: the selection's first row copied down the rest of it, or its first
+ * column across. A selection one row high takes the row above it; one column wide, the column left.
+ */
+function fillFromEdge(direction: "down" | "right"): void {
+	const area = selection.range
+
+	if (!area) {
+		return
+	}
+
+	if (direction === "down") {
+		const top = area.bottom > area.top ? area.top : area.top - 1
+
+		if (top >= 0) {
+			fillRange({ ...area, top, bottom: top }, { direction, count: area.bottom - top }, "copy")
+		}
+
+		return
+	}
+
+	const left = area.right > area.left ? area.left : area.left - 1
+
+	if (left >= 0) {
+		fillRange({ ...area, left, right: left }, { direction, count: area.right - left }, "copy")
+	}
+}
+
 // ---------------------------------------------------------------- mouse
 
 let stopDrag: (() => void) | null = null
 
-/** Follows the mouse until the button is let go, wherever it goes. */
-function drag(onMove: (event: MouseEvent) => void, onEnd?: () => void): void {
+/**
+ * Follows the mouse until the button is let go, wherever it goes. `onEnd` is given the release, or
+ * null when the drag was cut short: by another starting, or by the grid going away.
+ */
+function drag(onMove: (event: MouseEvent) => void, onEnd?: (release: MouseEvent | null) => void): void {
 	stopDrag?.()
 
-	const end = (): void => {
+	const end = (event?: MouseEvent): void => {
 		window.removeEventListener("mousemove", onMove)
 		window.removeEventListener("mouseup", end)
 		stopDrag = null
-		onEnd?.()
+		onEnd?.(event instanceof MouseEvent ? event : null)
 	}
 
 	window.addEventListener("mousemove", onMove)
@@ -2425,7 +2727,7 @@ defineExpose({
 		role="grid"
 		:tabindex="active ? -1 : 0"
 		:data-tabula-theme="theme"
-		:class="{ 'is-filtered': filtered, 'is-scrolled-x': scrollX > 0 }"
+		:class="{ 'is-filtered': filtered, 'is-scrolled-x': scrollX > 0, 'is-filling': fillDrag }"
 		:style="{ '--tabula-row-height': `${rowHeight}px` }"
 		:aria-rowcount="rowCount + 1"
 		:aria-colcount="fields.length"
@@ -2437,7 +2739,7 @@ defineExpose({
 		@cut="onCut"
 		@paste="onPaste"
 	>
-		<div ref="scroller" class="tabula-grid-scroller" @scroll.passive="updateWindow">
+		<div ref="scroller" class="tabula-grid-scroller tabula-scroll" @scroll.passive="updateWindow">
 			<div
 				class="tabula-grid-sheet"
 				:style="{ width: `${gutterWidth + totalWidth}px`, height: `${HEADER_HEIGHT + totalHeight}px` }"
@@ -2610,6 +2912,16 @@ defineExpose({
 						</div>
 						<div v-if="rangeParts.pinned" class="tabula-grid-range" :style="rangeParts.pinned" />
 						<div v-if="active && activePinned" class="tabula-grid-active" :style="activeStyle" />
+						<div v-if="fillParts?.pinned" class="tabula-grid-fill-preview" :style="fillParts.pinned" />
+						<div
+							v-if="fillHandle?.pinned"
+							class="tabula-grid-fill"
+							:style="fillHandle.style"
+							:title="GRID_TEXT[locale].fillHandle"
+							aria-hidden="true"
+							@mousedown.stop="onFillDown"
+							@dblclick.stop="onFillDouble"
+						/>
 					</div>
 					<div
 						v-for="r in visibleRows"
@@ -2641,6 +2953,16 @@ defineExpose({
 					</div>
 					<div v-if="rangeParts.free" class="tabula-grid-range" :style="rangeParts.free" />
 					<div v-if="active && !activePinned" class="tabula-grid-active" :style="activeStyle" />
+					<div v-if="fillParts?.free" class="tabula-grid-fill-preview" :style="fillParts.free" />
+					<div
+						v-if="fillHandle && !fillHandle.pinned"
+						class="tabula-grid-fill"
+						:style="fillHandle.style"
+						:title="GRID_TEXT[locale].fillHandle"
+						aria-hidden="true"
+						@mousedown.stop="onFillDown"
+						@dblclick.stop="onFillDouble"
+					/>
 					<input
 						v-if="active"
 						ref="editor"
@@ -2668,7 +2990,7 @@ defineExpose({
 		<ul
 			v-if="listOpen"
 			:id="listId"
-			class="tabula-grid-list"
+			class="tabula-grid-list tabula-scroll"
 			role="listbox"
 			:style="
 				listPlace
@@ -2794,7 +3116,7 @@ defineExpose({
 				/>
 				{{ GRID_TEXT[locale].selectAll }}
 			</label>
-			<ul class="tabula-grid-filter-list">
+			<ul class="tabula-grid-filter-list tabula-scroll">
 				<li v-for="entry in shownValues" :key="entry.key">
 					<label>
 						<input
@@ -3087,11 +3409,16 @@ defineExpose({
 	cursor: pointer;
 }
 
+/*
+ * The list reaches into the panel's padding, so its scroll bar runs there rather than against the
+ * counts, and gives the room back: the values end where the rest of the panel does, bar or none.
+ */
 .tabula-grid-filter-list {
 	max-height: 220px;
-	margin: 0;
-	padding: 0;
+	margin: 0 -8px 0 0;
+	padding: 0 3px 0 0;
 	overflow: auto;
+	scrollbar-gutter: stable;
 	list-style: none;
 	border-top: 1px solid var(--tabula-line);
 }
@@ -3369,6 +3696,54 @@ defineExpose({
 
 .tabula-grid:focus-within .tabula-grid-active {
 	box-shadow: inset 0 0 0 2px var(--tabula-accent);
+}
+
+/* The fill handle: the small square on the selection's corner, as in Excel. */
+.tabula-grid-fill {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 3;
+	box-sizing: border-box;
+	width: 7px;
+	height: 7px;
+	margin: -4px 0 0 -4px;
+	border: 1px solid var(--tabula-bg);
+	background: var(--tabula-muted);
+	cursor: crosshair;
+}
+
+.tabula-grid:focus-within .tabula-grid-fill {
+	background: var(--tabula-accent);
+}
+
+/* Easier to catch than to see. */
+.tabula-grid-fill::before {
+	position: absolute;
+	inset: -4px;
+	content: "";
+}
+
+.tabula-grid.is-filling,
+.tabula-grid.is-filling * {
+	cursor: crosshair;
+}
+
+/* Where letting go of the handle would fill. */
+.tabula-grid-fill-preview {
+	position: absolute;
+	top: 0;
+	left: 0;
+	box-sizing: border-box;
+	border: 1px dashed var(--tabula-fg);
+	pointer-events: none;
+}
+
+/* A finger cannot hold a square this small; on a touch screen, filling is a paste. */
+@media not (any-pointer: fine) {
+	.tabula-grid-fill {
+		display: none;
+	}
 }
 
 /* Waiting on the active cell for whatever is typed: there, focused, and not seen. */

@@ -1873,3 +1873,125 @@ describe("sorting and filtering", () => {
 		})
 	})
 })
+
+describe("filling", () => {
+	/** Writes values straight into the store, by row on screen. */
+	function put(page: Page, key: string, values: readonly unknown[]): Promise<void> {
+		return page.evaluate(
+			([field, list]) => {
+				const { store } = window.__playground!
+
+				list.forEach((value, index) => store.setCell(store.rowIdAt(index)!, field, value as never))
+			},
+			[key, values] as const
+		)
+	}
+
+	function column(page: Page, key: string, count: number): Promise<unknown[]> {
+		return Promise.all(Array.from({ length: count }, (_, row) => valueAt(page, row, key)))
+	}
+
+	/** Drags the fill handle to a cell, holding a key when letting go if told to. */
+	async function dragHandle(page: Page, to: Locator, hold?: string, check?: () => Promise<void>): Promise<void> {
+		const handle = await page.locator(".tabula-grid-fill").boundingBox()
+		const target = await to.boundingBox()
+
+		if (!handle || !target) {
+			throw new Error("The fill handle or the target cell is not on screen.")
+		}
+
+		await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
+		await page.mouse.down()
+		await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 5 })
+		await check?.()
+
+		if (hold) {
+			await page.keyboard.down(hold)
+		}
+
+		await page.mouse.up()
+
+		if (hold) {
+			await page.keyboard.up(hold)
+		}
+	}
+
+	it("drags a series down from two prices, selects what it filled, and undoes it in one step", async () => {
+		await withPage(20, async page => {
+			const before = await column(page, "newPrice", 5)
+
+			await put(page, "newPrice", ["10", "20"])
+			await cell(page, 0, 3).click()
+			await press(page, "Shift+ArrowDown")
+			await dragHandle(page, cell(page, 4, 3), undefined, async () => {
+				await expect(page.locator(".tabula-grid-fill-preview").count()).resolves.toBe(1)
+			})
+
+			await expect.poll(() => column(page, "newPrice", 5)).toEqual(["10", "20", "30", "40", "50"])
+			await expect(selected(page)).resolves.toMatchObject({ range: { top: 0, bottom: 4, left: 3, right: 3 } })
+			await expect(page.locator(".tabula-grid-fill-preview").count()).resolves.toBe(0)
+
+			await press(page, "Control+z")
+
+			await expect.poll(() => column(page, "newPrice", 5)).toEqual(["10", "20", ...before.slice(2)])
+		})
+	})
+
+	it("goes on a day at a time from a date, and copies it with Ctrl held", async () => {
+		await withPage(20, async page => {
+			await put(page, "validFrom", ["2026-12-01"])
+			await cell(page, 0, 6).click()
+			await dragHandle(page, cell(page, 2, 6))
+
+			await expect.poll(() => column(page, "validFrom", 3)).toEqual(["2026-12-01", "2026-12-02", "2026-12-03"])
+
+			await cell(page, 0, 6).click()
+			await dragHandle(page, cell(page, 2, 6), "Control")
+
+			await expect.poll(() => column(page, "validFrom", 3)).toEqual(["2026-12-01", "2026-12-01", "2026-12-01"])
+		})
+	})
+
+	it("fills down as far as the column beside goes when the handle is double-clicked", async () => {
+		await withPage(20, async page => {
+			await put(page, "newPrice", ["99"])
+			await cell(page, 0, 3).click()
+			await page.locator(".tabula-grid-fill").dblclick()
+
+			await expect.poll(() => column(page, "newPrice", 20)).toEqual(Array.from({ length: 20 }, () => "99"))
+			await expect(selected(page)).resolves.toMatchObject({ range: { top: 0, bottom: 19, left: 3, right: 3 } })
+		})
+	})
+
+	it("copies the first row down with Ctrl+D, and across into another kind of column with Ctrl+R", async () => {
+		await withPage(20, async page => {
+			await put(page, "note", ["Kampanya 1"])
+			await cell(page, 0, 8).click()
+			await press(page, "Shift+ArrowDown", 3)
+			await press(page, "Control+d")
+
+			// Copied, not counted on: Ctrl+D never makes a series.
+			await expect.poll(() => column(page, "note", 4)).toEqual(Array.from({ length: 4 }, () => "Kampanya 1"))
+
+			await put(page, "active", [true])
+			await cell(page, 0, 7).click()
+			await press(page, "Shift+ArrowRight")
+			await press(page, "Control+r")
+
+			// Yes and no reach a text column as the sheet writes them.
+			await expect.poll(() => valueAt(page, 0, "note")).toBe("Evet")
+		})
+	})
+
+	it("leaves a column that cannot be edited as it was", async () => {
+		await withPage(20, async page => {
+			const before = await column(page, "sku", 4)
+
+			await cell(page, 0, 1).click()
+			await dragHandle(page, cell(page, 3, 1))
+
+			await expect(column(page, "sku", 4)).resolves.toEqual(before)
+			await expect(selected(page)).resolves.toMatchObject({ range: { top: 0, bottom: 3 } })
+		})
+	})
+})

@@ -80,6 +80,10 @@ Done means all of these pass. CI runs them on Node 22, 24 and 26.
   what is sent goes through `canonicalValue`.
 - **Reading, checking and writing values must agree with `nouxwell/tabula`.** A change there adds
   cases to `conformance/values.json` and passes on both sides.
+- **Scroll bars are the CRM's thin ones** (DESIGN.md, "Scroll bars"): `tabula-scroll` on every
+  scroll area in a package, `scrollbar-thin` beside the overflow utility in an application. Never
+  the browser's own bar, never `scrollbar-width` / `scrollbar-color` or `::-webkit-scrollbar`
+  rules written in a component.
 - **Waiting is shown where it happens** (DESIGN.md, "Loading"): an action's button spins by itself
   when its click returns the promise, a part waiting for data shows `AppSpin` alone, a failure
   offers to try again. No spinner over a whole page, none that turns forever.

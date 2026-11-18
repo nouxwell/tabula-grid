@@ -79,7 +79,11 @@
 				</div>
 			</div>
 
-			<div role="toolbar" aria-label="Tablo araçları" class="flex items-center gap-2 overflow-x-auto pb-1">
+			<div
+				role="toolbar"
+				aria-label="Tablo araçları"
+				class="scrollbar-thin flex items-center gap-2 overflow-x-auto pb-1"
+			>
 				<AppTooltip>
 					<template #trigger>
 						<AppButton

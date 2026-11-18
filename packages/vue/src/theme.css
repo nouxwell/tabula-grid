@@ -64,6 +64,10 @@
 	--tabula-issues-error-line: color-mix(in srgb, var(--tabula-error) 35%, var(--tabula-bg));
 	--tabula-issues-warning-bg: color-mix(in srgb, var(--tabula-warning) 8%, var(--tabula-bg));
 	--tabula-issues-warning-line: color-mix(in srgb, var(--tabula-warning) 50%, var(--tabula-bg));
+	/* The scroll bars' thumb, as thin as the CRM's, in the colour of its stronger dividers. */
+	--tabula-scrollbar: color-mix(in srgb, var(--tabula-fg) 20%, transparent);
+	--tabula-scrollbar-hover: color-mix(in srgb, var(--tabula-fg) 30%, transparent);
+	--tabula-scrollbar-size: 5px;
 
 	font-family: var(--tabula-font-family, inherit);
 	font-size: var(--tabula-font-size);
@@ -80,6 +84,39 @@
 	--tabula-success: #00e19b;
 
 	color-scheme: dark;
+}
+
+/*
+ * Every scroll area of the grid and the issue panel: the sheet, the lists. A thin rounded thumb on a
+ * clear track, as the IONSIS CRM draws its scroll areas, in place of the browser's own bar with its
+ * arrows. Chromium and Safari draw it with the ::-webkit-scrollbar rules alone; in Chromium the
+ * standard scrollbar-width and scrollbar-color would turn those off and bring the thick bar back,
+ * so the standard pair is only for browsers without them, such as Firefox.
+ */
+.tabula-scroll::-webkit-scrollbar {
+	width: var(--tabula-scrollbar-size);
+	height: var(--tabula-scrollbar-size);
+}
+
+.tabula-scroll::-webkit-scrollbar-track,
+.tabula-scroll::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+.tabula-scroll::-webkit-scrollbar-thumb {
+	border-radius: var(--tabula-scrollbar-size);
+	background: var(--tabula-scrollbar);
+}
+
+.tabula-scroll::-webkit-scrollbar-thumb:hover {
+	background: var(--tabula-scrollbar-hover);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+	.tabula-scroll {
+		scrollbar-width: thin;
+		scrollbar-color: var(--tabula-scrollbar) transparent;
+	}
 }
 
 @media (prefers-color-scheme: dark) {

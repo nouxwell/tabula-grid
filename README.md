@@ -134,6 +134,17 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
 - **Clipboard.** Copy gives text a spreadsheet reads. A pasted block lands at the top left of the
   selection, one pasted value fills the whole selection, and a paste that runs past the last row
   adds the rows it needs. A read-only column is passed over and keeps its values.
+- **Filling, as in Excel.** Drag the square on the selection's corner down, up or across: numbers
+  with one step between them go on by it (10, 20 gives 30, 40), a date goes on a day at a time,
+  dates on one day of the month by months, and a name ending in a number counts on ("Ürün 9",
+  "Ürün 10", "A009", "A010"); anything else, and one number alone, repeats. Ctrl (Option on a Mac)
+  held when letting go turns a series into copies, or one number into a count. Double-clicking
+  the square fills down as far as the column beside goes, so a price typed at the top of a list
+  goes down all of it. Ctrl+D copies the selection's first row down it, Ctrl+R its first column
+  across. A fill is one step to undo, writes only into the rows shown, and passes over columns
+  that cannot be edited; across columns of different kinds a value is carried through its text,
+  as a paste would. The core's `fillValues(field, values, count, options)` works the values out.
+  On a touch screen the square is not drawn: a finger cannot hold it.
 - **Columns.** Each column starts as wide as its header, from 100 to 320 pixels. A header past 100
   characters is cut with "…", and every header is whole in its tooltip. Dragging a column's edge
   goes up to 1,000 pixels and is never undone by measuring; double-clicking it fits the column to
@@ -250,6 +261,9 @@ with an issue are worked out from them. Both components carry the class `tabula-
   /* … */
 }
 ```
+
+Scroll bars are thin, as the CRM's: `--tabula-scrollbar`, `--tabula-scrollbar-hover` and
+`--tabula-scrollbar-size` (5px) change them, on every area of the grid and the panel that scrolls.
 
 Where the accent carries words, on a link or a button, the grid takes it a step towards the text
 colour, `--tabula-accent-text`: IONSIS's green reads at 2.9:1 on white, under the 4.5:1 text

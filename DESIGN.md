@@ -120,7 +120,7 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 8   | Who found an issue (browser or server)              | package     | done                         |
 | 9   | Search in the sheet                                 | package     | not chosen                   |
 | 10  | Filter and sort in the header                       | package     | done (phase two)             |
-| 11  | Fill handle                                         | package     | phase two                    |
+| 11  | Fill handle                                         | package     | done (phase two)             |
 | 12  | Status bar with sum and average                     | package     | done                         |
 | 13  | Sheet tabs                                          | package     | not chosen (large)           |
 | 14  | Zoom                                                | package     | not chosen                   |
@@ -185,6 +185,26 @@ As the CRM's loading standard has it:
 
 ---
 
+## Scroll bars
+
+As the CRM draws them: **a thin rounded thumb on a clear track**, 5px, in the text colour at 20%
+(30% under the pointer), never the browser's own bar with its arrows.
+
+- **In the packages**, every scroll area carries the class `tabula-scroll` from `theme.css`: the
+  sheet, the filter's list of values, the editor's suggestions, the issue list. A new one does the
+  same. `--tabula-scrollbar`, `--tabula-scrollbar-hover` and `--tabula-scrollbar-size` change it.
+- **In an application**, a scroll area of its own takes `scrollbar-thin` beside its overflow
+  utility: `overflow-y-auto scrollbar-thin`. Areas Naive UI scrolls (`AppDrawer`, `AppModal`)
+  draw their own thumb and do not take it.
+- **No `scrollbar-width` or `scrollbar-color` beside these**, and no `::-webkit-scrollbar` rules
+  in a component. In Chromium the standard pair turns the thin bar off and brings the thick one
+  back, which is why the class keeps them for browsers without the pseudo-elements only.
+- **A bar never runs against content.** A list inside a padded panel reaches into the padding with
+  a negative margin and gives the room back with `scrollbar-gutter: stable` and a little padding,
+  so the bar runs in the panel's padding and the content ends where the rest of the panel does.
+
+---
+
 ## Motion
 
 - **Everything that changes state moves softly**, 150–300ms, `ease-out` or `ease-in-out`; nothing
@@ -212,6 +232,9 @@ As the CRM's loading standard has it:
   `ssrContext.styles`, which Nuxt 4 no longer writes.
 - **Ids in components** come from `useId()`, never a counter: a counter differs between the server
   and the browser.
+- **Tailwind 4 has a `scrollbar-thin` utility of its own** (`scrollbar-width: thin`), which in
+  Chromium would bring the thick bar back. The application's `scrollbar-thin` in `main.css` sits
+  outside Tailwind's layers so it wins, and resets it.
 - **The grid is drawn in the browser only.** Its rows are fetched by the browser
   (`useFetch(…, { server: false })`); in the page's payload they would be sent twice.
 
@@ -227,6 +250,7 @@ As the CRM's loading standard has it:
 - [ ] Every hint is an `AppTooltip`; every modal the `AppModal` shape; every drawer
       `AppDrawer` + `AppDrawerContent`.
 - [ ] What opens, closes or swaps animates; reduced motion turns it off.
+- [ ] No browser scroll bar: `tabula-scroll` in a package, `scrollbar-thin` in an application.
 - [ ] Every action's button spins while it runs (its click returns the promise); a waiting part
       spins alone; a failure says so with a way to try again.
 - [ ] A part marked "not chosen" above was asked about before it was built.

@@ -9,6 +9,20 @@ The three packages are versioned together.
 
 ### Added
 
+- **Filling, as in Excel.** The square on the selection's corner drags a fill down, up or across:
+  numbers go on by their step, a date a day at a time, dates on one day of the month by months, a
+  name ending in a number counts on with its leading zeros, and anything else repeats; Ctrl or
+  Alt held when letting go swaps a series and copies. Double-clicking it fills down as far as the
+  column beside goes. Ctrl+D and Ctrl+R copy the selection's first row down or first column across.
+  A fill is one step to undo, writes only into the rows shown and passes over columns that cannot
+  be edited. Not drawn on a touch screen.
+- **`fillValues`** in the core, with `FillMode` and `FillOptions`: the values a fill writes,
+  worked out exactly, numbers as decimal text.
+- **Thin scroll bars**, as the CRM draws them: every scroll area of the grid and the issue panel
+  carries `tabula-scroll`, a 5px rounded thumb on a clear track, set with `--tabula-scrollbar`,
+  `--tabula-scrollbar-hover` and `--tabula-scrollbar-size`. The issue list's and the filter
+  list's bars run in their panel's padding, clear of the cards and counts. The example has the
+  CRM's `scrollbar-thin` for its own scroll areas.
 - **`TabulaFormulaBar`**: the active cell's address and value above the sheet. An address typed and
   Entered goes there; a value typed is written as typing it into the cell writes it, into the cell
   it was typed for even when a click has moved the selection on. A formula column shows its formula,

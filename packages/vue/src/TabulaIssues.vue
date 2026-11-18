@@ -226,7 +226,7 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 				</span>
 			</header>
 			<p v-if="issues.length === 0" class="tabula-issues-none">{{ text.none }}</p>
-			<ul v-else class="tabula-issues-list">
+			<ul v-else class="tabula-issues-list tabula-scroll">
 				<li v-for="issue in shown" :key="issue.id">
 					<button type="button" class="tabula-issues-item" :class="itemClass(issue)" @click="choose(issue)">
 						<span class="tabula-issues-line">
@@ -407,9 +407,11 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 	flex-direction: column;
 	gap: 8px;
 	min-height: 0;
-	margin: 0;
-	padding: 0;
+	/* Into the panel's padding, so the bar runs there and never against the cards. */
+	margin: 0 -10px 0 0;
+	padding: 0 5px 0 0;
 	overflow: auto;
+	scrollbar-gutter: stable;
 	list-style: none;
 }
 

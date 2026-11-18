@@ -155,7 +155,8 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		clear: "Temizle",
 		cancel: "Vazgeç",
 		moreValues: "değer listede yok; arayarak bulun",
-		badBound: "Bu değer okunamadı; sütunun yazdığı gibi yazın."
+		badBound: "Bu değer okunamadı; sütunun yazdığı gibi yazın.",
+		fillHandle: "Doldurmak için sürükleyin; çift tıklayınca yandaki sütun bitene dek aşağı doldurur."
 	},
 	en: {
 		succeeded: "Processed",
@@ -188,7 +189,8 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		clear: "Clear",
 		cancel: "Cancel",
 		moreValues: "more values not listed; search to find them",
-		badBound: "This value cannot be read; write it as the column does."
+		badBound: "This value cannot be read; write it as the column does.",
+		fillHandle: "Drag to fill; double-click to fill down as far as the column beside goes."
 	}
 }
 
