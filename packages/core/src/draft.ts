@@ -2,9 +2,11 @@ import type { ColumnLayout } from "./columns.js"
 import type { ProcessRequest } from "./contract.js"
 import { TabulaError } from "./errors.js"
 import type { RowEntry, RowInit, RowStore } from "./rows.js"
-import { FIELD_TYPES, type FieldType, type ModuleSchema } from "./schema.js"
+import { FIELD_TYPES, type FieldSchema, type FieldType, type ModuleSchema } from "./schema.js"
 import type { PendingRun, PersistedSession, RowResult, SheetSession } from "./session.js"
 import { toCellValue, type CellValue } from "./value.js"
+import { valueProblem } from "./values/read.js"
+import { VALUE_SETTINGS, type ValueSettings } from "./values/settings.js"
 
 /**
  * A sheet saved to go on with later. Saving a draft creates no business record: it is the sheet as
@@ -22,6 +24,8 @@ export const DRAFT_VERSION = 1
 export interface DraftField {
 	readonly key: string
 	readonly type: FieldType
+	/** Its label then, so a field gone since is still known by name. Drafts saved before it was kept have none. */
+	readonly label?: string
 }
 
 /** The user's view of the sheet. */
@@ -75,7 +79,9 @@ export function createDraft(options: CreateDraftOptions): Draft {
 		module: schema.module,
 		schemaVersion: schema.schemaVersion,
 		sheetId: session?.sheetId ?? schema.module,
-		fields: Object.freeze(schema.fields.map(field => Object.freeze({ key: field.key, type: field.type }))),
+		fields: Object.freeze(
+			schema.fields.map(field => Object.freeze({ key: field.key, type: field.type, label: field.label }))
+		),
 		savedAt: (options.now?.() ?? new Date()).toISOString(),
 		revision: store.revision,
 		rows: Object.freeze(store.snapshot()),
@@ -213,6 +219,144 @@ function renames(draft: Draft, schema: ModuleSchema, given: Readonly<Record<stri
 	return map
 }
 
+/** A field of a draft, as a review before opening it shows it. */
+export interface DraftFieldMapping {
+	readonly key: string
+	/** As the draft wrote it; null for a draft saved before labels were kept. */
+	readonly label: string | null
+	readonly type: FieldType
+	/** Where its values go: its own field, the one it is renamed to, or null when they are dropped. */
+	readonly target: string | null
+	/** How many rows hold a value in it. */
+	readonly filled: number
+	/** Its first values, three at most, to know it by. */
+	readonly samples: readonly CellValue[]
+	/** How many of its values the target cannot read as its type: they open marked. */
+	readonly unreadable: number
+}
+
+export interface DraftMapping {
+	/** Every field of the draft, in its order. */
+	readonly fields: readonly DraftFieldMapping[]
+	/** The schema's fields no field of the draft goes to: they open empty. */
+	readonly added: readonly string[]
+	/** How many rows lose a value in a field that is dropped. */
+	readonly losing: number
+}
+
+export interface MapDraftOptions {
+	/** A field renamed since, by its old key, as `openDraft` takes it. */
+	readonly rename?: Readonly<Record<string, string>>
+	/** How values are read, to count what a field of another type cannot. Turkish by default. */
+	readonly settings?: ValueSettings
+}
+
+/**
+ * What opening a draft would do to each of its fields, with `rename` as given: for a screen that
+ * lets the user map the fields of a draft saved under another schema before it opens.
+ *
+ * @throws TabulaError `invalid_argument` or `unknown_field` for a rename `openDraft` refuses
+ */
+export function mapDraft(draft: Draft, schema: ModuleSchema, options: MapDraftOptions = {}): DraftMapping {
+	const rename = renames(draft, schema, options.rename ?? {})
+	const settings = options.settings ?? VALUE_SETTINGS.tr
+	const targets = new Set<string>()
+	let losing = 0
+
+	const fields = draft.fields.map(field => {
+		const to = rename.get(field.key) ?? field.key
+		const target = schema.has(to) ? to : null
+		const values = draft.rows.map(row => row.values[field.key] ?? null).filter(value => value !== null)
+		const moved = target !== null && (target !== field.key || schema.field(target).type !== field.type)
+		const unreadable = moved
+			? values.filter(value => valueProblem(schema.field(target), value, settings) !== null).length
+			: 0
+
+		if (target !== null) {
+			targets.add(target)
+		}
+
+		return Object.freeze({
+			key: field.key,
+			label: field.label ?? null,
+			type: field.type,
+			target,
+			filled: values.length,
+			samples: Object.freeze(values.slice(0, 3)),
+			unreadable
+		})
+	})
+
+	const dropped = new Set(fields.filter(field => field.target === null).map(field => field.key))
+
+	for (const row of draft.rows) {
+		if (Object.entries(row.values).some(([key, value]) => value !== null && dropped.has(key))) {
+			losing++
+		}
+	}
+
+	return Object.freeze({
+		fields: Object.freeze(fields),
+		added: Object.freeze(schema.fields.filter(field => !targets.has(field.key)).map(field => field.key)),
+		losing
+	})
+}
+
+/**
+ * The renames that look meant: each field the schema no longer has, paired with a new field of the
+ * same type whose name shares a word with its own ("Fiyat" and "Yeni fiyat", "price" and
+ * "newPrice"), the closest first, each new field taken once. A suggestion for the user to confirm,
+ * never applied on its own.
+ */
+export function suggestRenames(draft: Draft, schema: ModuleSchema): Record<string, string> {
+	const kept = new Set(draft.fields.map(field => field.key))
+	const fresh = schema.fields.filter(field => !kept.has(field.key))
+	const pairs: { readonly from: string; readonly to: string; readonly score: number }[] = []
+
+	for (const old of draft.fields.filter(field => !schema.has(field.key))) {
+		for (const field of fresh) {
+			const score = field.type === old.type ? likeness(old, field) : 0
+
+			if (score > 0) {
+				pairs.push({ from: old.key, to: field.key, score })
+			}
+		}
+	}
+
+	pairs.sort((a, b) => b.score - a.score)
+
+	const result: Record<string, string> = {}
+	const taken = new Set<string>()
+
+	for (const pair of pairs) {
+		if (!(pair.from in result) && !taken.has(pair.to)) {
+			result[pair.from] = pair.to
+			taken.add(pair.to)
+		}
+	}
+
+	return result
+}
+
+/** How alike two fields' names are: shared words of their labels count double, of their keys once. */
+function likeness(old: DraftField, field: FieldSchema): number {
+	const shared = (a: readonly string[], b: readonly string[]): number => a.filter(word => b.includes(word)).length
+
+	return 2 * shared(words(old.label ?? ""), words(field.label)) + shared(keyWords(old.key), keyWords(field.key))
+}
+
+function words(text: string): string[] {
+	return text
+		.toLocaleLowerCase("tr")
+		.split(/[^\p{L}\p{N}]+/u)
+		.filter(word => word.length > 1)
+}
+
+/** "newPrice", "new_price" and "new-price" alike: new, price. */
+function keyWords(key: string): string[] {
+	return words(key.replace(/([a-z0-9])([A-Z])/g, "$1 $2"))
+}
+
 /** What moved on between the draft's schema and this one; null when nothing did. */
 function compare(draft: Draft, schema: ModuleSchema, rename: ReadonlyMap<string, string>): DraftChanges | null {
 	const old = new Map(draft.fields.map(field => [rename.get(field.key) ?? field.key, field] as const))
@@ -315,7 +459,9 @@ export function readDraft(input: unknown): Draft {
 			return []
 		}
 
-		return [{ key: text(field.key, `fields[${index}].key`), type: type as FieldType }]
+		const label = field.label === undefined ? undefined : text(field.label, `fields[${index}].label`)
+
+		return [{ key: text(field.key, `fields[${index}].key`), type: type as FieldType, ...(label ? { label } : {}) }]
 	})
 
 	const rows = list(root.rows, "rows", problem).flatMap((item, index) => {

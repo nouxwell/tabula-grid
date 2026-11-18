@@ -46,6 +46,11 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
   (`TabulaPreview` in an `AppModal`): how many rows make a new price line, change one or leave
   one as it is, and each row's fields from the old value to the new. Choosing a row goes to it;
   "N satırı uygula" sends the rows.
+- **An older draft.** A draft saved under another schema opens "Taslak eski bir şemayla
+  kaydedilmiş" (`TabulaDraftMapping` in an `AppModal` that only its buttons close): each field
+  the schema lost, mapped to a new one (the likely one suggested) or dropped, with its first
+  values and what would be lost. "Taslağı aç" opens the draft so mapped and saves it under the new
+  schema; "Taslağı sil, sunucudan aç" lets it go. Nothing is saved while the window is open.
 - **Working on many rows.** "Yüzde uygula", "Tutar ekle" and "Yuvarla" change the numbers
   selected in one step; "Satırları sil" and Ctrl+− take rows out. Cells changed since the rows
   were loaded are marked, "Değişenler" shows only their rows, and the search finds a product, a

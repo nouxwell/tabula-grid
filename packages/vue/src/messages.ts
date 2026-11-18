@@ -216,6 +216,68 @@ export const PREVIEW_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, s
 	}
 }
 
+/** The words of the review of a draft saved under another schema. `{n}` and the like are filled in. */
+export const DRAFT_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, string>>>> = {
+	tr: {
+		saved: "{date} tarihinde kaydedildi · {rows} satır · şema {from}. sürüm, şimdi {to}. sürüm",
+		fromHead: "Taslaktaki alan",
+		toHead: "Şimdiki alan",
+		drop: "Bırak, değerler silinir",
+		otherType: "tür farklı",
+		suggested: "Önerilen",
+		moves: "{n} değer taşınır",
+		losing: "{n} satırdaki değer silinecek",
+		noValues: "Değeri yok",
+		retyped: "Türü değişti: {from} → {to}",
+		unreadable: "{n} değer yeni türde okunamıyor; açılınca işaretlenir",
+		added: "Yeni alan",
+		addedNote: "boş açılır",
+		same: "{n} alan aynı",
+		mapped: "{n} alan eşlendi",
+		dropped: "{n} alan bırakılıyor",
+		string: "Metin",
+		integer: "Tam sayı",
+		decimal: "Ondalık",
+		money: "Para",
+		quantity: "Miktar",
+		percent: "Yüzde",
+		bool: "Evet/Hayır",
+		date: "Tarih",
+		datetime: "Tarih ve saat",
+		options: "Seçenek",
+		lookup: "Kayıt"
+	},
+	en: {
+		saved: "Saved {date} · {rows} rows · schema version {from}, now {to}",
+		fromHead: "Field in the draft",
+		toHead: "Field now",
+		drop: "Drop, values are deleted",
+		otherType: "other type",
+		suggested: "Suggested",
+		moves: "{n} values move",
+		losing: "Values in {n} rows will be deleted",
+		noValues: "No values",
+		retyped: "Type changed: {from} → {to}",
+		unreadable: "{n} values cannot be read as the new type; they open marked",
+		added: "New field",
+		addedNote: "opens empty",
+		same: "{n} fields unchanged",
+		mapped: "{n} fields mapped",
+		dropped: "{n} fields dropped",
+		string: "Text",
+		integer: "Whole number",
+		decimal: "Decimal",
+		money: "Money",
+		quantity: "Quantity",
+		percent: "Percent",
+		bool: "Yes/no",
+		date: "Date",
+		datetime: "Date and time",
+		options: "Option",
+		lookup: "Record"
+	}
+}
+
 /** The words of the formula bar and the status bar. */
 export const BAR_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, string>>>> = {
 	tr: {

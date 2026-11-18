@@ -573,6 +573,34 @@
 			</template>
 		</AppModal>
 
+		<AppModal
+			v-model:show="reviewOpen"
+			title="Taslak eski bir şemayla kaydedilmiş"
+			width="760px"
+			:closable="false"
+			:mask-closable="false"
+			:close-on-esc="false"
+		>
+			<AppModalScrollWrapper>
+				<TabulaDraftMapping
+					v-if="reviewing"
+					v-model:rename="draftRename"
+					:draft="reviewing.draft"
+					:schema="reviewing.schema"
+					:theme="theme"
+					:locale="locale"
+					:value-settings="valueSettings"
+				/>
+			</AppModalScrollWrapper>
+			<template #footer>
+				<div class="flex flex-wrap items-center justify-end gap-2">
+					<span class="mr-auto text-sm text-muted">Açılana kadar taslağa dokunulmaz.</span>
+					<AppButton type="error" ghost @click="dropReviewed">Taslağı sil, sunucudan aç</AppButton>
+					<AppButton type="primary" @click="openReviewed">Taslağı aç</AppButton>
+				</div>
+			</template>
+		</AppModal>
+
 		<AppModal v-model:show="removeOpen" title="Görünümü sil" width="440px">
 			<AppModalScrollWrapper>
 				<p class="m-0">
@@ -591,6 +619,7 @@
 
 <script setup lang="ts">
 import {
+	suggestRenames,
 	VALUE_SETTINGS,
 	VIEW_NAME_LIMIT,
 	viewNameProblem,
@@ -602,6 +631,8 @@ import {
 	type ColumnSort,
 	type ModuleSchemaInput,
 	type Adjustment,
+	type Draft,
+	type ModuleSchema,
 	type ProcessPlan,
 	type RowId,
 	type RowInit,
@@ -612,7 +643,7 @@ import { useMessage, type DropdownOption } from "naive-ui"
 import { h } from "vue"
 import AppIcon from "~/components/atoms/AppIcon.vue"
 import { localeMenu, type Locale } from "~/utils/locales"
-import type { ImportResult, Sheet } from "~/utils/sheet"
+import { discardDraft, type ImportResult, type Sheet } from "~/utils/sheet"
 import { FIT_TOOLTIP_STYLE } from "~/utils/tooltip"
 
 // The schema comes with the page: the server draws the title and the shell from it. The rows only
@@ -698,7 +729,9 @@ function makeSheet(
 	rowList: readonly RowInit[],
 	carried?: readonly RowInit[],
 	/** A template to show in place of the saved one, keeping the columns as the user has them. */
-	preview?: { readonly template: unknown }
+	preview?: { readonly template: unknown },
+	/** The kept draft, opened with its fields mapped as the user chose. */
+	draft?: { readonly rename: Readonly<Record<string, string>> }
 ): void {
 	const template = preview ? preview.template : (templates.value?.find(item => item.id === templateId.value) ?? null)
 	const made = createSheet(
@@ -707,7 +740,7 @@ function makeSheet(
 		locale,
 		{ columns, widths },
 		// The server's rows: what the user's changes are told against, whichever rows the sheet opens with.
-		{ template, carried: carried !== undefined, baseline: rowList }
+		{ template, carried: carried !== undefined, baseline: rowList, ...(draft ? { draft } : {}) }
 	)
 
 	sheetKey.value++
@@ -720,6 +753,47 @@ function makeSheet(
 	if (made.templateError) {
 		message.error("Şablon uygulanamadı; tablo modül şemasıyla açıldı.")
 	}
+
+	// A draft saved under another schema: the user maps its fields, or lets it go, before anything is saved.
+	if (made.review) {
+		reviewing.value = { draft: made.review.draft, schema: made.schema }
+		draftRename.value = suggestRenames(made.review.draft, made.schema)
+		reviewOpen.value = true
+	}
+}
+
+/** A kept draft saved under another schema, while the user decides about it. */
+const reviewing = shallowRef<{ readonly draft: Draft; readonly schema: ModuleSchema } | null>(null)
+const reviewOpen = ref(false)
+const draftRename = ref<Readonly<Record<string, string>>>({})
+
+/** Opens the kept draft with its fields mapped as chosen. */
+function openReviewed(): void {
+	if (!input.value || !rows.value) {
+		return
+	}
+
+	const mapped = Object.keys(draftRename.value).length
+
+	reviewOpen.value = false
+	sheet.value?.dispose()
+	makeSheet(input.value, rows.value, undefined, undefined, { rename: draftRename.value })
+	// Kept at once under the schema it now fits, so it does not come back for review.
+	void sheet.value?.saver.save()
+	message.success(mapped > 0 ? `Taslak açıldı; ${mapped} alan eşlendi.` : "Taslak açıldı.")
+}
+
+/** Lets the kept draft go, and goes on with the server's rows, already on screen. */
+function dropReviewed(): void {
+	if (!input.value || !rows.value) {
+		return
+	}
+
+	discardDraft()
+	reviewOpen.value = false
+	sheet.value?.dispose()
+	makeSheet(input.value, rows.value)
+	message.info("Taslak silindi; tablo sunucudaki satırlarla açık.")
 }
 
 // Made once the rows are in the browser.

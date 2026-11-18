@@ -36,6 +36,8 @@ const validator = new SheetValidator(schema, store, VALUE_SETTINGS.tr)
 - **`TabulaFormulaBar`** shows the active cell's address and value, goes to an address typed into
   it, and writes a value typed there, as a spreadsheet's formula bar.
 - **`TabulaStatusBar`** counts the rows and issues and sums and averages the numbers selected.
+- **`TabulaDraftMapping`** maps the fields of a draft saved under an older schema before it opens:
+  where each field the schema lost goes, its first values, and what would be lost or unreadable.
 - **`TabulaPreview`** shows what a run would do before it is sent: new records, updates from the
   old value to the new, and the rows that would not change, as the backend's check said.
 

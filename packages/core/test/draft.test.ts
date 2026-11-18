@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
 	createDraft,
 	DraftSaver,
+	mapDraft,
 	ModuleSchema,
 	openDraft,
 	readDraft,
 	RowStore,
 	SheetSession,
+	suggestRenames,
 	TabulaError,
 	type Draft,
 	type ModuleSchemaInput,
@@ -240,6 +242,79 @@ describe("drafts", () => {
 
 		expect(codeOf(() => openDraft(draft, renamed, { rename: { aisle: "location" } }))).toBe("invalid_argument")
 		expect(codeOf(() => openDraft(draft, renamed, { rename: { shelf: "bin" } }))).toBe("unknown_field")
+	})
+
+	describe("mapping a draft's fields before it opens", () => {
+		const before = ModuleSchema.from({
+			module: "inventory.count",
+			schemaVersion: 1,
+			fields: [
+				{ key: "product", type: "lookup", lookup: "product", label: "Ürün" },
+				{ key: "counted", type: "decimal", label: "Sayılan adet" },
+				{ key: "shelf", type: "string", label: "Raf" },
+				{ key: "note", type: "string", label: "Not" }
+			]
+		})
+		const after = ModuleSchema.from({
+			module: "inventory.count",
+			schemaVersion: 2,
+			fields: [
+				{ key: "product", type: "lookup", lookup: "product", label: "Ürün" },
+				{ key: "counted", type: "integer", label: "Sayılan adet" },
+				{ key: "location", type: "string", label: "Raf yeri" },
+				{ key: "comment", type: "string", label: "Açıklama" }
+			]
+		})
+		const draft = createDraft({
+			id: "d_1",
+			schema: before,
+			store: new RowStore({
+				createRowId: (() => {
+					let next = 0
+
+					return () => `row_${++next}`
+				})(),
+				rows: [
+					{ values: { product: { id: 7, label: "Termos" }, counted: "12", shelf: "A-1", note: "kırık" } },
+					{ values: { product: { id: 8, label: "Kupa" }, counted: "2.5", shelf: "B-2" } },
+					{ values: { product: { id: 9, label: "Matara" }, counted: "40" } }
+				]
+			})
+		})
+
+		it("keeps each field's label, and reads a draft saved before labels were kept", () => {
+			expect(draft.fields[2]).toEqual({ key: "shelf", type: "string", label: "Raf" })
+
+			const old = stored(draft) as { fields: { label?: string }[] }
+
+			old.fields.forEach(field => delete field.label)
+
+			expect(mapDraft(readDraft(old), after).fields[2]).toMatchObject({ key: "shelf", label: null })
+		})
+
+		it("suggests a rename only to a field of the same type whose name shares a word", () => {
+			// "Raf" and "Raf yeri" share a word; "Not" and "Açıklama" share none, so nothing is guessed.
+			expect(suggestRenames(draft, after)).toEqual({ shelf: "location" })
+		})
+
+		it("says where each field goes, what it holds, what the new type cannot read and what is lost", () => {
+			const mapping = mapDraft(draft, after, { rename: { shelf: "location" } })
+
+			expect(mapping.fields.map(field => [field.key, field.target, field.filled, field.unreadable])).toEqual([
+				["product", "product", 3, 0],
+				// Now whole numbers: 2.5 is not one, and opens marked.
+				["counted", "counted", 3, 1],
+				["shelf", "location", 2, 0],
+				["note", null, 1, 0]
+			])
+			expect(mapping.fields[2]?.samples).toEqual(["A-1", "B-2"])
+			expect(mapping.added).toEqual(["comment"])
+			expect(mapping.losing).toBe(1)
+
+			// Without the rename the shelf is dropped too.
+			expect(mapDraft(draft, after).losing).toBe(2)
+			expect(codeOf(() => mapDraft(draft, after, { rename: { shelf: "bin" } }))).toBe("unknown_field")
+		})
 	})
 
 	it("opens a processed row locked, and a run that never answered still unknown, to be sent again as it was", async () => {

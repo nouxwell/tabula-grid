@@ -1672,6 +1672,54 @@ describe("TabulaGrid", () => {
 			})
 		})
 
+		it("maps a field the schema renamed since, suggested by its name, and opens the draft with it", async () => {
+			await withPage(5, async page => {
+				await type(page, 0, 8, "hasarlı koli")
+				await expect.poll(() => draftStatus(page), { timeout: 5000 }).toMatch(/^Taslak kaydedildi/)
+
+				// As if saved when the note was "comment", labelled "Not": the schema calls it "note" now.
+				await page.evaluate(key => {
+					const draft = JSON.parse(localStorage.getItem(key) ?? "{}")
+
+					draft.schemaVersion = 0
+					draft.fields = draft.fields.map((field: { key: string }) =>
+						field.key === "note" ? { key: "comment", type: "string", label: "Not" } : field
+					)
+					draft.rows = draft.rows.map((row: { values: Record<string, unknown> }) => {
+						const { note, ...values } = row.values
+
+						return { ...row, values: { ...values, comment: note ?? null } }
+					})
+					localStorage.setItem(key, JSON.stringify(draft))
+				}, KEY)
+
+				await reloading(page, () => page.reload())
+
+				const mapping = page.locator(".tabula-mapping")
+
+				await expect(mapping.locator("select").inputValue()).resolves.toBe("note")
+				await expect(mapping.locator(".tabula-mapping-tag.is-suggested").innerText()).resolves.toBe("Önerilen")
+				// Its first values, to know it by: the note typed first, then the sample rows' own.
+				await expect(mapping.locator(".tabula-mapping-samples").first().innerText()).resolves.toMatch(
+					/^hasarlı koli · /
+				)
+				await expect(mapping.locator(".tabula-mapping-summary").innerText()).resolves.toBe("1 alan eşlendi")
+
+				// Dropped instead: the values it holds would go, and the panel says how many.
+				await mapping.locator("select").selectOption("")
+				await expect(mapping.locator(".tabula-mapping-tag.is-lost").innerText()).resolves.toMatch(
+					/^\d+ satırdaki değer silinecek$/
+				)
+				await mapping.locator("select").selectOption("note")
+
+				await reloading(page, () => page.locator(".playground-open-anyway").click())
+
+				await expect(page.locator(".tabula-mapping").count()).resolves.toBe(0)
+				await expect(valueAt(page, 0, "note")).resolves.toBe("hasarlı koli")
+				await expect(page.evaluate(() => location.search)).resolves.toBe("?rows=5")
+			})
+		})
+
 		it("starts a fresh sheet when the draft is thrown away", async () => {
 			await withPage(5, async page => {
 				const sample = await valueAt(page, 0, "newPrice")

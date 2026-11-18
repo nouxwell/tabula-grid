@@ -9,6 +9,16 @@ The three packages are versioned together.
 
 ### Added
 
+- **Mapping an older draft's fields.** A draft now keeps each field's label (`DraftField.label`;
+  drafts saved before read as they were). `mapDraft` says what opening a draft would do to each
+  field, its first values, the rows that lose a value and the values a new type cannot read;
+  `suggestRenames` pairs a field the schema lost with a new one of the same type and a shared
+  word in its name. `TabulaDraftMapping` in the Vue package draws it, with a list to map or drop
+  each field (design J, canvas items 49 and 51–55). The example opens it for a draft saved under
+  another schema, keeps the draft untouched and saves nothing until the user decides, then opens
+  the draft with its fields mapped and saves it under the new schema, or lets it go. Before, it
+  opened the server's rows instead and wrote over the draft at its next save.
+
 - **What the user changed.** `SheetChanges` in the core follows each cell that holds other than it
   did when the sheet was loaded, and each row added, compared as the backend reads values;
   matched by a key field, a draft opened later shows its changes against the server's rows.

@@ -194,8 +194,8 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
 - **Themes.** `light`, `dark` or `auto`, in colours an application changes (see below).
 
 With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>`, `<TabulaIssues>`,
-`<TabulaFormulaBar>`, `<TabulaStatusBar>` and `<TabulaPreview>` are available everywhere, drawn in
-the browser only.
+`<TabulaFormulaBar>`, `<TabulaStatusBar>`, `<TabulaPreview>` and `<TabulaDraftMapping>` are
+available everywhere, drawn in the browser only.
 
 ### The formula bar and the status bar
 
@@ -704,6 +704,28 @@ and opens with `{ accept: true }` once the user agrees, `rename` carrying a rena
 values to its new key. Every value is then checked again. A processed row opens locked, and a run
 that never answered opens `unknown`, to be sent again under its key: closing the page mid-run
 cannot lead to the rows being processed twice.
+
+### Mapping the fields of an older draft
+
+A draft keeps each field's label with its key, so a field the schema has dropped since is still
+known by name. `mapDraft(draft, schema, { rename })` says what opening it would do to each field:
+where its values go (its own field, the one it is renamed to, or nowhere), how many rows hold a
+value, its first values, and how many of them a field of another type cannot read; with the new
+fields that open empty and the rows that lose a value. `suggestRenames(draft, schema)` pairs each
+field the schema lost with a new field of the same type whose name shares a word with its own
+("Fiyat" and "Yeni fiyat", `price` and `newPrice`): a suggestion to show, never applied alone.
+
+```vue
+<TabulaDraftMapping v-model:rename="rename" :draft="draft" :schema="schema" />
+<!-- rename starts as suggestRenames(draft, schema); then openDraft(draft, schema, { accept: true, rename }) -->
+```
+
+`TabulaDraftMapping` draws it: each field the schema lost, with its type, key and first values,
+and a list to map it to a new field or drop it, saying how many values move or how many rows lose
+one; the fields whose type changed, with how many values the new type cannot read; the new
+fields; and the ones unchanged in a line. The host puts it in a window with the buttons to open
+the draft or let it go, and keeps the draft untouched until then: the example saves nothing while
+the window is open, and saves the draft under the new schema once it opens.
 
 ## Saved views
 

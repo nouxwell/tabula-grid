@@ -28,6 +28,7 @@ import {
 	withDefaults,
 	type ColumnLayout,
 	type Draft,
+	type DraftChanges,
 	type GridTemplate,
 	type LookupAdapters,
 	type ModuleSchemaInput,
@@ -69,12 +70,30 @@ async function storeDraft(draft: Draft): Promise<void> {
 	localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
 }
 
-/** The kept draft, opened against the schema as it is now; null when there is none or it cannot be read. */
-function openKept(schema: ModuleSchema): ReturnType<typeof openDraft> | null {
+/** Lets the kept draft go, when the user would rather start from the server's rows. */
+export function discardDraft(): void {
+	localStorage.removeItem(DRAFT_KEY)
+}
+
+/**
+ * The kept draft, opened against the schema as it is now, or come back for review when the schema
+ * moved on; with `rename`, opened anyway, its fields mapped as the user chose. Null when there is
+ * none or it cannot be read.
+ */
+function openKept(
+	schema: ModuleSchema,
+	rename?: Readonly<Record<string, string>>
+): { readonly draft: Draft; readonly opening: ReturnType<typeof openDraft> } | null {
 	const kept = storedDraft()
 
 	try {
-		return kept === null ? null : openDraft(readDraft(kept), schema)
+		if (kept === null) {
+			return null
+		}
+
+		const draft = readDraft(kept)
+
+		return { draft, opening: openDraft(draft, schema, rename ? { accept: true, rename } : {}) }
 	} catch {
 		return null
 	}
@@ -101,13 +120,22 @@ export interface ImportResult extends Pick<TableImport, "columns" | "missing" | 
  *
  * What the user changed is told against `baseline`, the server's rows, matched by product: a draft
  * opened on another day still shows what it changed.
+ *
+ * A draft saved under another schema is not opened, nor is it written over: `review` holds it, the
+ * sheet opens with the server's rows and saves nothing until the user decides. Made again with
+ * `draft.rename`, the sheet opens the draft with its fields mapped so.
  */
 export function createSheet(
 	input: ModuleSchemaInput,
 	rows: readonly RowInit[],
 	locale: Ref<ValueLocale>,
 	layout: { readonly columns: Ref<ColumnLayout>; readonly widths: Ref<Readonly<Record<string, number>>> },
-	options: { readonly template?: unknown; readonly carried?: boolean; readonly baseline?: readonly RowInit[] } = {}
+	options: {
+		readonly template?: unknown
+		readonly carried?: boolean
+		readonly baseline?: readonly RowInit[]
+		readonly draft?: { readonly rename: Readonly<Record<string, string>> }
+	} = {}
 ) {
 	const { columns, widths } = layout
 	const moduleSchema = ModuleSchema.from(input)
@@ -125,8 +153,11 @@ export function createSheet(
 		}
 	}
 
-	const opening = options.carried ? null : openKept(schema)
+	const kept = options.carried ? null : openKept(schema, options.draft?.rename)
+	const opening = kept?.opening ?? null
 	const opened = opening?.status === "opened" ? opening : null
+	const review: { readonly draft: Draft; readonly changes: DraftChanges } | null =
+		kept && opening?.status === "review" ? { draft: kept.draft, changes: opening.changes } : null
 	const store = new RowStore({ rows: opened ? opened.rows : applyFormulas(schema, rows) })
 	const formulas = new FormulaEngine({ schema, store })
 	const validator = new SheetValidator(schema, store, VALUE_SETTINGS[locale.value])
@@ -152,7 +183,8 @@ export function createSheet(
 		schema,
 		store,
 		session,
-		save: storeDraft,
+		// The kept draft waits for the user's word: nothing is written over it meanwhile.
+		save: review ? async () => {} : storeDraft,
 		view: () => ({ columnWidths: widths.value, columns: columns.value })
 	})
 
@@ -262,6 +294,8 @@ export function createSheet(
 		view,
 		saver,
 		changes,
+		/** A kept draft saved under another schema, waiting for the user to map its fields or let it go. */
+		review,
 		/** Whether a kept draft was opened, with the columns the user had. */
 		restored: opened !== null,
 		/** The template the sheet works with, and why one asked for could not be. */

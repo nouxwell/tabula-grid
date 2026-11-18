@@ -179,6 +179,14 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 46  | The issues as a table in a bottom panel, with tabs  | package     | not chosen         |
 | 47  | Workflow steps over the sheet                       | application | not chosen         |
 | 48  | Type marks in cells (⌄, calendar, switch)           | package     | not chosen         |
+| 49  | A window mapping an older draft's fields (J)        | both        | done (phase two)   |
+| 50  | A warning strip, the mapping in a drawer (K)        | application | not chosen         |
+| 51  | Renames suggested by type and name                  | package     | done (phase two)   |
+| 52  | Each field's first values                           | package     | done (phase two)   |
+| 53  | Values lost, and values the new type cannot read    | package     | done (phase two)   |
+| 54  | Field labels kept in drafts                         | package     | done (phase two)   |
+| 55  | The draft kept untouched until the user decides     | application | done (phase two)   |
+| 56  | Renames declared by the schema (`renamedFrom`)      | package     | not chosen         |
 | —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
 | —   | Saved views (personal views)                        | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)      | both        | done (phase two)   |

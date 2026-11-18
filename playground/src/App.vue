@@ -20,6 +20,7 @@ import {
 	SheetChanges,
 	SheetSession,
 	SheetValidator,
+	suggestRenames,
 	UndoHistory,
 	VALUE_SETTINGS,
 	type Draft,
@@ -35,6 +36,7 @@ import {
 import {
 	TabulaFormulaBar,
 	TabulaGrid,
+	TabulaDraftMapping,
 	TabulaIssues,
 	TabulaPreview,
 	TabulaStatusBar,
@@ -56,7 +58,8 @@ const channels = params.get("channels") === "1"
 const schema = ModuleSchema.from(channels ? withChannels(priceUpdate) : priceUpdate)
 
 // A draft left from last time is opened, unless the schema has moved on since: then the user sees
-// what changed and decides. `accept=1` is that decision, taken from the address once it is used.
+// what changed, maps the fields that went, and decides. `accept=1` is that decision, and `rename`
+// the mapping, as JSON, both taken from the address once used.
 const stored = loadStoredDraft()
 let draft: Draft | null = null
 let opening: DraftOpening | null = null
@@ -65,19 +68,25 @@ let draftProblem: string | null = null
 if (stored !== null) {
 	try {
 		draft = readDraft(stored)
-		opening = openDraft(draft, schema, { accept: params.get("accept") === "1" })
+		opening = openDraft(draft, schema, {
+			accept: params.get("accept") === "1",
+			rename: JSON.parse(params.get("rename") ?? "{}") as Record<string, string>
+		})
 	} catch (error) {
 		draftProblem = error instanceof Error ? error.message : String(error)
 	}
 }
 
-if (params.has("accept")) {
+if (params.has("accept") || params.has("rename")) {
 	params.delete("accept")
+	params.delete("rename")
 	window.history.replaceState(null, "", `${location.pathname}${params.size > 0 ? `?${params}` : ""}`)
 }
 
 const opened = opening?.status === "opened" ? opening : null
 const review = opening?.status === "review" ? opening.changes : null
+/** Where the fields the schema lost go, as the user maps them; the likely renames to start with. */
+const draftRename = ref<Readonly<Record<string, string>>>(review && draft ? suggestRenames(draft, schema) : {})
 // Formula fields worked out before the store exists: opening the sheet is no change of the user's.
 const store = new RowStore({ rows: opened ? opened.rows : applyFormulas(schema, sampleRows(rowCount, { channels })) })
 // Keeps them worked out as the sheet changes; what it writes joins the edit's undo step.
@@ -168,6 +177,11 @@ window.addEventListener("pagehide", flush)
 
 function openAnyway(): void {
 	params.set("accept", "1")
+
+	if (Object.keys(draftRename.value).length > 0) {
+		params.set("rename", JSON.stringify(draftRename.value))
+	}
+
 	location.search = params.toString()
 }
 
@@ -670,6 +684,16 @@ onMounted(() => {
 				{{ words.openAnyway }}
 			</button>
 			<button type="button" class="playground-discard" @click="startOver">{{ words.discard }}</button>
+			<TabulaDraftMapping
+				v-if="review && draft"
+				v-model:rename="draftRename"
+				class="playground-mapping"
+				:draft="draft"
+				:schema="schema"
+				:theme="theme"
+				:locale="language"
+				:value-settings="valueSettings"
+			/>
 		</div>
 		<div v-if="plan" class="playground-preview">
 			<TabulaPreview
@@ -823,6 +847,17 @@ body {
 	border-radius: 4px;
 	background: #fdf3dc;
 	color: #4d3800;
+	font-size: 13px;
+}
+
+.playground-mapping {
+	flex-basis: 100%;
+	max-height: 40vh;
+	padding: 10px 12px;
+	overflow: auto;
+	border-radius: 4px;
+	background: #ffffff;
+	color: #000000;
 	font-size: 13px;
 }
 

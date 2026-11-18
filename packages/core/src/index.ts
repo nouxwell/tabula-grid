@@ -179,14 +179,17 @@ export type {
 	StatusQuery
 } from "./contract.js"
 
-export { createDraft, DRAFT_FORMAT, DRAFT_VERSION, openDraft, readDraft } from "./draft.js"
+export { createDraft, DRAFT_FORMAT, DRAFT_VERSION, mapDraft, openDraft, readDraft, suggestRenames } from "./draft.js"
 export type {
 	CreateDraftOptions,
 	Draft,
 	DraftChanges,
 	DraftField,
+	DraftFieldMapping,
+	DraftMapping,
 	DraftOpening,
 	DraftView,
+	MapDraftOptions,
 	OpenDraftOptions
 } from "./draft.js"
 
