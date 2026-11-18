@@ -709,10 +709,16 @@ const saver = new DraftSaver({
   view: () => ({ columnWidths: widths.value })
 })
 // Saves a moment after the user stops changing the sheet (2 s by default), and on saver.save().
+
+// What waits is saved before the page goes, so a reload right after a change keeps it.
+window.addEventListener("pagehide", () => void saver.flush())
 ```
 
 The draft's id is made in the browser, so saving the same draft again replaces it; a save whose
 answer was lost makes no second draft. A save that fails leaves the sheet as it is and says so.
+A save that writes at once, such as to the browser's storage, is done before the page goes; one
+sent to a backend may not be, so a hidden page (`visibilitychange`) is a good moment to flush too.
+A saver disposed of saves no more: a sheet made again over the same rows saves them with its own.
 
 Opening one checks it against the schema as it is now:
 

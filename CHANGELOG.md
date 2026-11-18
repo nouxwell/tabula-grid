@@ -20,6 +20,13 @@ The three packages are versioned together.
   its own template; checks and runs are about the open sheet (canvas items 63, 65, 67, 68, 70 and
   71, design R).
 
+### Fixed
+
+- **The example keeps a change made just before the page goes.** A reload, a closed tab or a
+  page put out of sight within two seconds of a change, the saver's delay, lost it; so did
+  choosing or saving a template in that time. It now saves what waits on `pagehide` and when the
+  page is hidden, and a sheet made again saves the rows it carried at once.
+
 ## [0.2.1] — 2026-11-18
 
 A patch: the grid keeps the user's place when it is made again over the same rows, the example's

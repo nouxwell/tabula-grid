@@ -733,7 +733,7 @@ import {
 	type TabulaGrid as Grid
 } from "@nouxwell/tabula-vue"
 import { useMessage, type DropdownOption } from "naive-ui"
-import { refDebounced } from "@vueuse/core"
+import { refDebounced, useEventListener } from "@vueuse/core"
 import { h } from "vue"
 import AppCard from "~/components/atoms/AppCard.vue"
 import AppIcon from "~/components/atoms/AppIcon.vue"
@@ -1171,9 +1171,11 @@ watch(templateId, () => {
 	}
 
 	const carried = current.store.snapshot()
+	const unsaved = current.saver.dirty
 
 	current.dispose()
 	makeSheet(input.value, rows.value, carried)
+	saveCarried(unsaved)
 
 	const name = sheet.value?.template?.name
 
@@ -1188,6 +1190,27 @@ onBeforeUnmount(() => {
 	stopMedia?.()
 	sheet.value?.dispose()
 })
+
+/**
+ * A sheet made again over the rows it had stops saving with it. A change it had not saved yet is
+ * saved by the new one at once, under its schema, rather than when the user next changes something.
+ */
+function saveCarried(unsaved: boolean): void {
+	if (unsaved) {
+		void sheet.value?.saver.save()
+	}
+}
+
+// What waits to be saved is written as the page goes away or out of sight, not two seconds later:
+// a reload or a closed tab right after a change keeps it.
+const saveWaiting = (): void => void sheet.value?.saver.flush()
+
+useEventListener("pagehide", saveWaiting)
+useEventListener(
+	() => (import.meta.client ? document : null),
+	"visibilitychange",
+	() => document.visibilityState === "hidden" && saveWaiting()
+)
 
 watch(onlyIssueRows, only => sheet.value?.onlyIssueRows(only))
 
@@ -1357,9 +1380,11 @@ async function saveTemplate(template: unknown): Promise<boolean> {
 	await refreshTemplates()
 
 	const carried = sheet.value.store.snapshot()
+	const unsaved = sheet.value.saver.dirty
 
 	sheet.value.dispose()
 	makeSheet(input.value, rows.value, carried)
+	saveCarried(unsaved)
 	message.success("Şablon kaydedildi; kurallar tabloda.")
 
 	return true
