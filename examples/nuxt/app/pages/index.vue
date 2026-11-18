@@ -50,7 +50,7 @@
 						<span><AppTag>Taslak</AppTag></span>
 					</template>
 					<AppFitText
-						text="Bir taslak üzerinde çalışıyorsunuz: İşle'ye basana kadar hiçbir kayıt değişmez. Taslak bu tarayıcıda saklanır."
+						text="Bir taslak üzerinde çalışıyorsunuz: Değişiklikleri uygula'ya basana kadar hiçbir kayıt değişmez. Taslak bu tarayıcıda saklanır."
 					/>
 				</AppTooltip>
 				<span v-if="sheet" class="hidden text-sm text-muted md:inline">
@@ -72,15 +72,22 @@
 						<template #icon><AppIcon name="check" :size="16" /></template>
 						Kontrol et
 					</AppButton>
-					<AppButton
-						type="primary"
-						:disabled="!sheet"
-						:loading="phase === 'processing' || preparing"
-						@click="process"
-					>
-						<template #icon><AppIcon name="play" :size="16" /></template>
-						İşle
-					</AppButton>
+					<AppTooltip :disabled="errors === 0">
+						<template #trigger>
+							<span>
+								<AppButton
+									type="primary"
+									:disabled="!sheet || errors > 0"
+									:loading="phase === 'processing' || preparing"
+									@click="process"
+								>
+									<template #icon><AppIcon name="play" :size="16" /></template>
+									Değişiklikleri uygula
+								</AppButton>
+							</span>
+						</template>
+						{{ blockedText }}
+					</AppTooltip>
 				</div>
 			</div>
 
@@ -190,9 +197,118 @@
 							<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
 						</AppButton>
 					</AppDropdown>
+					<span class="mx-1 hidden h-5 w-px bg-divider md:block" aria-hidden="true" />
+					<AppTooltip>
+						<template #trigger>
+							<AppButton
+								:size="controlSize"
+								:disabled="!sheet"
+								class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+								@click="openAdjust('percent')"
+							>
+								<template #icon><AppIcon name="percent" /></template>
+								<span class="hidden md:inline">Yüzde uygula</span>
+								<span class="sr-only md:hidden">Yüzde uygula</span>
+							</AppButton>
+						</template>
+						Seçili sayıları bir oranda artırır ya da azaltır.
+					</AppTooltip>
+					<AppTooltip>
+						<template #trigger>
+							<AppButton
+								:size="controlSize"
+								:disabled="!sheet"
+								class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+								@click="openAdjust('add')"
+							>
+								<template #icon><AppIcon name="plus" /></template>
+								<span class="hidden md:inline">Tutar ekle</span>
+								<span class="sr-only md:hidden">Tutar ekle</span>
+							</AppButton>
+						</template>
+						Seçili sayılara bir tutar ekler; eksi tutar düşer.
+					</AppTooltip>
+					<AppDropdown :options="roundOptions" @select="chooseRound">
+						<AppButton
+							:size="controlSize"
+							:disabled="!sheet"
+							class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+						>
+							<template #icon><AppIcon name="round" /></template>
+							<span class="hidden md:inline">Yuvarla</span>
+							<span class="sr-only md:hidden">Yuvarla</span>
+							<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
+						</AppButton>
+					</AppDropdown>
+					<AppTooltip>
+						<template #trigger>
+							<AppButton
+								:size="controlSize"
+								:disabled="!sheet"
+								class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+								@click="removeRows"
+							>
+								<template #icon><AppIcon name="trash" /></template>
+								<span class="hidden md:inline">Satırları sil</span>
+								<span class="sr-only md:hidden">Satırları sil</span>
+							</AppButton>
+						</template>
+						Seçimin geçtiği satırları siler (Ctrl+−); Ctrl+Z geri getirir.
+					</AppTooltip>
 					<input ref="csvInput" type="file" accept=".csv,text/csv" hidden @change="importChosen" />
 				</div>
 			</AppScrollbar>
+
+			<!-- Which rows: all, or the changed ones; and the search, on the right. -->
+			<div v-if="sheet" class="flex flex-wrap items-center gap-2 pb-2 text-sm">
+				<div class="flex flex-wrap items-center gap-2" role="group" aria-label="Satırlar">
+					<button
+						type="button"
+						class="flex items-center gap-1.5 rounded-app border px-2.5 py-1"
+						:class="
+							onlyChanged
+								? 'border-divider text-muted'
+								: 'border-primary bg-primary/10 font-semibold text-primary-text'
+						"
+						:aria-pressed="!onlyChanged"
+						@click="onlyChanged = false"
+					>
+						Tüm satırlar
+						<span class="rounded-full bg-surface-alt px-1.5 text-xs tabular-nums">{{ rowCountText }}</span>
+					</button>
+					<button
+						type="button"
+						class="flex items-center gap-1.5 rounded-app border px-2.5 py-1"
+						:class="
+							onlyChanged
+								? 'border-primary bg-primary/10 font-semibold text-primary-text'
+								: 'border-divider text-muted'
+						"
+						:aria-pressed="onlyChanged"
+						:title="onlyChanged ? 'Yeniden basınca süzgeç tablonun şimdiki hâline uygulanır' : undefined"
+						@click="showChanged"
+					>
+						Değişenler
+						<span class="rounded-full bg-surface-alt px-1.5 text-xs tabular-nums">
+							{{ changeSummary.rows }}
+						</span>
+					</button>
+					<span v-if="changeSummary.missing > 0" class="text-muted">
+						· {{ changeSummary.missing }} satır silindi
+					</span>
+				</div>
+				<div class="w-full md:ml-auto md:w-72">
+					<AppInput
+						v-model:value="searchText"
+						:size="narrow ? 'large' : 'small'"
+						clearable
+						placeholder="Ürün, SKU veya not ara…"
+						aria-label="Tabloda ara"
+					>
+						<template #prefix><AppIcon name="search" :size="16" class="text-muted" /></template>
+					</AppInput>
+				</div>
+			</div>
 
 			<TabulaFormulaBar :grid="grid" :theme="theme" :locale="locale" />
 		</div>
@@ -216,6 +332,8 @@
 						:history="sheet.history"
 						:lookups="sheet.lookups"
 						:view="sheet.view"
+						:changes="sheet.changes"
+						column-letters
 						:theme="theme"
 						:locale="locale"
 						:value-settings="valueSettings"
@@ -250,11 +368,21 @@
 				:theme="theme"
 				:locale="locale"
 				:value-settings="valueSettings"
+				:address-of="addressOf"
+				name-field="productId"
 				@select="issue => grid?.goTo(issue.rowId!, issue.field)"
 				@refresh-rows="sheet.view.refresh()"
 			>
-				<template v-if="narrow" #actions>
+				<template v-if="narrow || errors > 0" #actions>
+					<p
+						v-if="errors > 0"
+						class="m-0 flex w-full items-center gap-2 rounded-app bg-error/10 px-3 py-2.5 text-sm text-error"
+						role="status"
+					>
+						{{ blockedText }}
+					</p>
 					<AppButton
+						v-if="narrow"
 						type="primary"
 						size="large"
 						icon="refresh"
@@ -285,7 +413,7 @@
 				:loading="phase === 'processing' || preparing"
 				@click="process"
 			>
-				İşle
+				Uygula
 			</AppButton>
 		</div>
 
@@ -399,7 +527,7 @@
 			</template>
 		</AppModal>
 
-		<AppModal v-model:show="previewOpen" title="İşlenecekler" width="880px">
+		<AppModal v-model:show="previewOpen" title="Uygulanacak değişiklikler" width="880px">
 			<AppModalScrollWrapper>
 				<TabulaPreview
 					v-if="sheet && preview"
@@ -416,7 +544,31 @@
 				<div class="flex flex-wrap items-center justify-end gap-2">
 					<span class="mr-auto text-sm text-muted">Bir satıra tıklayınca tabloda o satıra gidilir.</span>
 					<AppButton @click="previewOpen = false">Vazgeç</AppButton>
-					<AppButton type="primary" @click="run">{{ preview?.rows.length ?? 0 }} satırı işle</AppButton>
+					<AppButton type="primary" @click="run">{{ preview?.rows.length ?? 0 }} satırı uygula</AppButton>
+				</div>
+			</template>
+		</AppModal>
+
+		<AppModal v-model:show="adjustOpen" :title="adjustTitle" width="420px">
+			<AppModalScrollWrapper>
+				<form class="flex flex-col gap-2" @submit.prevent="applyAdjust">
+					<label for="adjust-amount" class="text-sm text-muted">{{ adjustHint }}</label>
+					<AppInput
+						v-model:value="adjustText"
+						:input-props="{ id: 'adjust-amount', inputmode: 'decimal' }"
+						:status="adjustProblem ? 'error' : undefined"
+						:placeholder="adjustKind === 'percent' ? 'Örn. 5 ya da -10' : 'Örn. 10 ya da -2,5'"
+						autofocus
+					>
+						<template #suffix>{{ adjustKind === "percent" ? "%" : "" }}</template>
+					</AppInput>
+					<p v-if="adjustProblem" class="m-0 text-sm text-error" role="alert">{{ adjustProblem }}</p>
+				</form>
+			</AppModalScrollWrapper>
+			<template #footer>
+				<div class="flex justify-end gap-2">
+					<AppButton @click="adjustOpen = false">Vazgeç</AppButton>
+					<AppButton type="primary" @click="applyAdjust">Uygula</AppButton>
 				</div>
 			</template>
 		</AppModal>
@@ -449,6 +601,7 @@ import {
 	type FieldInput,
 	type ColumnSort,
 	type ModuleSchemaInput,
+	type Adjustment,
 	type ProcessPlan,
 	type RowId,
 	type RowInit,
@@ -553,7 +706,8 @@ function makeSheet(
 		carried ?? rowList,
 		locale,
 		{ columns, widths },
-		{ template, carried: carried !== undefined }
+		// The server's rows: what the user's changes are told against, whichever rows the sheet opens with.
+		{ template, carried: carried !== undefined, baseline: rowList }
 	)
 
 	sheetKey.value++
@@ -953,6 +1107,128 @@ async function check(): Promise<void> {
 	}
 }
 
+/** Why the changes cannot go yet: the errors standing. */
+const blockedText = computed(() => `Uygulamadan önce ${errors.value} hatayı düzeltin.`)
+
+/** A cell's address for the issues, as the grid has the columns now. */
+function addressOf(rowId: RowId, field: string): string | null {
+	return grid.value?.addressOf(rowId, field) ?? null
+}
+
+// ---------------------------------------------------------------- changes, search, bulk edits
+
+/** What the user changed since the rows were loaded, counted as the sheet changes. */
+const changeSummary = computed(() =>
+	version.value >= 0 && sheet.value ? sheet.value.changes.summary() : { rows: 0, cells: 0, added: 0, missing: 0 }
+)
+const rowCountText = computed(() => new Intl.NumberFormat("tr-TR").format(rowCount.value))
+const onlyChanged = ref(false)
+
+watch(onlyChanged, only => sheet.value?.onlyChanged(only))
+
+/** "Değişenler" again: the filter taken anew, to the sheet as it is now. */
+function showChanged(): void {
+	if (onlyChanged.value) {
+		sheet.value?.onlyChanged(true)
+	} else {
+		onlyChanged.value = true
+	}
+}
+
+const searchText = ref("")
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+
+// A moment after the typing stops: 10,000 rows are searched once, not at every letter.
+watch(searchText, text => {
+	clearTimeout(searchTimer)
+	searchTimer = setTimeout(() => sheet.value?.search(text ?? ""), 150)
+})
+
+const adjustOpen = ref(false)
+const adjustKind = ref<"percent" | "add">("percent")
+const adjustText = ref("")
+const adjustProblem = ref<string | null>(null)
+const adjustTitle = computed(() =>
+	adjustKind.value === "percent" ? "Seçili sayılara yüzde uygula" : "Seçili sayılara tutar ekle"
+)
+const adjustHint = computed(() =>
+	adjustKind.value === "percent"
+		? "Seçili sayılar bu oranda artar; eksi bir oran düşürür. Sonuç sütunun basamağına yuvarlanır."
+		: "Seçili sayılara bu tutar eklenir; eksi bir tutar düşülür."
+)
+const roundOptions: DropdownOption[] = [
+	{ label: "En yakın 0,05'e", key: "0.05|half" },
+	{ label: "Tam sayıya", key: "1|half" },
+	{ label: "Tam sayıya, yukarı", key: "1|up" },
+	{ label: "Tam sayıya, aşağı", key: "1|down" },
+	{ label: "En yakın 10'a", key: "10|half" }
+]
+
+function openAdjust(kind: "percent" | "add"): void {
+	if (!grid.value?.selected) {
+		message.warning("Önce değiştirilecek hücreleri seçin.")
+
+		return
+	}
+
+	adjustKind.value = kind
+	adjustText.value = ""
+	adjustProblem.value = null
+	adjustOpen.value = true
+}
+
+/** Applies a change to the numbers selected, and says how many changed. */
+function adjust(adjustment: Adjustment): void {
+	const changed = grid.value?.adjustSelection(adjustment) ?? 0
+
+	if (changed > 0) {
+		message.success(`${changed} hücre güncellendi. Ctrl+Z geri alır.`)
+	} else {
+		message.warning("Seçimde değiştirilebilir bir sayı yok.")
+	}
+
+	grid.value?.focus()
+}
+
+function applyAdjust(): void {
+	// "5", "-2,5", "%5": a number with a comma or a point, a sign, nothing else.
+	const text = (adjustText.value ?? "").replace(/[\s%]/g, "").replace(",", ".")
+
+	if (!/^[+-]?\d+(\.\d+)?$/.test(text)) {
+		adjustProblem.value = "Bir sayı yazın, örneğin 5 ya da -2,5."
+
+		return
+	}
+
+	adjustOpen.value = false
+	adjust({ kind: adjustKind.value, by: text.replace(/^\+/, "") })
+}
+
+function chooseRound(key: string): void {
+	const [step = "1", mode = "half"] = key.split("|")
+
+	if (!grid.value?.selected) {
+		message.warning("Önce yuvarlanacak hücreleri seçin.")
+
+		return
+	}
+
+	adjust({ kind: "round", step, mode: mode as "half" | "up" | "down" })
+}
+
+/** Takes out the rows the selection spans; Ctrl+Z brings them back. */
+function removeRows(): void {
+	const removed = grid.value?.removeRows() ?? 0
+
+	if (removed > 0) {
+		message.success(`${removed} satır silindi. Ctrl+Z geri getirir.`)
+	} else {
+		message.warning("Önce silinecek satırları seçin.")
+	}
+
+	grid.value?.focus()
+}
+
 /** What the run would do, by the check before it: shown in a window before anything is sent. */
 const preview = shallowRef<ProcessPlan | null>(null)
 const previewOpen = ref(false)
@@ -987,7 +1263,7 @@ async function process(): Promise<void> {
 		}
 
 		if (checked.status === "failed") {
-			message.error("Kontrol yapılamadı; işlem başlatılmadı.")
+			message.error("Kontrol yapılamadı; değişiklikler uygulanmadı.")
 
 			return
 		}
@@ -1038,11 +1314,11 @@ async function run(): Promise<void> {
 		message.warning(`${outcome.blocked} satırda düzeltilmesi gereken hata var.`)
 		issuesOpen.value = narrow.value
 	} else if (outcome.status === "succeeded" || outcome.status === "partial" || outcome.status === "failed") {
-		message.info(`${outcome.succeeded} satır işlendi, ${outcome.failed} satır işlenemedi.`)
+		message.info(`${outcome.succeeded} satır uygulandı, ${outcome.failed} satır uygulanamadı.`)
 	} else if (outcome.status === "nothing") {
 		message.info("Gönderilecek satır yok.")
 	} else {
-		message.error("İşlem yapılamadı.")
+		message.error("Değişiklikler uygulanamadı.")
 	}
 }
 </script>

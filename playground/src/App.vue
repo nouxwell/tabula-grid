@@ -17,6 +17,7 @@ import {
 	RowStore,
 	rowsWithIssues,
 	RowView,
+	SheetChanges,
 	SheetSession,
 	SheetValidator,
 	UndoHistory,
@@ -117,6 +118,10 @@ const lookups = new LookupResolver({ schema, store, adapters: backend.lookups })
 
 // The rows on screen: all of them, or only those with issues when the panel's switch says so.
 const view = new RowView(store)
+// What the user changed since the sheet opened, marked on its cells.
+const changes = new SheetChanges({ schema, store })
+// `?letters=1`: the columns' letters over their headers.
+const columnLetters = params.get("letters") === "1"
 const onlyIssueRows = ref(false)
 const shownRows = shallowRef(view.size)
 
@@ -497,6 +502,7 @@ onBeforeUnmount(() => {
 	lookups.dispose()
 	formulas.dispose()
 	view.dispose()
+	changes.dispose()
 	session.dispose()
 	validator.dispose()
 	history.dispose()
@@ -548,6 +554,8 @@ onMounted(() => {
 		lookups,
 		formulas,
 		view,
+		changes,
+		adjust: adjustment => grid.value?.adjustSelection(adjustment) ?? 0,
 		widths: () => widths.value,
 		columns: () => columns.value
 	}
@@ -689,6 +697,8 @@ onMounted(() => {
 				:history="history"
 				:lookups="lookups"
 				:view="view"
+				:changes="changes"
+				:column-letters="columnLetters"
 				:theme="theme"
 				:locale="language"
 				:value-settings="valueSettings"

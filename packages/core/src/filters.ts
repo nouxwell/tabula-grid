@@ -3,8 +3,10 @@ import { isFormulaError } from "./formula/error.js"
 import type { RowId, RowStore } from "./rows.js"
 import type { FieldSchema, ModuleSchema } from "./schema.js"
 import type { CellValue } from "./value.js"
+import { editText, formatCell } from "./values/format.js"
 import { decimalText } from "./values/number.js"
 import { isLookupValue } from "./values/read.js"
+import { VALUE_SETTINGS, type ValueSettings } from "./values/settings.js"
 import type { RowFilter, RowOrder } from "./view.js"
 
 /**
@@ -121,6 +123,50 @@ export function rowsMatching(store: RowStore, schema: ModuleSchema, filters: Col
 	}
 
 	return rowId => tests.every(test => test(rowId))
+}
+
+export interface SearchOptions {
+	/** How values are written, to find them as the cells show them. Turkish by default. */
+	readonly settings?: ValueSettings
+	/** Whose rules lower the case, such as "tr", where "I" lowers to "ı". "tr" by default. */
+	readonly locale?: string
+	/** The fields searched; every field of the schema by default. */
+	readonly fields?: readonly string[]
+}
+
+/**
+ * The rows where a cell holds `text`, as the cell shows it ("1.533,80", "Mağaza, Web", the record's
+ * name), case aside. A number is found as it is typed too, "1533,8". Empty text keeps every row.
+ */
+export function rowsContaining(
+	store: RowStore,
+	schema: ModuleSchema,
+	text: string,
+	options: SearchOptions = {}
+): RowFilter {
+	const locale = options.locale ?? "tr"
+	const settings = options.settings ?? VALUE_SETTINGS.tr
+	const needle = text.trim().toLocaleLowerCase(locale)
+	const fields = (options.fields ?? schema.fields.map(field => field.key))
+		.filter(key => schema.has(key))
+		.map(key => schema.field(key))
+
+	if (needle === "") {
+		return () => true
+	}
+
+	const holds = (written: string): boolean => written.toLocaleLowerCase(locale).includes(needle)
+
+	return rowId =>
+		fields.some(field => {
+			const value = store.get(rowId, field.key)
+
+			return (
+				value !== null &&
+				(holds(formatCell(field, value, settings)) ||
+					(NUMERIC.has(field.type) && holds(editText(field, value, settings))))
+			)
+		})
 }
 
 function inRange(field: FieldSchema, value: CellValue, from: string | null, to: string | null): boolean {

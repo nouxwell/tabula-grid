@@ -55,6 +55,8 @@
 	--tabula-success-mark: color-mix(in srgb, var(--tabula-success) 85%, var(--tabula-fg));
 	--tabula-info-text: color-mix(in srgb, var(--tabula-info) 85%, var(--tabula-fg));
 	--tabula-info-bg: color-mix(in srgb, var(--tabula-info) 10%, var(--tabula-bg));
+	/* A cell the user changed since the sheet was loaded. */
+	--tabula-changed-mark: var(--tabula-info);
 
 	--tabula-issues-bg: var(--tabula-bg);
 	--tabula-issues-fg: var(--tabula-fg);

@@ -87,10 +87,16 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 
 1. **Top bar**: logo, where the page is (Ürünler / Toplu işlemler), theme switch, language select
    with flags.
-2. **Page header**: title, "Taslak" tag (its tooltip says nothing is written before İşle), the row
-   count (counting up), the save status, then Taslağı kaydet · Kontrol et · **İşle** (primary).
+2. **Page header**: title, "Taslak" tag (its tooltip says nothing is written before the changes
+   are applied), the row count (counting up), the save status, then Taslağı kaydet · Kontrol et ·
+   **Değişiklikleri uygula** (primary). While an error stands it is held back, its tooltip and the
+   foot of the issues saying "Uygulamadan önce N hatayı düzeltin."
 3. **Toolbar**: undo and redo (icon buttons with tooltips), İçe aktar ▾, Dışa aktar ▾, Sütunlar,
-   the template ▾, **Kurallar** (only with a template; its tooltip says why otherwise), the view ▾.
+   the template ▾, **Kurallar** (only with a template; its tooltip says why otherwise), the view ▾,
+   then the bulk edits on what is selected: Yüzde uygula and Tutar ekle (each a small window with
+   the amount), Yuvarla ▾ (to 0,05, whole, whole up or down, or tens), and Satırları sil (Ctrl+−).
+   Under the toolbar, "Tüm satırlar" and "Değişenler" with their counts, and the search on the
+   right.
    - **The rules drawer** (design E, 560px, on the right) has no mask: the sheet stays in view and in
      reach while a rule is written. Each rule is a card with its sentence and how many rows it
      catches now; one at a time opens as a form (field, what it must be, against what, Ne zaman,
@@ -104,7 +110,9 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
      rows and how many rows fail, as it is typed. A column kept shows in the sheet at once, marked
      as not saved in the footer; Vazgeç and closing the drawer put the sheet back as saved.
 4. **Formula bar** (`TabulaFormulaBar`): address and value of the active cell.
-5. **The sheet** (`TabulaGrid`) and, on its right, **the issues** (`TabulaIssues`, 340px).
+5. **The sheet** (`TabulaGrid`, with column letters, and the user's changed cells marked in the top
+   left corner in the info colour) and, on its right, **the issues** (`TabulaIssues`, 340px, each
+   with the cell's address, "D8", and the product).
 6. **Status bar** (`TabulaStatusBar`): rows and issues, the selection, its sum and average.
 
 ### Phone (under 768px) — designs C and D
@@ -116,8 +124,8 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 5. The sheet, rows 40px high.
 6. **Issues bar** (`TabulaIssues variant="sheet"`): the counts; it opens the issues as a sheet
    from the bottom, with "Yeniden kontrol et"; choosing an issue closes it and goes to the cell.
-7. **Action bar** at the bottom: Taslağı kaydet · Kontrol et · İşle, İşle disabled while an error
-   stands.
+7. **Action bar** at the bottom: Taslağı kaydet · Kontrol et · Uygula, Uygula disabled while an
+   error stands. The search takes the whole width under the row filter.
 
 ### The parts, as decided
 
@@ -158,6 +166,19 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 33  | The check says what each row would do (`plan`)      | package     | done (phase two)   |
 | 34  | Choosing a row in the preview goes to it            | both        | done (phase two)   |
 | 35  | Rows that would not change are not sent             | package     | not chosen         |
+| 36  | Changed cells marked, and a "Değişenler" filter     | both        | done (phase two)   |
+| 37  | Bulk percentage, amount and rounding                | both        | done (phase two)   |
+| 38  | Searching the sheet                                 | both        | done (phase two)   |
+| 39  | Column letters over the headers                     | package     | done (phase two)   |
+| 40  | Selecting and taking rows out                       | both        | done (phase two)   |
+| 41  | The cell's address and the row's name in issues     | package     | done (phase two)   |
+| 42  | The run held back while errors stand, with why      | application | done (phase two)   |
+| 43  | "Değişiklikleri uygula" in place of "İşle"          | application | done (phase two)   |
+| 44  | The issue panel opened and closed from the bar      | application | not chosen         |
+| 45  | Fixing a cell in the issue panel                    | package     | not chosen         |
+| 46  | The issues as a table in a bottom panel, with tabs  | package     | not chosen         |
+| 47  | Workflow steps over the sheet                       | application | not chosen         |
+| 48  | Type marks in cells (⌄, calendar, switch)           | package     | not chosen         |
 | —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
 | —   | Saved views (personal views)                        | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)      | both        | done (phase two)   |

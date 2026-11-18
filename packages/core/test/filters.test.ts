@@ -6,6 +6,7 @@ import {
 	ModuleSchema,
 	RowStore,
 	rowOrder,
+	rowsContaining,
 	rowsMatching,
 	RowView,
 	rowsWithIssues,
@@ -105,6 +106,37 @@ describe("rowsMatching", () => {
 		)
 
 		expect(names(view)).toEqual(["Ürün 10", "Zeytin"])
+	})
+})
+
+describe("rowsContaining", () => {
+	it("finds text as the cells show it, case aside the Turkish way, and numbers as typed too", () => {
+		const { store, view } = setup()
+		const search = (text: string): unknown[] => {
+			view.filter(rowsContaining(store, schema, text), "search")
+
+			return names(view)
+		}
+
+		expect(search("ÜRÜN")).toEqual(["Ürün 10", "ürün 9"])
+		// "I" lowers to "ı" in Turkish: "AYVA" and "ayva" alike.
+		expect(search("ayva")).toEqual(["Ayva"])
+		// As the cell shows it, and as it is typed.
+		expect(search("12,50")).toEqual(["Ürün 10", "Ayva"])
+		expect(search("100")).toEqual(["ürün 9"])
+		expect(search("01.12.2026")).toEqual(["Ürün 10"])
+		// An option by its label.
+		expect(search("avro")).toEqual(["ürün 9", "Zeytin"])
+		expect(search("  ")).toHaveLength(5)
+		expect(search("yok böyle")).toEqual([])
+	})
+
+	it("searches only the fields it is given", () => {
+		const { store, view } = setup()
+
+		view.filter(rowsContaining(store, schema, "avro", { fields: ["name"] }), "search")
+
+		expect(names(view)).toEqual([])
 	})
 })
 

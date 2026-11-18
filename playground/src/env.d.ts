@@ -1,4 +1,5 @@
 import type {
+	Adjustment,
 	ColumnLayout,
 	DraftSaver,
 	FormulaEngine,
@@ -7,6 +8,7 @@ import type {
 	RowStore,
 	RowView,
 	Selection,
+	SheetChanges,
 	SheetSession,
 	SheetValidator,
 	UndoHistory
@@ -27,6 +29,9 @@ export interface PlaygroundHandle {
 	readonly lookups: LookupResolver
 	readonly formulas: FormulaEngine
 	readonly view: RowView
+	readonly changes: SheetChanges
+	/** The grid's `adjustSelection`: how many cells it changed. */
+	readonly adjust: (adjustment: Adjustment) => number
 	readonly widths: () => Readonly<Record<string, number>>
 	readonly columns: () => ColumnLayout
 }

@@ -177,6 +177,20 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
 - **Sorting and filtering.** The same menu sorts the rows by the column and filters it: tick the
   values to keep, or give a range of numbers or dates. A sorted header shows its arrow, a filtered
   one a funnel (see below).
+- **Taking rows out.** Ctrl+− takes out the rows selected whole, as Excel's does; with cells
+  selected, the first press selects their rows, so a slip of the keys takes nothing out.
+  `removeRows()` takes out the rows the selection spans, for a toolbar's button. Either is one
+  step to undo, and a row on its way to the backend stays.
+- **Changing numbers in bulk.** `adjustSelection(adjustment)` raises the numbers selected by a
+  percentage (`{ kind: "percent", by: "5" }`), adds an amount (`{ kind: "add", by: "-2.5" }`), or
+  rounds them to a step (`{ kind: "round", step: "0.05", mode: "half" }`), exactly, to the
+  column's digits, as one step to undo. Columns that cannot be edited, locked rows and cells with
+  no number are passed over; it returns how many cells changed. The core's
+  `adjustValue(field, value, adjustment)` works out one value.
+- **What the user changed.** Give the grid a `SheetChanges` as `changes`, and every cell the user
+  changed since the sheet was loaded has a mark in its top left corner (see below).
+- **Column letters.** `column-letters` puts A, B, C over the headers, as the columns stand on
+  screen: the addresses the formula bar shows.
 - **Themes.** `light`, `dark` or `auto`, in colours an application changes (see below).
 
 With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>`, `<TabulaIssues>`,
@@ -208,7 +222,7 @@ Two components that go with a grid, placed wherever the page wants them, given t
 Both read what the grid exposes, which any other part of a page can read too: `cell` (the active
 cell, its address, field and text), `selected` (the range, with `summarizeCells` from the core
 behind its sum and average), `rows`, `issueSummary`, `goToAddress(address)`,
-`writeCell(rowId, field, text)` and `formatValue(field, value)`. Addresses follow the columns as
+`addressOf(rowId, field)`, `writeCell(rowId, field, text)` and `formatValue(field, value)`. Addresses follow the columns as
 they stand on screen; `columnName` and `parseAddress` turn one into the other.
 
 ### Sorting and filtering
@@ -243,6 +257,33 @@ const sort = ref<ColumnSort | null>(null) // { key: "price", direction: "desc" }
 - **The same in code.** `rowsMatching(store, schema, filters)` is the filter and
   `rowOrder(store, schema, sort, locale)` the order the grid gives its `RowView`;
   `compareValues`, `distinctValues` and `hasRange` are what the menu is built from.
+- **Searching.** `rowsContaining(store, schema, text, { settings })` keeps the rows where a cell
+  holds the text as the cell shows it ("1.533,80", "Mağaza, Web", a record's name), case aside the
+  language's way; a number is found as it is typed too. Give it to the view under a name of its
+  own, `view.filter(rowsContaining(…), "search")`, so it stands with the column filters.
+
+### What the user changed
+
+`SheetChanges` follows what the user changed since the sheet was loaded: each cell that holds
+other than it did, and each row added since. Only the fields that are sent count. Values are
+compared as the backend reads them (12.5 is "12.50", a record is its id, a multi-select's options
+count in any order), and a value put back takes its mark away.
+
+```ts
+const changes = new SheetChanges({
+  schema,
+  store,
+  baseline: rowsFromTheServer, // left out, the store as it is now
+  key: "productId" // matched by product, so a draft opened another day shows its changes
+})
+
+changes.isChanged(rowId, "newPrice")
+changes.summary() // { rows: 128, cells: 140, added: 2, missing: 1 }
+view.filter(rowsChanged(changes), "changed") // only the rows changed or added
+```
+
+A row whose key changes is another row: an added one, while the one it was goes missing.
+`reset()` takes the sheet as it is now as what it is compared with.
 
 ### Colours
 
@@ -460,7 +501,8 @@ an issue for a deleted row is dropped, one for an unknown field is kept as the r
   stop and takes nothing back: rows done before the stop stay done.
 
 Give the grid `:issues="session.issues"` and `:results="session.results"`, and the panel the same
-issues. Each row's number then shows its result, and a processed row can no longer be changed.
+issues. Given the grid's `addressOf` as `address-of`, and a field naming the rows as
+`name-field`, the panel shows each issue's cell address, "D8", and its row's product. Each row's number then shows its result, and a processed row can no longer be changed.
 
 ### Before a run: what it would do
 
@@ -495,8 +537,9 @@ again; a finished run leaves nothing to go by, since it changed what the backend
 `TabulaPreview` draws a plan: the counts, a filter by kind, and each row with its fields from the
 old value to the new (`1.496,66 → 1.533,80`), a new record with the fields it gets, and the warnings
 standing on it. The host puts it in a window of its own with the buttons to go on; choosing a row
-emits `select` with its id. The example's İşle checks the sheet when the last check no longer
-holds, stops on rows with an error, and otherwise opens the preview before anything is sent.
+emits `select` with its id. The example's "Değişiklikleri uygula" checks the sheet when the last
+check no longer holds, is held back with its reason while errors stand, and otherwise opens the
+preview before anything is sent.
 
 ## Importing and exporting
 

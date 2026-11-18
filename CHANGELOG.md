@@ -9,6 +9,28 @@ The three packages are versioned together.
 
 ### Added
 
+- **What the user changed.** `SheetChanges` in the core follows each cell that holds other than it
+  did when the sheet was loaded, and each row added, compared as the backend reads values;
+  matched by a key field, a draft opened later shows its changes against the server's rows.
+  `rowsChanged` filters a view to them, `summary()` counts them. The grid marks a changed cell
+  in its top left corner (`changes`, `--tabula-changed-mark`). The example has "Tüm satırlar" and
+  "Değişenler" over the sheet, with the counts.
+- **Changing numbers in bulk.** `adjustSelection()` on the grid raises the numbers selected by a
+  percentage, adds an amount or rounds them to a step, exactly and to the column's digits, as one
+  step to undo; `adjustValue` in the core works out one value. The example's toolbar has
+  "Yüzde uygula", "Tutar ekle" and "Yuvarla".
+- **Searching the sheet.** `rowsContaining` keeps the rows where a cell holds the text as the cell
+  shows it, case aside the language's way. The example searches as the user types.
+- **Taking rows out.** Ctrl+− takes out rows selected whole; with cells selected it first selects
+  their rows. `removeRows()` takes out the rows the selection spans. One step to undo; a row on its
+  way to the backend stays. The example's toolbar has "Satırları sil".
+- **Column letters** over the headers with `column-letters`, A, B, C as the columns stand.
+- **The issue panel shows the cell's address and the row's name**, given the grid's `addressOf`
+  (`address-of`) and `name-field`.
+- **In the example**, İşle is now "Değişiklikleri uygula" (Uygula on a phone), held back while
+  errors stand with "Uygulamadan önce N hatayı düzeltin." beside it and at the foot of the issues.
+  These are items 36–43 of the design canvas, from the user's own designs.
+
 - **A preview before a run.** A pre-flight answer may say what each row would do, in `plan`:
   `create`, `update` with the fields that would change and the values the backend holds now, or
   `unchanged`. `session.plan()` reads it against the sheet as it stands, a row changed since the

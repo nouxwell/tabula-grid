@@ -28,9 +28,10 @@ const validator = new SheetValidator(schema, store, VALUE_SETTINGS.tr)
 
 - **`TabulaGrid`** draws only what is on screen, so 50,000 rows draw like 50. It moves, edits,
   copies and pastes as Excel does, reads what is typed the sheet's way, marks the cells with
-  issues, undoes with Ctrl+Z, pins and hides columns, and picks lookups from a searched list.
-- **`TabulaIssues`** lists the sheet's issues as cards, with counts, Previous and Next, says whether
-  the browser or the server found each, and filters the sheet to the rows that have them. On a
+  issues and the ones the user changed, undoes with Ctrl+Z, pins and hides columns, picks lookups
+  from a searched list, raises numbers by a percentage, and takes rows out with Ctrl+−.
+- **`TabulaIssues`** lists the sheet's issues as cards, with counts, Previous and Next, the cell's
+  address and the row's name, says whether the browser or the server found each, and filters the sheet to the rows that have them. On a
   phone it is a bar that opens the list from the bottom of the screen (`variant="sheet"`).
 - **`TabulaFormulaBar`** shows the active cell's address and value, goes to an address typed into
   it, and writes a value typed there, as a spreadsheet's formula bar.

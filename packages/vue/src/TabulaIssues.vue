@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import {
+	formatCell,
 	VALUE_SETTINGS,
 	type Issue,
 	type IssueSet,
 	type ModuleSchema,
+	type RowId,
 	type RowStore,
 	type ValueSettings
 } from "@nouxwell/tabula-core"
@@ -31,7 +33,14 @@ const props = defineProps({
 	 * `panel`: the list beside or under the sheet. `sheet`, for a phone: a bar with the counts, which
 	 * opens the list from the bottom of the screen over the sheet; choosing an issue closes it again.
 	 */
-	variant: { type: String as PropType<"panel" | "sheet">, default: "panel" }
+	variant: { type: String as PropType<"panel" | "sheet">, default: "panel" },
+	/** The grid's `addressOf`: each issue on a cell then shows the cell's address, "D8". */
+	addressOf: {
+		type: Function as PropType<(rowId: RowId, field: string) => string | null>,
+		default: undefined
+	},
+	/** A field that names a row, such as its product, shown on each issue about the row. */
+	nameField: { type: String as PropType<string | null>, default: null }
 })
 
 const emit = defineEmits<{ select: [issue: Issue]; refreshRows: [] }>()
@@ -91,6 +100,26 @@ function label(issue: Issue): string {
 	const field = issue.field !== null && schema.has(issue.field) ? schema.field(issue.field).label : ""
 
 	return [row, field].filter(Boolean).join(" · ")
+}
+
+/** The cell's address, "D8", when the host gave the grid's way to tell it. */
+function address(issue: Issue): string | null {
+	return issue.rowId !== null && issue.field !== null && props.addressOf
+		? props.addressOf(issue.rowId, issue.field)
+		: null
+}
+
+/** What the row is called, by the field the host named. */
+function rowName(issue: Issue): string {
+	const schema = toRaw(props.schema)
+
+	if (issue.rowId === null || props.nameField === null || !schema.has(props.nameField)) {
+		return ""
+	}
+
+	const value = toRaw(props.store).get(issue.rowId, props.nameField)
+
+	return formatCell(schema.field(props.nameField), value, props.valueSettings)
 }
 
 function itemClass(issue: Issue): string[] {
@@ -235,8 +264,10 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 						<span class="tabula-issues-line">
 							<span class="tabula-issues-dot" aria-hidden="true" />
 							<span class="tabula-issues-where">{{ label(issue) }}</span>
+							<span v-if="address(issue)" class="tabula-issues-address" v-text="address(issue)" />
 							<span class="tabula-issues-source">{{ source(issue) }}</span>
 						</span>
+						<span v-if="rowName(issue)" class="tabula-issues-name" v-text="rowName(issue)" />
 						<span class="tabula-issues-text">{{ issueText(issue, locale, valueSettings) }}</span>
 						<span v-if="issue.stale" class="tabula-issues-recheck">{{ text.recheck }}</span>
 						<span v-if="issue.rowId !== null" class="tabula-issues-go" aria-hidden="true">
@@ -481,6 +512,34 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 
 .is-stale .tabula-issues-where {
 	color: var(--tabula-issues-fg);
+}
+
+.tabula-issues-address {
+	padding: 0 6px;
+	border-radius: var(--tabula-radius-small);
+	background: var(--tabula-issues-error-bg);
+	color: var(--tabula-issues-error);
+	font-size: 0.85em;
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+
+.is-warning .tabula-issues-address {
+	background: var(--tabula-issues-warning-bg);
+	color: var(--tabula-issues-warning);
+}
+
+.is-stale .tabula-issues-address {
+	background: var(--tabula-hover-bg);
+	color: var(--tabula-issues-muted);
+}
+
+.tabula-issues-name {
+	overflow: hidden;
+	max-width: 100%;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .tabula-issues-source {

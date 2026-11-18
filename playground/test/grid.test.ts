@@ -814,6 +814,88 @@ describe("TabulaGrid", () => {
 		})
 	})
 
+	describe("changes, bulk edits and taking rows out", () => {
+		const editTo = async (page: Page, row: number, col: number, text: string): Promise<void> => {
+			await cell(page, row, col).click()
+			await page.keyboard.type(text)
+			await press(page, "Enter")
+		}
+
+		it("marks a cell changed since the sheet opened, until its value comes back", async () => {
+			await withPage(20, async page => {
+				await editTo(page, 1, 3, "123")
+
+				await expect.poll(() => cell(page, 1, 3).getAttribute("class")).toContain("is-changed")
+				await expect(cell(page, 1, 2).getAttribute("class")).resolves.not.toContain("is-changed")
+				await expect(page.evaluate(() => window.__playground!.changes.summary())).resolves.toMatchObject({
+					rows: 1,
+					cells: 1
+				})
+
+				await page.keyboard.press("Control+z")
+
+				await expect.poll(() => cell(page, 1, 3).getAttribute("class")).not.toContain("is-changed")
+			})
+		})
+
+		it("raises the numbers selected by a percentage, as one step to undo", async () => {
+			await withPage(20, async page => {
+				const before = await Promise.all([0, 1, 2].map(row => valueAt(page, row, "newPrice")))
+
+				await cell(page, 0, 3).click()
+				await cell(page, 2, 3).click({ modifiers: ["Shift"] })
+
+				await expect(
+					page.evaluate(() => window.__playground!.adjust({ kind: "percent", by: "10" }))
+				).resolves.toBe(3)
+
+				const after = await Promise.all([0, 1, 2].map(row => valueAt(page, row, "newPrice")))
+
+				expect(after).toEqual(before.map(value => (Math.round(Number(value) * 110) / 100).toString()))
+
+				await page.keyboard.press("Control+z")
+
+				await expect(Promise.all([0, 1, 2].map(row => valueAt(page, row, "newPrice")))).resolves.toEqual(before)
+			})
+		})
+
+		it("takes out rows selected whole with Ctrl+−, a cell's row first selected, and Ctrl+Z brings them back", async () => {
+			await withPage(20, async page => {
+				const size = (): Promise<number> => page.evaluate(() => window.__playground!.store.size)
+				const fifth = await valueAt(page, 4, "productId")
+
+				await cell(page, 4, 2).click()
+				await page.keyboard.press("Control+Minus")
+
+				// The first press selects the row, and takes nothing out.
+				await expect(size()).resolves.toBe(20)
+				await expect(selected(page)).resolves.toMatchObject({ range: { top: 4, bottom: 4, left: 0 } })
+
+				await page.keyboard.press("Control+Minus")
+
+				await expect(size()).resolves.toBe(19)
+				await expect(valueAt(page, 4, "productId")).resolves.not.toEqual(fifth)
+
+				await page.keyboard.press("Control+z")
+
+				await expect(size()).resolves.toBe(20)
+				await expect(valueAt(page, 4, "productId")).resolves.toEqual(fifth)
+			})
+		})
+
+		it("draws each column's letter over its header, as the formula bar names it", async () => {
+			await withPage(
+				20,
+				async page => {
+					await expect
+						.poll(() => page.locator(".tabula-grid-th-letter").allInnerTexts())
+						.toEqual(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"])
+				},
+				"&letters=1"
+			)
+		})
+	})
+
 	describe("the backend", () => {
 		const status = (page: Page): Promise<string> => page.locator(".playground-status").innerText()
 		const gutter = (page: Page, row: number): Locator => page.locator(".tabula-grid-rh").nth(row)

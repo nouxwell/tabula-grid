@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+	adjustValue,
 	arrangeColumns,
 	autoColumnWidth,
 	clampColumnWidth,
@@ -26,6 +27,7 @@ import {
 	VALUE_SETTINGS,
 	withColumn,
 	withDefaults,
+	type Adjustment,
 	type CellPosition,
 	type CellRange,
 	type ColumnFilters,
@@ -43,6 +45,7 @@ import {
 	type ModuleSchema,
 	type RowResults,
 	type RowStore,
+	type SheetChanges,
 	type StoreChange,
 	type ValueSettings
 } from "@nouxwell/tabula-core"
@@ -111,6 +114,13 @@ const props = defineProps({
 	 * left out, the grid keeps its own. One passed in belongs to the host, which disposes of it.
 	 */
 	history: { type: Object as PropType<UndoHistory>, default: undefined },
+	/**
+	 * What the user changed since the sheet was loaded, such as a `SheetChanges`: a changed cell has a
+	 * mark in its top left corner. Left out, nothing is marked.
+	 */
+	changes: { type: Object as PropType<SheetChanges>, default: undefined },
+	/** Letters over the headers, A, B, C, as the columns stand on screen: the formula bar's addresses. */
+	columnLetters: { type: Boolean, default: false },
 	/** The language of the grid's own words: issue messages and labels. */
 	locale: { type: String as PropType<GridLocale>, default: "tr" }
 })
@@ -135,6 +145,8 @@ const filters = defineModel<ColumnFilters>("filters", { default: () => ({}) })
 const sort = defineModel<ColumnSort | null>("sort", { default: null })
 
 const HEADER_HEIGHT = 32
+/** The strip of column letters over the headers, when there is one. */
+const LETTERS_HEIGHT = 20
 const OVERSCAN_ROWS = 6
 const OVERSCAN_COLS = 2
 /** Room kept free at a header's right edge for the handle that resizes the column. */
@@ -231,6 +243,8 @@ const gutterWidth = computed(() => Math.max(44, String(Math.max(rowCount.value, 
 const cellStyles = computed(() =>
 	widths.value.map((width, index) => `left:${offsets.value[index] ?? 0}px;width:${width}px`)
 )
+
+const headerHeight = computed(() => HEADER_HEIGHT + (props.columnLetters ? LETTERS_HEIGHT : 0))
 
 const cellClasses = computed(() =>
 	fields.value.map(field => {
@@ -377,7 +391,7 @@ function bodySize(): { width: number; height: number } {
 
 	return {
 		width: Math.max(0, (element?.clientWidth ?? 0) - gutterWidth.value),
-		height: Math.max(0, (element?.clientHeight ?? 0) - HEADER_HEIGHT)
+		height: Math.max(0, (element?.clientHeight ?? 0) - headerHeight.value)
 	}
 }
 
@@ -496,6 +510,22 @@ function toneClass(row: number, col: number): string | undefined {
 	const sign = rowId === undefined ? 0 : signOf(store.value.get(rowId, field.key))
 
 	return sign > 0 ? "is-positive" : sign < 0 ? "is-negative" : undefined
+}
+
+/** A cell the user changed since the sheet was loaded, as the host's `changes` say. */
+function changeClass(row: number, col: number): string | undefined {
+	const changes = toRaw(props.changes)
+
+	if (!changes) {
+		return undefined
+	}
+
+	void changeVersion.value
+
+	const rowId = view.value.rowIdAt(row)
+	const field = fields.value[col]
+
+	return rowId !== undefined && field !== undefined && changes.isChanged(rowId, field.key) ? "is-changed" : undefined
 }
 
 /** The issues on a cell, as the issue set has them now. */
@@ -1400,6 +1430,20 @@ function handleShortcut(event: KeyboardEvent, mod: boolean): boolean {
 		return true
 	}
 
+	// Ctrl+− takes out rows selected whole, as Excel's does; with cells selected it first selects
+	// their rows, so a slip of the keys takes nothing out. Taken from the browser's zoom only here.
+	if (mod && !altGr && (event.key === "-" || event.code === "NumpadSubtract") && !props.readonly) {
+		const area = selection.range
+
+		if (area && area.left === 0 && area.right >= fields.value.length - 1) {
+			removeRows()
+		} else if (area) {
+			selection.selectRows(area.top, area.bottom)
+		}
+
+		return true
+	}
+
 	// Taken from the browser's bookmark and reload only where the grid can fill.
 	const key = event.key.toLowerCase()
 
@@ -2181,6 +2225,21 @@ watch(
 	{ immediate: true }
 )
 
+// What the user changed, when the host follows it.
+const changeVersion = shallowRef(0)
+
+watch(
+	() => toRaw(props.changes),
+	(given, _previous, onCleanup) => {
+		changeVersion.value++
+
+		if (given) {
+			onCleanup(given.subscribe(() => changeVersion.value++))
+		}
+	},
+	{ immediate: true }
+)
+
 // The backend's results, when the host gives them.
 const results = shallowRef<RowResults | undefined>(toRaw(props.results))
 const resultVersion = shallowRef(0)
@@ -2749,6 +2808,100 @@ function writeCell(rowId: string, key: string, input: string): boolean {
 	return true
 }
 
+/**
+ * Changes every number selected by `adjustment`, as one step to undo: a percentage, an amount, or
+ * rounding to a step. Cells that cannot be edited, rows a run locked and cells holding no number are
+ * passed over. Returns how many cells changed.
+ *
+ * @throws TabulaError `invalid_argument` for an amount or a step that `adjustValue` refuses
+ */
+function adjustSelection(adjustment: Adjustment): number {
+	const area = selection.range
+
+	if (!area || props.readonly) {
+		return 0
+	}
+
+	commitEdit(false)
+
+	const sheetRows = store.value
+	let changed = 0
+
+	sheetRows.transact(
+		() => {
+			for (let row = area.top; row <= area.bottom; row++) {
+				const rowId = view.value.rowIdAt(row)
+
+				if (rowId === undefined || isLockedRow(rowId)) {
+					continue
+				}
+
+				for (let col = area.left; col <= area.right; col++) {
+					const field = fields.value[col]
+
+					if (!isEditable(field) || field.formula) {
+						continue
+					}
+
+					const next = adjustValue(field, sheetRows.get(rowId, field.key), adjustment, props.valueSettings)
+
+					if (next !== null) {
+						sheetRows.setCell(rowId, field.key, next)
+						changed++
+					}
+				}
+			}
+		},
+		{ origin: "adjust" }
+	)
+
+	return changed
+}
+
+/**
+ * Takes the rows the selection spans out of the sheet, as one step to undo. A row on its way to the
+ * backend stays; one it processed may go, as `removeSucceeded()` takes them. Returns how many went.
+ */
+function removeRows(): number {
+	const area = selection.range
+
+	if (!area || props.readonly) {
+		return 0
+	}
+
+	commitEdit(false)
+
+	const going: string[] = []
+
+	for (let row = area.top; row <= area.bottom; row++) {
+		const rowId = view.value.rowIdAt(row)
+		const inFlight =
+			rowId !== undefined && isLockedRow(rowId) && results.value?.resultOf(rowId)?.outcome !== "succeeded"
+
+		if (rowId !== undefined && !inFlight) {
+			going.push(rowId)
+		}
+	}
+
+	if (going.length > 0) {
+		store.value.transact(() => store.value.removeRows(going), { origin: "remove" })
+		selection.moveTo(area.top, selection.active?.col ?? 0)
+	}
+
+	return going.length
+}
+
+/**
+ * A cell's address as the formula bar writes it, "D8": its column as the columns stand on screen,
+ * its row's number in the sheet. Null for a column not shown or a row not in the sheet.
+ */
+function addressOf(rowId: string, field: string): string | null {
+	const col = fields.value.findIndex(candidate => candidate.key === field)
+	const index = store.value.indexOf(rowId)
+
+	return col < 0 || index < 0 ? null : `${columnName(col)}${index + 1}`
+}
+
 /** How many rows are shown, and how many the sheet has. */
 const rows = computed(() => {
 	void dataVersion.value
@@ -2784,6 +2937,9 @@ defineExpose({
 	goTo,
 	goToAddress,
 	writeCell,
+	adjustSelection,
+	removeRows,
+	addressOf,
 	focus: focusInput,
 	/** Fits a column to its header and contents, as a double click on its edge does. */
 	autoFit,
@@ -2809,7 +2965,12 @@ defineExpose({
 		role="grid"
 		:tabindex="active ? -1 : 0"
 		:data-tabula-theme="theme"
-		:class="{ 'is-filtered': filtered, 'is-scrolled-x': scrollX > 0, 'is-filling': fillDrag }"
+		:class="{
+			'is-filtered': filtered,
+			'is-scrolled-x': scrollX > 0,
+			'is-filling': fillDrag,
+			'has-letters': columnLetters
+		}"
 		:style="{ '--tabula-row-height': `${rowHeight}px` }"
 		:aria-rowcount="rowCount + 1"
 		:aria-colcount="fields.length"
@@ -2826,14 +2987,14 @@ defineExpose({
 				class="tabula-grid-sheet"
 				:style="{
 					width: `${gutterWidth + totalWidth + SCROLL_ROOM}px`,
-					height: `${HEADER_HEIGHT + totalHeight + SCROLL_ROOM}px`
+					height: `${headerHeight + totalHeight + SCROLL_ROOM}px`
 				}"
 			>
 				<div
 					class="tabula-grid-head"
 					role="row"
 					aria-rowindex="1"
-					:style="{ width: `${gutterWidth + totalWidth}px`, height: `${HEADER_HEIGHT}px` }"
+					:style="{ width: `${gutterWidth + totalWidth}px`, height: `${headerHeight}px` }"
 				>
 					<div class="tabula-grid-corner" :style="{ width: `${gutterWidth}px` }" @mousedown="onCornerDown" />
 					<div
@@ -2853,6 +3014,12 @@ defineExpose({
 							:title="headerTitle(c)"
 							@mousedown="onHeaderDown($event, c)"
 						>
+							<span
+								v-if="columnLetters"
+								class="tabula-grid-th-letter"
+								aria-hidden="true"
+								v-text="columnName(c)"
+							/>
 							<span v-if="fields[c]?.formula" class="tabula-grid-fx" aria-hidden="true">ƒx</span>
 							<span class="tabula-grid-th-text">{{ headerText(c) }}</span>
 							<span v-if="fields[c]?.required" class="tabula-grid-required" aria-hidden="true">*</span>
@@ -2898,6 +3065,12 @@ defineExpose({
 						:title="headerTitle(c)"
 						@mousedown="onHeaderDown($event, c)"
 					>
+						<span
+							v-if="columnLetters"
+							class="tabula-grid-th-letter"
+							aria-hidden="true"
+							v-text="columnName(c)"
+						/>
 						<span v-if="fields[c]?.formula" class="tabula-grid-fx" aria-hidden="true">ƒx</span>
 						<span class="tabula-grid-th-text">{{ headerText(c) }}</span>
 						<span v-if="fields[c]?.required" class="tabula-grid-required" aria-hidden="true">*</span>
@@ -2955,7 +3128,7 @@ defineExpose({
 					class="tabula-grid-body"
 					:data-version="dataVersion"
 					:style="{
-						top: `${HEADER_HEIGHT}px`,
+						top: `${headerHeight}px`,
 						left: `${gutterWidth}px`,
 						width: `${totalWidth}px`,
 						height: `${totalHeight}px`
@@ -2988,7 +3161,7 @@ defineExpose({
 								:aria-selected="inRange(r, c)"
 								:aria-readonly="!isEditable(fields[c]) || rowLocked(r) || undefined"
 								:aria-invalid="issueClass(r, c) === 'is-error' ? 'true' : undefined"
-								:class="[cellClasses[c], issueClass(r, c), toneClass(r, c)]"
+								:class="[cellClasses[c], issueClass(r, c), toneClass(r, c), changeClass(r, c)]"
 								:style="cellStyles[c]"
 								:title="issueTitle(r, c)"
 							>
@@ -3029,7 +3202,7 @@ defineExpose({
 							:aria-selected="inRange(r, c)"
 							:aria-readonly="!isEditable(fields[c]) || rowLocked(r) || undefined"
 							:aria-invalid="issueClass(r, c) === 'is-error' ? 'true' : undefined"
-							:class="[cellClasses[c], issueClass(r, c), toneClass(r, c)]"
+							:class="[cellClasses[c], issueClass(r, c), toneClass(r, c), changeClass(r, c)]"
 							:style="cellStyles[c]"
 							:title="issueTitle(r, c)"
 						>
@@ -3073,7 +3246,7 @@ defineExpose({
 				</div>
 			</div>
 		</div>
-		<ScrollThumbs :target="scroller" :inset-top="HEADER_HEIGHT" :inset-left="gutterWidth + pinnedWidth" />
+		<ScrollThumbs :target="scroller" :inset-top="headerHeight" :inset-left="gutterWidth + pinnedWidth" />
 		<ul
 			v-if="listOpen"
 			:id="listId"
@@ -3313,6 +3486,30 @@ defineExpose({
 	border-right: 1px solid var(--tabula-head-line);
 	font-weight: 600;
 	white-space: nowrap;
+}
+
+/* The column's letter, on a strip of its own over the label. */
+.tabula-grid.has-letters .tabula-grid-th {
+	padding-top: 20px;
+}
+
+.tabula-grid-th-letter {
+	position: absolute;
+	top: 0;
+	right: 0;
+	left: 0;
+	box-sizing: border-box;
+	height: 20px;
+	border-bottom: 1px solid var(--tabula-line);
+	color: var(--tabula-muted);
+	font-size: 0.9em;
+	font-weight: 400;
+	line-height: 19px;
+	text-align: center;
+}
+
+.tabula-grid.has-letters .tabula-grid-corner {
+	background: linear-gradient(var(--tabula-head-bg) 19px, var(--tabula-line) 19px 20px, var(--tabula-head-bg) 20px);
 }
 
 .tabula-grid-th.is-right {
@@ -3679,6 +3876,17 @@ defineExpose({
 
 .tabula-grid-cell.is-warning::after {
 	border-right-color: var(--tabula-warning-mark);
+}
+
+/* A cell the user changed since the sheet was loaded: a mark in the top left, apart from an issue's. */
+.tabula-grid-cell.is-changed::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	border-width: 6px 6px 0 0;
+	border-style: solid;
+	border-color: var(--tabula-changed-mark) transparent transparent transparent;
 }
 
 /* A backend's issue on a cell changed since: no tint, a grey corner, until it is checked again. */

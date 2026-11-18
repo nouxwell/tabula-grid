@@ -84,8 +84,21 @@ export type { FormulaErrorCode, FormulaErrorValue } from "./formula/error.js"
 export { RowView, rowsWithIssues, rowsWithResult } from "./view.js"
 export type { RowFilter, RowOrder } from "./view.js"
 export { summarizeCells } from "./summary.js"
-export { compareValues, distinctValues, filterKey, filterKeys, hasRange, rowOrder, rowsMatching } from "./filters.js"
+export {
+	compareValues,
+	distinctValues,
+	filterKey,
+	filterKeys,
+	hasRange,
+	rowOrder,
+	rowsContaining,
+	rowsMatching
+} from "./filters.js"
 export { fillValues } from "./fill.js"
+export { adjustValue, isAdjustable } from "./adjust.js"
+export type { Adjustment } from "./adjust.js"
+export { rowsChanged, SheetChanges } from "./changes.js"
+export type { ChangeSummary, SheetChangesOptions } from "./changes.js"
 export { breaksCheck, checkFields, COMPARISONS, CONDITION_OPS, rowsBreaking } from "./checks.js"
 export type {
 	CheckInput,
@@ -123,7 +136,7 @@ export {
 } from "./views.js"
 export type { SavedView, SavedViews, ViewNameOptions, ViewNameProblem, ViewState } from "./views.js"
 export type { FillMode, FillOptions } from "./fill.js"
-export type { ColumnCondition, ColumnFilters, ColumnSort, DistinctValue } from "./filters.js"
+export type { ColumnCondition, ColumnFilters, ColumnSort, DistinctValue, SearchOptions } from "./filters.js"
 export type { CellSummary } from "./summary.js"
 
 export { Selection } from "./selection.js"

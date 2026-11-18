@@ -15,8 +15,11 @@ import {
 	readDraft,
 	readTemplate,
 	RowStore,
+	rowsChanged,
+	rowsContaining,
 	rowsWithIssues,
 	RowView,
+	SheetChanges,
 	SheetSession,
 	SheetValidator,
 	toCsv,
@@ -95,13 +98,16 @@ export interface ImportResult extends Pick<TableImport, "columns" | "missing" | 
  * With a template, the sheet works with the module schema as the template narrows it. A template
  * that does not apply is left out, and `templateError` says why. `carried` rows, the sheet's own
  * when the template changes, are taken as they are, in place of a draft.
+ *
+ * What the user changed is told against `baseline`, the server's rows, matched by product: a draft
+ * opened on another day still shows what it changed.
  */
 export function createSheet(
 	input: ModuleSchemaInput,
 	rows: readonly RowInit[],
 	locale: Ref<ValueLocale>,
 	layout: { readonly columns: Ref<ColumnLayout>; readonly widths: Ref<Readonly<Record<string, number>>> },
-	options: { readonly template?: unknown; readonly carried?: boolean } = {}
+	options: { readonly template?: unknown; readonly carried?: boolean; readonly baseline?: readonly RowInit[] } = {}
 ) {
 	const { columns, widths } = layout
 	const moduleSchema = ModuleSchema.from(input)
@@ -134,6 +140,13 @@ export function createSheet(
 		...(opened ? { restore: opened.session } : {})
 	})
 	const lookups = new LookupResolver({ schema, store, adapters: lookupAdapters })
+	const changes = new SheetChanges({
+		schema,
+		store,
+		baseline: options.baseline ?? rows,
+		key: "productId",
+		settings: VALUE_SETTINGS[locale.value]
+	})
 	const view = new RowView(store)
 	const saver = new DraftSaver({
 		schema,
@@ -159,7 +172,8 @@ export function createSheet(
 		session.subscribe(bump),
 		session.results.subscribe(bump),
 		view.subscribe(bump),
-		saver.subscribe(bump)
+		saver.subscribe(bump),
+		changes.subscribe(bump)
 	]
 	const stopLocale = watch(locale, value => validator.setSettings(VALUE_SETTINGS[value]))
 
@@ -168,6 +182,24 @@ export function createSheet(
 			view.filter(rowsWithIssues(session.issues), "issues")
 		} else {
 			view.clear("issues")
+		}
+	}
+
+	/** Only the rows the user changed or added, as they are now. */
+	function onlyChanged(only: boolean): void {
+		if (only) {
+			view.filter(rowsChanged(changes), "changed")
+		} else {
+			view.clear("changed")
+		}
+	}
+
+	/** The rows holding the text, as their cells show it; empty text shows every row again. */
+	function search(text: string): void {
+		if (text.trim() === "") {
+			view.clear("search")
+		} else {
+			view.filter(rowsContaining(store, schema, text, { settings: VALUE_SETTINGS[locale.value] }), "search")
 		}
 	}
 
@@ -212,6 +244,7 @@ export function createSheet(
 		stops.forEach(stop => stop())
 		saver.dispose()
 		lookups.dispose()
+		changes.dispose()
 		session.dispose()
 		validator.dispose()
 		view.dispose()
@@ -228,6 +261,7 @@ export function createSheet(
 		lookups,
 		view,
 		saver,
+		changes,
 		/** Whether a kept draft was opened, with the columns the user had. */
 		restored: opened !== null,
 		/** The template the sheet works with, and why one asked for could not be. */
@@ -235,6 +269,8 @@ export function createSheet(
 		templateError,
 		version,
 		onlyIssueRows,
+		onlyChanged,
+		search,
 		importCsv,
 		exportCsv,
 		dispose
