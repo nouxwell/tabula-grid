@@ -2083,9 +2083,18 @@ describe("scroll bars", () => {
 })
 
 describe("a multi-select cell", () => {
-	/** The Kanallar column's place: it comes after the others. */
-	async function channelsCol(page: Page): Promise<number> {
-		return Number(await page.locator(".tabula-grid-th", { hasText: "Kanallar" }).getAttribute("aria-colindex")) - 1
+	/**
+	 * Goes to the Kanallar column, the last, on a row: the sheet draws only the columns in view, so
+	 * a cell of it is reached as a user reaches it, by End, which brings it into view.
+	 */
+	async function toChannels(page: Page, row: number): Promise<number> {
+		const col = Number(await page.locator(".tabula-grid").getAttribute("aria-colcount")) - 1
+
+		await cell(page, row, 0).click()
+		await press(page, "End")
+		await expect.poll(async () => (await selected(page)).active).toEqual({ row, col })
+
+		return col
 	}
 
 	const options = (page: Page) => page.locator(".tabula-grid-list .tabula-grid-option")
@@ -2098,11 +2107,10 @@ describe("a multi-select cell", () => {
 		await withPage(
 			20,
 			async page => {
-				const col = await channelsCol(page)
+				const col = await toChannels(page, 0)
 
 				await expect(cell(page, 2, col).innerText()).resolves.toBe("Mağaza, Web")
 
-				await cell(page, 0, col).click()
 				await press(page, "F2")
 
 				await expect.poll(() => options(page).allInnerTexts()).toEqual(["Mağaza", "Web", "Pazar yeri"])
@@ -2130,9 +2138,8 @@ describe("a multi-select cell", () => {
 		await withPage(
 			20,
 			async page => {
-				const col = await channelsCol(page)
+				const col = await toChannels(page, 3)
 
-				await cell(page, 3, col).click()
 				await page.keyboard.type("paz")
 				await expect.poll(() => options(page).allInnerTexts()).toEqual(["Pazar yeri"])
 				await press(page, "Enter")
@@ -2154,9 +2161,8 @@ describe("a multi-select cell", () => {
 		await withPage(
 			20,
 			async page => {
-				const col = await channelsCol(page)
+				const col = await toChannels(page, 2)
 
-				await cell(page, 2, col).click()
 				await press(page, "F2")
 				await press(page, "Space")
 				await press(page, "Escape")
@@ -2166,7 +2172,8 @@ describe("a multi-select cell", () => {
 				await press(page, "Alt+ArrowDown")
 				await options(page).filter({ hasText: "Pazar yeri" }).click()
 				await expect(picked(page)).resolves.toEqual(["Mağaza", "Web", "Pazar yeri"])
-				await cell(page, 5, 0).click()
+				// Into the column beside, which is in view as this one is.
+				await cell(page, 5, col - 1).click()
 
 				await expect.poll(() => valueAt(page, 2, "channels")).toEqual(["store", "web", "market"])
 			},
@@ -2178,7 +2185,7 @@ describe("a multi-select cell", () => {
 		await withPage(
 			20,
 			async page => {
-				const col = await channelsCol(page)
+				const col = await toChannels(page, 0)
 				const panel = page.locator(".tabula-grid-filter")
 
 				await header(page, col).hover()
