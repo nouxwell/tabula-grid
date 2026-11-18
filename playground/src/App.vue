@@ -40,6 +40,7 @@ import {
 	TabulaIssues,
 	TabulaPreview,
 	TabulaStatusBar,
+	type GridMenuItem,
 	type GridTheme
 } from "@nouxwell/tabula-vue"
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
@@ -129,6 +130,11 @@ const lookups = new LookupResolver({ schema, store, adapters: backend.lookups })
 const view = new RowView(store)
 // What the user changed since the sheet opened, marked on its cells.
 const changes = new SheetChanges({ schema, store })
+// The playground's own item in the grid's right-click menu: rounding what is selected.
+const menuItems: readonly GridMenuItem[] = [
+	{ key: "round", label: "Yuvarla", children: [{ key: "round:1", label: "Tam sayıya" }] }
+]
+
 // `?letters=1`: the columns' letters over their headers.
 const columnLetters = params.get("letters") === "1"
 const onlyIssueRows = ref(false)
@@ -504,6 +510,13 @@ function showPlanned(rowId: RowId): void {
 	grid.value?.goTo(rowId)
 }
 
+/** The playground's own menu item, by its key: rounding the numbers selected. */
+function onMenu(key: string): void {
+	if (key.startsWith("round:")) {
+		grid.value?.adjustSelection({ kind: "round", step: key.slice("round:".length) })
+	}
+}
+
 async function ask(): Promise<void> {
 	const outcome = await session.refresh()
 
@@ -723,9 +736,11 @@ onMounted(() => {
 				:view="view"
 				:changes="changes"
 				:column-letters="columnLetters"
+				:menu-items="menuItems"
 				:theme="theme"
 				:locale="language"
 				:value-settings="valueSettings"
+				@menu="onMenu"
 			/>
 			<TabulaIssues
 				v-model:only-issue-rows="onlyIssueRows"

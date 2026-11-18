@@ -274,7 +274,9 @@
 						@click="onlyChanged = false"
 					>
 						Tüm satırlar
-						<span class="rounded-full bg-surface-alt px-1.5 text-xs tabular-nums">{{ rowCountText }}</span>
+						<span class="rounded-full bg-surface-alt px-1.5 text-xs tabular-nums">
+							<AppNumberAnimation :to="rowCount" locale="tr-TR" />
+						</span>
 					</button>
 					<button
 						type="button"
@@ -290,12 +292,16 @@
 					>
 						Değişenler
 						<span class="rounded-full bg-surface-alt px-1.5 text-xs tabular-nums">
-							{{ changeSummary.rows }}
+							<AppNumberAnimation :to="changeSummary.rows" locale="tr-TR" />
 						</span>
 					</button>
-					<span v-if="changeSummary.missing > 0" class="text-muted">
-						· {{ changeSummary.missing }} satır silindi
-					</span>
+					<Transition name="fade">
+						<span v-if="changeSummary.missing > 0" class="text-muted">
+							·
+							<AppNumberAnimation :to="changeSummary.missing" locale="tr-TR" />
+							satır silindi
+						</span>
+					</Transition>
 				</div>
 				<div class="w-full md:ml-auto md:w-72">
 					<AppInput
@@ -314,7 +320,7 @@
 		</div>
 
 		<main class="flex min-h-0 flex-1 flex-col gap-3 px-4 py-3 md:flex-row md:px-6">
-			<div class="min-h-[320px] min-w-0 flex-1">
+			<AppCard class="min-h-[320px] min-w-0 flex-1 overflow-hidden" content-class="flex min-h-0 flex-col p-0!">
 				<Transition name="fade" mode="out-in">
 					<TabulaGrid
 						v-if="sheet"
@@ -324,7 +330,7 @@
 						v-model:column-widths="widths"
 						v-model:filters="filters"
 						v-model:sort="sort"
-						class="h-full"
+						class="min-h-0 flex-1 rounded-none! border-0!"
 						:schema="sheet.schema"
 						:store="sheet.store"
 						:issues="sheet.session.issues"
@@ -334,15 +340,17 @@
 						:view="sheet.view"
 						:changes="sheet.changes"
 						column-letters
+						:menu-items="menuItems"
 						:theme="theme"
 						:locale="locale"
 						:value-settings="valueSettings"
 						:row-height="narrow ? 40 : 30"
+						@menu="onMenu"
 					/>
 					<!-- Only the part that waits spins; the rest of the page is there and works. -->
 					<div
 						v-else
-						class="flex h-full flex-col items-center justify-center gap-3 rounded-app border border-divider bg-surface text-sm text-muted"
+						class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-muted"
 						role="status"
 					>
 						<template v-if="rowsError">
@@ -355,45 +363,52 @@
 						</template>
 					</div>
 				</Transition>
-			</div>
-			<TabulaIssues
+			</AppCard>
+			<!-- On a phone the issues are a bar opening a sheet, not a card. -->
+			<component
+				:is="narrow ? 'div' : AppCard"
 				v-if="sheet"
-				v-model:only-issue-rows="onlyIssueRows"
-				v-model:open="issuesOpen"
-				class="md:w-[340px] md:flex-none"
-				:variant="narrow ? 'sheet' : 'panel'"
-				:issues="sheet.session.issues"
-				:schema="sheet.schema"
-				:store="sheet.store"
-				:theme="theme"
-				:locale="locale"
-				:value-settings="valueSettings"
-				:address-of="addressOf"
-				name-field="productId"
-				@select="issue => grid?.goTo(issue.rowId!, issue.field)"
-				@refresh-rows="sheet.view.refresh()"
+				class="md:w-[340px]! md:flex-none"
+				v-bind="narrow ? {} : { contentClass: 'flex min-h-0 flex-col p-0!' }"
 			>
-				<template v-if="narrow || errors > 0" #actions>
-					<p
-						v-if="errors > 0"
-						class="m-0 flex w-full items-center gap-2 rounded-app bg-error/10 px-3 py-2.5 text-sm text-error"
-						role="status"
-					>
-						{{ blockedText }}
-					</p>
-					<AppButton
-						v-if="narrow"
-						type="primary"
-						size="large"
-						icon="refresh"
-						block
-						:loading="phase === 'checking'"
-						@click="check"
-					>
-						Yeniden kontrol et
-					</AppButton>
-				</template>
-			</TabulaIssues>
+				<TabulaIssues
+					v-model:only-issue-rows="onlyIssueRows"
+					v-model:open="issuesOpen"
+					:class="narrow ? '' : 'min-h-0 flex-1 rounded-none! border-0! bg-transparent!'"
+					:variant="narrow ? 'sheet' : 'panel'"
+					:issues="sheet.session.issues"
+					:schema="sheet.schema"
+					:store="sheet.store"
+					:theme="theme"
+					:locale="locale"
+					:value-settings="valueSettings"
+					:address-of="addressOf"
+					name-field="productId"
+					@select="issue => grid?.goTo(issue.rowId!, issue.field)"
+					@refresh-rows="sheet.view.refresh()"
+				>
+					<template v-if="narrow || errors > 0" #actions>
+						<p
+							v-if="errors > 0"
+							class="m-0 flex w-full items-center gap-2 rounded-app bg-error/10 px-3 py-2.5 text-sm text-error"
+							role="status"
+						>
+							{{ blockedText }}
+						</p>
+						<AppButton
+							v-if="narrow"
+							type="primary"
+							size="large"
+							icon="refresh"
+							block
+							:loading="phase === 'checking'"
+							@click="check"
+						>
+							Yeniden kontrol et
+						</AppButton>
+					</template>
+				</TabulaIssues>
+			</component>
 		</main>
 
 		<div class="hidden flex-none border-t border-divider md:block">
@@ -494,6 +509,7 @@
 			:locale="locale"
 			:settings="valueSettings"
 			:save="saveTemplate"
+			:letters="columnLetters"
 			@show-rows="showRuleRows"
 			@preview="previewTemplate"
 		/>
@@ -619,6 +635,7 @@
 
 <script setup lang="ts">
 import {
+	arrangeColumns,
 	suggestRenames,
 	VALUE_SETTINGS,
 	VIEW_NAME_LIMIT,
@@ -638,9 +655,11 @@ import {
 	type RowInit,
 	type ViewNameProblem
 } from "@nouxwell/tabula-core"
-import type { TabulaGrid as Grid } from "@nouxwell/tabula-vue"
+import { columnName, type GridMenuItem, type TabulaGrid as Grid } from "@nouxwell/tabula-vue"
 import { useMessage, type DropdownOption } from "naive-ui"
+import { refDebounced } from "@vueuse/core"
 import { h } from "vue"
+import AppCard from "~/components/atoms/AppCard.vue"
 import AppIcon from "~/components/atoms/AppIcon.vue"
 import { localeMenu, type Locale } from "~/utils/locales"
 import { discardDraft, type ImportResult, type Sheet } from "~/utils/sheet"
@@ -1195,7 +1214,6 @@ function addressOf(rowId: RowId, field: string): string | null {
 const changeSummary = computed(() =>
 	version.value >= 0 && sheet.value ? sheet.value.changes.summary() : { rows: 0, cells: 0, added: 0, missing: 0 }
 )
-const rowCountText = computed(() => new Intl.NumberFormat("tr-TR").format(rowCount.value))
 const onlyChanged = ref(false)
 
 watch(onlyChanged, only => sheet.value?.onlyChanged(only))
@@ -1210,13 +1228,10 @@ function showChanged(): void {
 }
 
 const searchText = ref("")
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-
 // A moment after the typing stops: 10,000 rows are searched once, not at every letter.
-watch(searchText, text => {
-	clearTimeout(searchTimer)
-	searchTimer = setTimeout(() => sheet.value?.search(text ?? ""), 150)
-})
+const searchFor = refDebounced(searchText, 250)
+
+watch(searchFor, text => sheet.value?.search(text ?? ""))
 
 const adjustOpen = ref(false)
 const adjustKind = ref<"percent" | "add">("percent")
@@ -1289,6 +1304,38 @@ function chooseRound(key: string): void {
 
 	adjust({ kind: "round", step, mode: mode as "half" | "up" | "down" })
 }
+
+/** The page's own items in the grid's right-click menu: the bulk changes, each with its window. */
+const menuItems = computed<GridMenuItem[]>(() => [
+	{ key: "percent", label: "Yüzde uygula…" },
+	{ key: "add", label: "Tutar ekle…" },
+	{
+		key: "round",
+		label: "Yuvarla",
+		children: roundOptions.map(option => ({ key: `round:${String(option.key)}`, label: String(option.label) }))
+	}
+])
+
+function onMenu(key: string): void {
+	if (key === "percent" || key === "add") {
+		openAdjust(key)
+	} else if (key.startsWith("round:")) {
+		chooseRound(key.slice("round:".length))
+	}
+}
+
+/** Each column's letter as the columns stand on screen, for the addresses a formula may hold. */
+const columnLetters = computed(() => {
+	const current = sheet.value
+
+	if (!current) {
+		return {}
+	}
+
+	const shown = arrangeColumns(current.schema.fields, columns.value).fields
+
+	return Object.fromEntries(shown.map((field, index) => [field.key, columnName(index)]))
+})
 
 /** Takes out the rows the selection spans; Ctrl+Z brings them back. */
 function removeRows(): void {

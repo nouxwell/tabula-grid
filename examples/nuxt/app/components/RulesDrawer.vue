@@ -51,10 +51,7 @@
 							@cancel="stopEditing"
 							@toggle-rows="toggleRows"
 						/>
-						<div
-							v-else
-							class="flex items-center gap-2.5 rounded-app border border-divider bg-surface px-3 py-2.5"
-						>
+						<AppCard v-else content-class="flex items-center gap-2.5 px-3! py-2.5!">
 							<span
 								class="size-2 flex-none rounded-full"
 								:class="item.severity === 'error' ? 'bg-error' : 'bg-warning'"
@@ -86,7 +83,7 @@
 								</template>
 								Kuralı sil
 							</AppTooltip>
-						</div>
+						</AppCard>
 					</template>
 
 					<p v-if="items.length === 0 && !editing" class="m-0 text-sm text-muted">
@@ -125,10 +122,7 @@
 							@save="keepColumn"
 							@cancel="columnEditing = null"
 						/>
-						<div
-							v-else
-							class="flex items-center gap-2.5 rounded-app border border-divider bg-surface px-3 py-2.5"
-						>
+						<AppCard v-else content-class="flex items-center gap-2.5 px-3! py-2.5!">
 							<span
 								class="w-5 flex-none text-center font-mono text-sm"
 								:class="item.formula ? 'text-primary-text' : 'text-muted'"
@@ -164,7 +158,7 @@
 								</template>
 								Sütunu sil
 							</AppTooltip>
-						</div>
+						</AppCard>
 					</template>
 
 					<p v-if="columnItems.length === 0 && !columnEditing" class="m-0 text-sm text-muted">
@@ -239,7 +233,15 @@ import {
 	type ValueSettings
 } from "@nouxwell/tabula-core"
 import { describeCheck, type GridLocale } from "@nouxwell/tabula-vue"
-import { columnDraftOf, columnOf, keyFor, kindWord, newColumnDraft, type ColumnDraft } from "~/utils/columns"
+import {
+	columnDraftOf,
+	columnOf,
+	columnsByLetter,
+	keyFor,
+	kindWord,
+	newColumnDraft,
+	type ColumnDraft
+} from "~/utils/columns"
 import { checkOf, draftOf, newDraft, type RuleDraft } from "~/utils/rules"
 import type { Sheet } from "~/utils/sheet"
 
@@ -259,6 +261,8 @@ const props = defineProps<{
 	settings: ValueSettings
 	/** Saves the template with its new checks and columns; resolves to whether it was kept. */
 	save: (template: unknown) => Promise<boolean>
+	/** Each column's letter as the columns stand on screen, by field key: what an address in a formula names. */
+	letters: Readonly<Record<string, string>>
 }>()
 
 const emit = defineEmits<{
@@ -481,14 +485,19 @@ const namedFields = computed(() => [
 	...moduleSchema.value.fields.map(field => ({
 		key: field.key,
 		label: props.sheet.schema.has(field.key) ? props.sheet.schema.field(field.key).label : field.label,
-		kind: kindWord(field.type)
+		kind: kindWord(field.type),
+		letter: props.letters[field.key] ?? null
 	})),
 	...columns.value.map(column => ({
 		key: column.key,
 		label: column.label ?? column.key,
-		kind: kindWord(column.type)
+		kind: kindWord(column.type),
+		letter: props.letters[column.key] ?? null
 	}))
 ])
+
+/** The fields by where their columns stand on screen, A first: what an address in a formula reads. */
+const addressColumns = computed(() => columnsByLetter(namedFields.value))
 
 /**
  * A new column takes its key from its header as it stands when kept, "Kâr marjı %" as "karMarji";
@@ -527,7 +536,7 @@ const columnPreview = computed(() => {
 		return null
 	}
 
-	const made = columnOf(withKey(current), namedFields.value)
+	const made = columnOf(withKey(current), namedFields.value, addressColumns.value)
 	const list = [...columns.value]
 	const position = current.index ?? list.length
 
@@ -586,7 +595,7 @@ function keepColumn(): void {
 		return
 	}
 
-	const made = columnOf(withKey(current), namedFields.value)
+	const made = columnOf(withKey(current), namedFields.value, addressColumns.value)
 
 	if (current.index === null) {
 		columns.value.push(made)

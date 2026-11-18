@@ -15,6 +15,7 @@
 		"@nouxwell/tabula-core": "workspace:^",
 		"@nouxwell/tabula-nuxt": "workspace:^",
 		"@nouxwell/tabula-vue": "workspace:^",
+		"@vueuse/core": "^15.0.0",
 		"naive-ui": "^2.45.3",
 		"nuxt": "^4.6.4",
 		"vue": "^3.5.45"

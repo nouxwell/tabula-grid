@@ -20,7 +20,14 @@ const props = defineProps({
 
 const text = computed(() => BAR_TEXT[props.locale])
 const cell = computed(() => props.grid?.cell ?? null)
-const formula = computed(() => cell.value?.field.formula ?? null)
+/** A column worked out by a formula: its formula in pieces, with labels, each field in its colour. */
+const formula = computed(() => cell.value?.formula ?? null)
+
+function partClass(field: string | null): string[] | undefined {
+	const index = field === null ? -1 : (cell.value?.references.indexOf(field) ?? -1)
+
+	return index < 0 ? undefined : ["tabula-formula-ref", `tabula-ref-${index % 6}`]
+}
 
 /**
  * The cell being typed for, kept from the first key: a click on another cell moves the selection
@@ -31,9 +38,7 @@ const draft = ref<string | null>(null)
 const address = ref<string | null>(null)
 const wrongAddress = ref(false)
 
-const shownValue = computed(
-	() => draft.value ?? (formula.value !== null ? `=${formula.value}` : (cell.value?.text ?? ""))
-)
+const shownValue = computed(() => draft.value ?? cell.value?.text ?? "")
 
 watch(
 	() => cell.value?.address,
@@ -126,9 +131,21 @@ function selectAll(event: FocusEvent): void {
 			@blur="onAddressBlur"
 		/>
 		<span class="tabula-formula-fx" aria-hidden="true">ƒx</span>
+		<div
+			v-if="formula !== null"
+			class="tabula-formula-value is-formula"
+			role="textbox"
+			aria-readonly="true"
+			tabindex="0"
+			:aria-label="text.value"
+			:title="text.formulaHint"
+		>
+			<span>=</span>
+			<span v-for="(part, at) in formula" :key="at" :class="partClass(part.field)" v-text="part.text" />
+		</div>
 		<input
+			v-else
 			class="tabula-formula-value"
-			:class="{ 'is-formula': formula !== null }"
 			type="text"
 			spellcheck="false"
 			autocomplete="off"
@@ -181,6 +198,21 @@ function selectAll(event: FocusEvent): void {
 .tabula-formula-value {
 	flex: 1;
 	min-width: 0;
+}
+
+/* A formula: read only, each field it reads in the colour its column has in the sheet. */
+.tabula-formula-value.is-formula {
+	display: block;
+	overflow: hidden;
+	line-height: 30px;
+	text-overflow: ellipsis;
+	background: var(--tabula-readonly-bg);
+	white-space: pre;
+}
+
+.tabula-formula-ref {
+	color: var(--tabula-ref);
+	font-weight: 600;
 }
 
 .tabula-formula-value[readonly] {

@@ -35,7 +35,7 @@
 			@click="follow"
 			@keyup="follow"
 			@focus="focused = true"
-			@blur="focused = false"
+			@blur="settle"
 		/>
 
 		<ul
@@ -48,7 +48,13 @@
 				class="px-3 pt-1.5 pb-1 text-[11px] font-semibold tracking-wide text-muted uppercase"
 				role="presentation"
 			>
-				{{ context.token?.kind === "field" ? "Alanlar" : "Fonksiyonlar" }}
+				{{
+					context.token?.kind === "field"
+						? "Alanlar"
+						: suggestions[0]?.letter
+							? "Sütun ve fonksiyonlar"
+							: "Fonksiyonlar"
+				}}
 			</li>
 			<li
 				v-for="(item, index) in suggestions"
@@ -61,6 +67,13 @@
 				@mousedown.prevent="insert(index)"
 				@mousemove="highlighted = index"
 			>
+				<span
+					v-if="item.letter"
+					class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-divider px-1 text-xs text-muted"
+					aria-hidden="true"
+				>
+					{{ item.letter }}
+				</span>
 				<span :class="item.mono ? 'font-mono font-medium' : 'font-semibold'">{{ item.label }}</span>
 				<span class="text-xs text-muted">{{ item.detail }}</span>
 				<span v-if="item.kind" class="ml-auto text-xs text-muted">{{ item.kind }}</span>
@@ -74,20 +87,29 @@
 
 <script setup lang="ts">
 /**
- * A formula field that helps as it is written: after "[" it lists the fields by their labels, on a
- * letter the functions that start with it, and above it the call the caret is in, with the argument
- * being written in bold and what the function does. Fields are written by their labels here; the
- * form turns them into keys when it saves.
+ * A formula field that helps as it is written: after "[" it lists the fields by their labels, each
+ * with its column's letter, on a letter the functions that start with it, and above it the call the
+ * caret is in, with the argument being written in bold and what the function does. Fields are
+ * written by their labels here; the form turns them into keys when it saves.
+ *
+ * An address, "D" or "D2", reads this row's column D: the list offers that column first, and leaving
+ * the field writes every address as its field's label, so moving a column changes nothing.
  */
-import { FORMULA_FUNCTIONS, formulaCaret } from "@nouxwell/tabula-core"
+import { FORMULA_FUNCTIONS, formulaCaret, formulaFromAddresses } from "@nouxwell/tabula-core"
 import { functionHelp, type GridLocale } from "@nouxwell/tabula-vue"
+import { columnsByLetter } from "~/utils/columns"
 
 const text = defineModel<string>({ required: true })
 
 const props = withDefaults(
 	defineProps<{
-		/** The fields a formula may read, with a word for their kind. */
-		fields: readonly { readonly key: string; readonly label: string; readonly kind: string }[]
+		/** The fields a formula may read, with a word for their kind and their column's letter on screen. */
+		fields: readonly {
+			readonly key: string
+			readonly label: string
+			readonly kind: string
+			readonly letter?: string | null
+		}[]
 		locale?: GridLocale
 		inputId?: string
 		placeholder?: string
@@ -132,6 +154,7 @@ const suggestions = computed(() => {
 					label: field.label,
 					detail: `[${field.key}]`,
 					kind: field.kind,
+					letter: field.letter ?? null,
 					insert: `[${field.label}]`,
 					mono: false
 				}))
@@ -139,17 +162,50 @@ const suggestions = computed(() => {
 	}
 
 	const prefix = token.query.toUpperCase()
-
-	return FORMULA_FUNCTIONS.filter(name => name.startsWith(prefix) && name !== prefix)
-		.slice(0, 8)
+	// "D" or "D2": the field of that column, in this row, before the functions.
+	const address = /^([A-Z]{1,3})[0-9]*$/.exec(prefix)
+	const column = address ? props.fields.find(field => field.letter === address[1]) : undefined
+	const functions = FORMULA_FUNCTIONS.filter(name => name.startsWith(prefix) && name !== prefix)
+		.slice(0, column ? 7 : 8)
 		.map(name => ({
 			label: name,
 			detail: functionHelp(name, props.locale)?.short ?? "",
 			kind: "",
+			letter: null as string | null,
 			insert: `${name}(`,
 			mono: true
 		}))
+
+	return column
+		? [
+				{
+					label: column.label,
+					detail: "bu satırın hücresi",
+					kind: column.kind,
+					letter: column.letter ?? null,
+					insert: `[${column.label}]`,
+					mono: false
+				},
+				...functions
+			]
+		: functions
 })
+
+/** The fields by where their columns stand, A first, for the addresses in what is typed. */
+const columns = computed(() =>
+	columnsByLetter(props.fields.map(field => ({ key: field.key, label: field.label, letter: field.letter ?? null })))
+)
+
+/** Leaving the field writes each address as its field's label: what it reads, for good. */
+function settle(): void {
+	focused.value = false
+
+	const settled = formulaFromAddresses(text.value, columns.value)
+
+	if (settled !== text.value) {
+		text.value = settled
+	}
+}
 
 const open = computed(() => focused.value && !dismissed.value && suggestions.value.length > 0)
 

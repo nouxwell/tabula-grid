@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { formulaCaret, formulaWithKeys, formulaWithLabels, parseFormula } from "../src/index"
+import {
+	formulaCaret,
+	formulaFromAddresses,
+	formulaParts,
+	formulaWithKeys,
+	formulaWithLabels,
+	parseFormula
+} from "../src/index"
 
 const fields = [
 	{ key: "currentPrice", label: "Mevcut fiyat" },
@@ -51,5 +58,39 @@ describe("formula help", () => {
 		// Two fields are labelled "Not": the label names neither, and stays for the parser to refuse.
 		expect(formulaWithKeys("[Not] & [note]", fields)).toBe("[Not] & [note]")
 		expect(() => parseFormula(formulaWithKeys(shown, fields))).not.toThrow()
+	})
+})
+
+describe("formulaFromAddresses", () => {
+	// As the columns stand on screen: A, B, C.
+	const columns = [
+		{ key: "product", label: "Ürün" },
+		{ key: "currentPrice", label: "Mevcut fiyat" },
+		{ key: "newPrice", label: "Aralık fiyatı" }
+	]
+
+	it("reads an address as the field of its column in the same row, with or without a row number", () => {
+		expect(formulaFromAddresses("C * 1.2 + B2", columns)).toBe("[Aralık fiyatı] * 1.2 + [Mevcut fiyat]")
+		expect(formulaFromAddresses("=c-b", columns)).toBe("=[Aralık fiyatı]-[Mevcut fiyat]")
+	})
+
+	it("leaves functions, TRUE, text, fields and columns past the last as written", () => {
+		expect(formulaFromAddresses('ROUND(C, 2) & "B2" & [Not]', columns)).toBe(
+			'ROUND([Aralık fiyatı], 2) & "B2" & [Not]'
+		)
+		expect(formulaFromAddresses("IF(TRUE, ABS (B), Z9)", columns)).toBe("IF(TRUE, ABS ([Mevcut fiyat]), Z9)")
+		// Part of a number or of a longer name is no address.
+		expect(formulaFromAddresses("1E5 + BB_1", columns)).toBe("1E5 + BB_1")
+	})
+})
+
+describe("formulaParts", () => {
+	it("cuts a formula into its text and the fields it reads, written with their labels", () => {
+		expect(formulaParts('[newPrice] - [currentPrice] & "[x]"', fields)).toEqual([
+			{ text: "[Aralık fiyatı]", field: "newPrice" },
+			{ text: " - ", field: null },
+			{ text: "[Mevcut fiyat]", field: "currentPrice" },
+			{ text: ' & "[x]"', field: null }
+		])
 	})
 })

@@ -1,10 +1,12 @@
 import {
+	formulaFromAddresses,
 	formulaWithKeys,
 	formulaWithLabels,
 	type FieldInput,
 	type FieldType,
 	type NamedField
 } from "@nouxwell/tabula-core"
+import { parseAddress } from "@nouxwell/tabula-vue"
 
 /**
  * A template's own column as the rules drawer edits it: a header, a kind, and a formula written with
@@ -100,8 +102,34 @@ export function newColumnDraft(taken: ReadonlySet<string>): ColumnDraft {
 	return { key: keyFor("Yeni sütun", taken), label: "Yeni sütun", type: "decimal", decimals: "", formula: "" }
 }
 
-/** The draft as a template's column: its formula written with keys, as it is saved. */
-export function columnOf(draft: ColumnDraft, fields: readonly NamedField[]): FieldInput {
+/**
+ * The fields at the places their columns stand on screen, by their letters: A at 0, B at 1. A place
+ * with no field, such as the column being written, is left empty.
+ */
+export function columnsByLetter(fields: readonly (NamedField & { readonly letter: string | null })[]): NamedField[] {
+	const places: NamedField[] = []
+
+	for (const field of fields) {
+		const at = field.letter ? parseAddress(`${field.letter}1`)?.col : undefined
+
+		if (at !== undefined) {
+			places[at] = field
+		}
+	}
+
+	return places
+}
+
+/**
+ * The draft as a template's column: its formula written with keys, as it is saved. An address such
+ * as "D" or "D2" is read as the field of that column in the same row, `columns` as they stand on
+ * screen, A first.
+ */
+export function columnOf(
+	draft: ColumnDraft,
+	fields: readonly NamedField[],
+	columns: readonly NamedField[] = []
+): FieldInput {
 	const decimals = Number.parseInt(draft.decimals, 10)
 	const formula = draft.formula.trim().replace(/^=\s*/, "")
 
@@ -110,6 +138,6 @@ export function columnOf(draft: ColumnDraft, fields: readonly NamedField[]): Fie
 		type: draft.type,
 		label: draft.label.trim() === "" ? draft.key : draft.label.trim(),
 		...(takesDecimals(draft.type) && Number.isSafeInteger(decimals) && decimals >= 0 ? { decimals } : {}),
-		...(formula === "" ? {} : { formula: formulaWithKeys(formula, fields) })
+		...(formula === "" ? {} : { formula: formulaWithKeys(formulaFromAddresses(formula, columns), fields) })
 	}
 }

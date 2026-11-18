@@ -211,3 +211,148 @@ function mapFields(formula: string, map: (name: string) => string): string {
 
 	return result
 }
+
+// ---------------------------------------------------------------- addresses and parts
+
+const ADDRESS = /^([A-Za-z]{1,3})([0-9]*)$/
+
+/**
+ * The formula with each cell address read as the field of its column, written with its label:
+ * "D * 1.2" and "D2 * 1.2" alike are "[Yeni fiyat] * 1.2". A column formula reads its own row, so
+ * an address's row number says nothing. `columns` are the fields as the columns stand on screen, A
+ * first. A name followed by "(" is a function, TRUE and FALSE are values, and an address past the
+ * last column is left as written, for the parser to refuse. Text in quotes and fields in brackets
+ * are left as they are.
+ */
+export function formulaFromAddresses(text: string, columns: readonly NamedField[]): string {
+	let result = ""
+	let at = 0
+
+	while (at < text.length) {
+		const char = text.charAt(at)
+
+		if (char === '"') {
+			const close = closingQuote(text, at)
+
+			result += text.slice(at, close)
+			at = close
+		} else if (char === "[") {
+			const close = text.indexOf("]", at + 1)
+			const end = close < 0 ? text.length : close + 1
+
+			result += text.slice(at, end)
+			at = end
+		} else if (NAME_START.test(char) && !NAME_PART.test(text.charAt(at - 1))) {
+			let end = at
+
+			while (end < text.length && NAME_PART.test(text.charAt(end))) {
+				end++
+			}
+
+			const name = text.slice(at, end)
+			const column = addressColumn(name, text.slice(end))
+			const field = column === null ? undefined : columns[column]
+
+			result += field ? `[${field.label}]` : name
+			at = end
+		} else {
+			result += char
+			at++
+		}
+	}
+
+	return result
+}
+
+/** Each of the formula's pieces, to draw it: text as written, and each field it reads, with its label. */
+export interface FormulaPart {
+	readonly text: string
+	/** The key of the field this piece reads; null for the rest of the formula. */
+	readonly field: string | null
+}
+
+/**
+ * The formula in pieces, its fields written by their labels: for a formula bar that colours each
+ * field it reads, as the sheet colours its column.
+ */
+export function formulaParts(formula: string, fields: readonly NamedField[]): FormulaPart[] {
+	const labels = new Map(fields.map(field => [field.key, field.label]))
+	const parts: FormulaPart[] = []
+	let plain = ""
+	let at = 0
+
+	while (at < formula.length) {
+		const char = formula.charAt(at)
+
+		if (char === '"') {
+			const close = closingQuote(formula, at)
+
+			plain += formula.slice(at, close)
+			at = close
+		} else if (char === "[") {
+			const close = formula.indexOf("]", at + 1)
+
+			if (close < 0) {
+				plain += formula.slice(at)
+				break
+			}
+
+			const key = formula.slice(at + 1, close)
+
+			if (plain !== "") {
+				parts.push({ text: plain, field: null })
+				plain = ""
+			}
+
+			parts.push({ text: `[${labels.get(key) ?? key}]`, field: key })
+			at = close + 1
+		} else {
+			plain += char
+			at++
+		}
+	}
+
+	if (plain !== "") {
+		parts.push({ text: plain, field: null })
+	}
+
+	return parts
+}
+
+/** Where the text in quotes that opens at `at` ends: past its closing quote, a doubled quote passed over. */
+function closingQuote(text: string, at: number): number {
+	let end = at + 1
+
+	while (end < text.length) {
+		if (text.charAt(end) === '"') {
+			if (text.charAt(end + 1) === '"') {
+				end += 2
+				continue
+			}
+
+			return end + 1
+		}
+
+		end++
+	}
+
+	return text.length
+}
+
+/** The column an address names, from 0, or null when the name is not an address: a function, TRUE or FALSE. */
+function addressColumn(name: string, after: string): number | null {
+	const match = ADDRESS.exec(name)
+	const upper = name.toUpperCase()
+
+	if (!match || after.trimStart().startsWith("(") || upper === "TRUE" || upper === "FALSE") {
+		return null
+	}
+
+	let column = 0
+
+	for (const letter of (match[1] ?? "").toUpperCase()) {
+		column = column * 26 + (letter.charCodeAt(0) - 64)
+	}
+
+	return column - 1
+}

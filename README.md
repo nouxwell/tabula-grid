@@ -191,6 +191,16 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
   changed since the sheet was loaded has a mark in its top left corner (see below).
 - **Column letters.** `column-letters` puts A, B, C over the headers, as the columns stand on
   screen: the addresses the formula bar shows.
+- **A right-click menu.** On a cell: Kes, Kopyala, Yapıştır; İçeriği temizle; Aşağı and Sağa
+  doldur; rows added above or below the selection (as many as it spans) and taken out; then
+  "Bu değere göre süz" and the sorts. On a row's number the same without the cell's own; on a
+  header, the header's menu. A click outside the selection selects the cell or row first, as in
+  Excel; any issue the cell has heads the menu. Shift+F10 and the menu key open it at the active
+  cell; arrows move in it, Escape closes it. While a cell is being edited the browser's own menu
+  stays, for the text. `menu-items` adds the host's own items after the grid's, one with
+  `children` opening them beside it, and `@menu` gives the key of the one chosen. Ctrl++ adds rows
+  as Ctrl+− takes them out, and `insertRows("above" | "below")` does it for a button. Menu
+  pasting reads the clipboard, which a browser may ask the user to allow; Ctrl+V needs nothing.
 - **Themes.** `light`, `dark` or `auto`, in colours an application changes (see below).
 
 With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>`, `<TabulaIssues>`,
@@ -578,8 +588,9 @@ A field in the module schema can be worked out from the other fields of its row 
 { "key": "difference", "type": "money", "decimals": 2, "formula": "[newPrice] - [currentPrice]" }
 ```
 
-The language is a spreadsheet's, without cell addresses: fields by key in brackets, numbers with a
-point, English function names, arguments separated by commas or semicolons. `SUM`, `AVERAGE`,
+The language is a spreadsheet's, fields by key in brackets rather than cell addresses (addresses
+are read while a formula is written; see below), numbers with a point, English function names,
+arguments separated by commas or semicolons. `SUM`, `AVERAGE`,
 `MIN`, `MAX`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `ABS`, `IF`, `IFERROR`, `AND`, `OR`, `NOT`, `ISBLANK`,
 `LEN` and `CONCAT` are built in, with `+ - * / ^ %`, `&` for text and the comparisons. Nothing a user
 writes is ever run as code: a formula is parsed, and the tree is worked out.
@@ -623,6 +634,16 @@ A formula editor helps as it is written, from three pieces:
 - **`functionHelp(name, locale)`** in `@nouxwell/tabula-vue` says what each of the 16 functions
   takes and does, in Turkish and English: `ROUND(sayı, basamak)`, "Sayıyı verilen ondalık
   basamağa yuvarlar". An application's own function has none, and is listed by its name.
+- **`formulaFromAddresses(text, columns)`** reads a cell address as the field of its column, in
+  the same row: "D * 1.2" and "D2 * 1.2" alike are "[Yeni fiyat] * 1.2", `columns` being the
+  fields as the columns stand on screen. A column formula only reads its own row, so a row number
+  says nothing; a name followed by "(" stays a function. Written with the label, the formula keeps
+  its meaning however the columns move later.
+
+The formula bar shows a worked-out column's formula by the fields' labels, each field it reads in
+its own colour, and the grid colours those columns the same while the cell is active, its own
+row's cells stronger, as Excel colours references. The grid's `cell` carries the formula in pieces
+(`formulaParts` from the core) and `references`, the fields it reads in order.
 
 [examples/nuxt](examples/nuxt/README.md) puts them together in the rules drawer's "Hesaplanan
 sütunlar" tab: the template's own columns, and a formula field that lists the fields after "[" and

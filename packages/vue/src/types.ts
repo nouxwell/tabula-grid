@@ -1,4 +1,4 @@
-import type { CellSummary, FieldSchema, RowId } from "@nouxwell/tabula-core"
+import type { CellSummary, FieldSchema, FormulaPart, RowId } from "@nouxwell/tabula-core"
 
 /**
  * The colours the grid draws with. `auto` follows the viewer's system setting; an application with
@@ -16,6 +16,25 @@ export interface ActiveCell {
 	readonly text: string
 	/** Whether it can be typed into now: an editable column, in a row no run has locked. */
 	readonly editable: boolean
+	/** A column worked out by a formula: the formula in pieces, its fields written with their labels. */
+	readonly formula: readonly FormulaPart[] | null
+	/**
+	 * The fields the formula reads, each once, in the order it reads them. The grid colours each
+	 * one's column with the colour of its place, and a formula bar colours it the same.
+	 */
+	readonly references: readonly string[]
+}
+
+/** An item the host adds to the menu a right click opens on a cell or a row's number. */
+export interface GridMenuItem {
+	/** What `menu` is emitted with when it is chosen. */
+	readonly key: string
+	readonly label: string
+	/** The keys that do the same, shown beside it, such as "Ctrl+D". */
+	readonly shortcut?: string
+	readonly disabled?: boolean
+	/** Items opened beside this one; choosing one of them emits its own key. */
+	readonly children?: readonly GridMenuItem[]
 }
 
 /** The cells selected, as a status bar shows them (`TabulaGrid`'s `selected`). */

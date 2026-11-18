@@ -109,10 +109,13 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
      the one being written in bold and what the function does. Under it, the values on the first
      rows and how many rows fail, as it is typed. A column kept shows in the sheet at once, marked
      as not saved in the footer; Vazgeç and closing the drawer put the sheet back as saved.
-4. **Formula bar** (`TabulaFormulaBar`): address and value of the active cell.
+4. **Formula bar** (`TabulaFormulaBar`): address and value of the active cell; a formula by the
+   fields' names, each in the colour its column takes in the sheet while the cell is active.
 5. **The sheet** (`TabulaGrid`, with column letters, and the user's changed cells marked in the top
    left corner in the info colour) and, on its right, **the issues** (`TabulaIssues`, 340px, each
-   with the cell's address, "D8", and the product).
+   with the cell's address, "D8", and the product). A right click opens the grid's menu: cut,
+   copy, paste, clear, fill, add and take out rows, the page's Yüzde uygula, Tutar ekle and
+   Yuvarla ▸, filter by the value and sort, each with its keys on the right.
 6. **Status bar** (`TabulaStatusBar`): rows and issues, the selection, its sum and average.
 
 ### Phone (under 768px) — designs C and D
@@ -187,6 +190,13 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 54  | Field labels kept in drafts                         | package     | done (phase two)   |
 | 55  | The draft kept untouched until the user decides     | application | done (phase two)   |
 | 56  | Renames declared by the schema (`renamedFrom`)      | package     | not chosen         |
+| 57  | Addresses typed in a formula read as fields (L)     | both        | done (phase two)   |
+| 58  | Column letters in the formula completion            | application | done (phase two)   |
+| 59  | The formula bar shows formulas by the fields' names | package     | done (phase two)   |
+| 60  | The columns a formula reads, coloured (Q)           | package     | done (phase two)   |
+| 61  | References to one cell (`$D$8`)                     | package     | not chosen         |
+| 62  | References to a column's total                      | package     | not chosen         |
+| —   | A right-click menu, with the host's own items       | both        | done (phase two)   |
 | —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
 | —   | Saved views (personal views)                        | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)      | both        | done (phase two)   |

@@ -52,7 +52,7 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
   values and what would be lost. "Taslağı aç" opens the draft so mapped and saves it under the new
   schema; "Taslağı sil, sunucudan aç" lets it go. Nothing is saved while the window is open.
 - **Working on many rows.** "Yüzde uygula", "Tutar ekle" and "Yuvarla" change the numbers
-  selected in one step; "Satırları sil" and Ctrl+− take rows out. Cells changed since the rows
+  selected in one step, from the toolbar or the grid's right-click menu; "Satırları sil" and Ctrl+− take rows out. Cells changed since the rows
   were loaded are marked, "Değişenler" shows only their rows, and the search finds a product, a
   code or a note as the cells show them.
 - **A backend.** [server/api](server/api) answers in the grid's contract: the module schema, the

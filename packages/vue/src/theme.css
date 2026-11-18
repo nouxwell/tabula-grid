@@ -57,6 +57,13 @@
 	--tabula-info-bg: color-mix(in srgb, var(--tabula-info) 10%, var(--tabula-bg));
 	/* A cell the user changed since the sheet was loaded. */
 	--tabula-changed-mark: var(--tabula-info);
+	/* The fields a formula reads, each in its own colour, in the sheet and the formula bar alike. */
+	--tabula-ref-1: #2f6fde;
+	--tabula-ref-2: #c26a00;
+	--tabula-ref-3: #8a3ffc;
+	--tabula-ref-4: #0f8f8f;
+	--tabula-ref-5: #d1307a;
+	--tabula-ref-6: #5b7f00;
 
 	--tabula-issues-bg: var(--tabula-bg);
 	--tabula-issues-fg: var(--tabula-fg);
@@ -89,8 +96,38 @@
 	--tabula-warning: #ffb600;
 	--tabula-success: #00e19b;
 	--tabula-info: #6267ff;
+	--tabula-ref-1: #6ea0ff;
+	--tabula-ref-2: #f0a040;
+	--tabula-ref-3: #b48cff;
+	--tabula-ref-4: #3cc7c7;
+	--tabula-ref-5: #ff6fae;
+	--tabula-ref-6: #a4cf3a;
 
 	color-scheme: dark;
+}
+
+.tabula-ref-0 {
+	--tabula-ref: var(--tabula-ref-1);
+}
+
+.tabula-ref-1 {
+	--tabula-ref: var(--tabula-ref-2);
+}
+
+.tabula-ref-2 {
+	--tabula-ref: var(--tabula-ref-3);
+}
+
+.tabula-ref-3 {
+	--tabula-ref: var(--tabula-ref-4);
+}
+
+.tabula-ref-4 {
+	--tabula-ref: var(--tabula-ref-5);
+}
+
+.tabula-ref-5 {
+	--tabula-ref: var(--tabula-ref-6);
 }
 
 /*
@@ -159,6 +196,12 @@
 		--tabula-warning: #ffb600;
 		--tabula-success: #00e19b;
 		--tabula-info: #6267ff;
+		--tabula-ref-1: #6ea0ff;
+		--tabula-ref-2: #f0a040;
+		--tabula-ref-3: #b48cff;
+		--tabula-ref-4: #3cc7c7;
+		--tabula-ref-5: #ff6fae;
+		--tabula-ref-6: #a4cf3a;
 
 		color-scheme: dark;
 	}

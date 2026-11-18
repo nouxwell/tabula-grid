@@ -7,7 +7,9 @@ import {
 	distinctValues,
 	editText,
 	fillValues,
+	filterKeys,
 	formatCell,
+	formulaParts,
 	hasRange,
 	headerDisplayText,
 	parseTsv,
@@ -66,7 +68,7 @@ import ScrollThumbs from "./ScrollThumbs.vue"
 import { alignmentOf } from "./alignment.js"
 import { GRID_TEXT, issueText, type GridLocale } from "./messages.js"
 import { horizontalPadding, textMeasurer, type Measure } from "./measure.js"
-import type { ActiveCell, GridTheme, SelectedCells } from "./types.js"
+import type { ActiveCell, GridMenuItem, GridTheme, SelectedCells } from "./types.js"
 
 const props = defineProps({
 	/** The module schema: which columns there are, in which order, and what each may hold. */
@@ -121,9 +123,19 @@ const props = defineProps({
 	changes: { type: Object as PropType<SheetChanges>, default: undefined },
 	/** Letters over the headers, A, B, C, as the columns stand on screen: the formula bar's addresses. */
 	columnLetters: { type: Boolean, default: false },
+	/**
+	 * The host's own items in the menu a right click opens on a cell or a row's number, after the
+	 * grid's. Choosing one emits `menu` with its key; one with `children` opens them beside it.
+	 */
+	menuItems: { type: Array as PropType<readonly GridMenuItem[]>, default: () => [] },
 	/** The language of the grid's own words: issue messages and labels. */
 	locale: { type: String as PropType<GridLocale>, default: "tr" }
 })
+
+const emit = defineEmits<{
+	/** One of the host's `menuItems` was chosen, by its key; the selection is what it is about. */
+	menu: [key: string]
+}>()
 
 /** Widths the user set by dragging or fitting, by field key. Bind it with v-model to keep them. */
 const columnWidths = defineModel<Readonly<Record<string, number>>>("columnWidths", { default: () => ({}) })
@@ -1430,6 +1442,26 @@ function handleShortcut(event: KeyboardEvent, mod: boolean): boolean {
 		return true
 	}
 
+	if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey && !mod)) {
+		openContextMenu(null)
+
+		return true
+	}
+
+	// Ctrl++ adds rows above rows selected whole, as Excel's does; with cells selected it first selects
+	// their rows.
+	if (mod && !altGr && (event.key === "+" || event.code === "NumpadAdd") && !props.readonly) {
+		const area = selection.range
+
+		if (area && area.left === 0 && area.right >= fields.value.length - 1) {
+			insertRows("above")
+		} else if (area) {
+			selection.selectRows(area.top, area.bottom)
+		}
+
+		return true
+	}
+
 	// Ctrl+− takes out rows selected whole, as Excel's does; with cells selected it first selects
 	// their rows, so a slip of the keys takes nothing out. Taken from the browser's zoom only here.
 	if (mod && !altGr && (event.key === "-" || event.code === "NumpadSubtract") && !props.readonly) {
@@ -1594,17 +1626,20 @@ function onCut(event: ClipboardEvent): void {
  * be edited is passed over, so every other value still lands in its own column.
  */
 function onPaste(event: ClipboardEvent): void {
-	const area = selection.range
-
-	if (editing.value || props.readonly || !area) {
+	if (editing.value || props.readonly || !selection.range) {
 		return
 	}
 
-	const block = parseTsv(event.clipboardData?.getData("text/plain") ?? "")
-
 	event.preventDefault()
+	pasteText(event.clipboardData?.getData("text/plain") ?? "")
+}
 
-	if (block.length === 0) {
+/** Pastes text a spreadsheet copied, as `onPaste` does: from the clipboard event, or the menu's Paste. */
+function pasteText(copied: string): void {
+	const area = selection.range
+	const block = parseTsv(copied)
+
+	if (props.readonly || !area || block.length === 0) {
 		return
 	}
 
@@ -2271,6 +2306,7 @@ watch(sizings, () => measureHeaders())
 watch(arranged, () => {
 	editing.value = null
 	closeColumnMenu()
+	closeContextMenu()
 	syncSize()
 })
 
@@ -2291,13 +2327,26 @@ function openColumnMenu(event: MouseEvent, col: number): void {
 		return
 	}
 
+	const at = button.getBoundingClientRect()
+
+	showColumnMenu(col, at.left, at.bottom)
+}
+
+/** The column's menu at a point on screen: under its button, or where a right click fell. */
+function showColumnMenu(col: number, x: number, y: number): void {
+	const frame = root.value
+
+	if (!frame) {
+		return
+	}
+
 	commitEdit(false)
 	closeColumnMenu()
+	closeContextMenu()
 
-	const at = button.getBoundingClientRect()
 	const box = frame.getBoundingClientRect()
 
-	columnMenu.value = { col, left: at.left - box.left, top: at.bottom - box.top }
+	columnMenu.value = { col, left: x - box.left, top: y - box.top }
 
 	// A press anywhere else closes it.
 	const close = (down: MouseEvent): void => {
@@ -2726,14 +2775,38 @@ const cell = computed<ActiveCell | null>(() => {
 		return null
 	}
 
+	const formula = field.formula ? Object.freeze(formulaParts(field.formula, schema.value.fields)) : null
+
 	return Object.freeze({
 		rowId,
 		field,
 		address: `${columnName(at.col)}${sheetRow(at.row)}`,
 		text: editText(field, store.value.get(rowId, field.key), props.valueSettings),
-		editable: isEditable(field) && !isLockedRow(rowId)
+		editable: isEditable(field) && !isLockedRow(rowId),
+		formula,
+		references: formula ? [...new Set(formula.flatMap(part => (part.field ? [part.field] : [])))] : []
 	})
 })
+
+/** How many colours the fields a formula reads take in turn. */
+const REFERENCE_COLOURS = 6
+
+/** Each field the active cell's formula reads, with the colour of its place. */
+const references = computed(
+	() => new Map((cell.value?.references ?? []).map((key, index) => [key, index % REFERENCE_COLOURS]))
+)
+
+/** A column the active cell's formula reads, in its colour; stronger on the active row. */
+function refClass(row: number | null, col: number): string | undefined {
+	const field = fields.value[col]
+	const index = field ? references.value.get(field.key) : undefined
+
+	if (index === undefined) {
+		return undefined
+	}
+
+	return `is-ref tabula-ref-${index}${row !== null && active.value?.row === row ? " is-ref-here" : ""}`
+}
 
 /**
  * The cells selected, summed as a spreadsheet's status bar sums them. Worked out only when read,
@@ -2892,6 +2965,377 @@ function removeRows(): number {
 }
 
 /**
+ * Adds as many empty rows as the selection spans, above it or below it, as one step to undo; they
+ * hold the schema's defaults, and are selected. Returns their ids.
+ */
+function insertRows(where: "above" | "below"): string[] {
+	const area = selection.range
+
+	if (!area || props.readonly) {
+		return []
+	}
+
+	commitEdit(false)
+
+	const rowsOf = store.value
+	const anchor = view.value.rowIdAt(where === "above" ? area.top : area.bottom)
+	const index = anchor === undefined ? rowsOf.size : rowsOf.indexOf(anchor) + (where === "below" ? 1 : 0)
+	let added: string[] = []
+
+	rowsOf.transact(
+		() => {
+			added = rowsOf.insertRows(index, withDefaults(schema.value, area.bottom - area.top + 1))
+		},
+		{ origin: "insert" }
+	)
+
+	const first = view.value.indexOf(added[0] ?? "")
+	const last = view.value.indexOf(added[added.length - 1] ?? "")
+
+	if (first >= 0) {
+		selection.selectRows(first, Math.max(first, last))
+		reveal()
+	}
+
+	return added
+}
+
+// ---------------------------------------------------------------- the context menu
+
+/** The menu a right click or the menu key opened: over a cell or a row's number, where, and what the cell says. */
+const contextMenu = shallowRef<{
+	readonly kind: "cell" | "row"
+	readonly left: number
+	readonly top: number
+	readonly issues: readonly string[]
+} | null>(null)
+/** The host's item whose children are open beside it. */
+const submenu = ref<string | null>(null)
+let stopContext: (() => void) | null = null
+
+const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+
+/** "Ctrl+X", or "⌘X" on a Mac. */
+function keys(key: string): string {
+	return MAC ? `⌘${key}` : `Ctrl+${key}`
+}
+
+interface MenuEntry {
+	readonly key: string
+	readonly label: string
+	readonly shortcut?: string
+	readonly disabled?: boolean
+	readonly children?: readonly GridMenuItem[]
+}
+
+/** The menu's items in order, a null between groups: the grid's own, the host's, then sorting and filtering. */
+const contextEntries = computed<readonly (MenuEntry | null)[]>(() => {
+	const menu = contextMenu.value
+	const words = GRID_TEXT[props.locale]
+	const fixed = props.readonly
+
+	if (!menu) {
+		return []
+	}
+
+	const entries: (MenuEntry | null)[] = [
+		{ key: "tabula:cut", label: words.cut ?? "", shortcut: keys("X"), disabled: fixed },
+		{ key: "tabula:copy", label: words.copy ?? "", shortcut: keys("C") },
+		{
+			key: "tabula:paste",
+			label: words.paste ?? "",
+			shortcut: keys("V"),
+			disabled: fixed || typeof navigator === "undefined" || !navigator.clipboard?.readText
+		},
+		null
+	]
+
+	if (menu.kind === "cell") {
+		entries.push(
+			{ key: "tabula:clear", label: words.clearCells ?? "", shortcut: "Delete", disabled: fixed },
+			{ key: "tabula:fillDown", label: words.fillDown ?? "", shortcut: keys("D"), disabled: fixed },
+			{ key: "tabula:fillRight", label: words.fillRight ?? "", shortcut: keys("R"), disabled: fixed },
+			null
+		)
+	}
+
+	entries.push(
+		{ key: "tabula:insertAbove", label: words.insertAbove ?? "", shortcut: keys("+"), disabled: fixed },
+		{ key: "tabula:insertBelow", label: words.insertBelow ?? "", disabled: fixed },
+		{ key: "tabula:removeRows", label: words.removeRows ?? "", shortcut: keys("−"), disabled: fixed }
+	)
+
+	if (props.menuItems.length > 0) {
+		entries.push(null, ...props.menuItems)
+	}
+
+	if (menu.kind === "cell") {
+		entries.push(
+			null,
+			{ key: "tabula:filterValue", label: words.filterValue ?? "" },
+			{ key: "tabula:sortAsc", label: words.sortAsc ?? "" },
+			{ key: "tabula:sortDesc", label: words.sortDesc ?? "" }
+		)
+	}
+
+	return entries
+})
+
+/**
+ * A right click: on a header, its column's menu; on a cell or a row's number, the context menu, the
+ * cell or row selected first when the click falls outside the selection, as in Excel. While a cell
+ * is being edited the browser's own menu stays, for the text in it. The menu key opens the menu at
+ * the active cell.
+ */
+function onContextMenu(event: MouseEvent): void {
+	const target = event.target instanceof Element ? event.target : null
+
+	if (editing.value || target?.closest(".tabula-grid-filter")) {
+		return
+	}
+
+	event.preventDefault()
+
+	if (target?.closest(".tabula-grid-menu")) {
+		return
+	}
+
+	// From the keyboard the event comes to the grid's input, at no point on screen.
+	if (target === editor.value || (event.clientX === 0 && event.clientY === 0)) {
+		openContextMenu(null)
+
+		return
+	}
+
+	const header = target?.closest<HTMLElement>(".tabula-grid-th")
+
+	if (header) {
+		const col = Number(header.getAttribute("aria-colindex")) - 1
+
+		if (col >= 0) {
+			showColumnMenu(col, event.clientX, event.clientY)
+		}
+
+		return
+	}
+
+	takeFocus(event)
+
+	if (target?.closest(".tabula-grid-rh")) {
+		const row = rowAtClient(event.clientY)
+		const area = selection.range
+		const whole = area && area.left === 0 && area.right >= fields.value.length - 1
+
+		if (!(whole && row >= area.top && row <= area.bottom)) {
+			selection.selectRows(row)
+		}
+
+		openContextMenu({ kind: "row", x: event.clientX, y: event.clientY })
+
+		return
+	}
+
+	const at = cellAt(event)
+
+	if (at && !inRange(at.row, at.col)) {
+		selection.moveTo(at.row, at.col)
+	}
+
+	openContextMenu({ kind: "cell", x: event.clientX, y: event.clientY })
+}
+
+/** Opens the menu at a point on screen; with none, under the active cell, as the menu key does. */
+function openContextMenu(at: { readonly kind: "cell" | "row"; readonly x: number; readonly y: number } | null): void {
+	const frame = root.value
+	const position = selection.active
+
+	if (!frame || !position) {
+		return
+	}
+
+	commitEdit(false)
+	closeColumnMenu()
+	closeContextMenu()
+
+	let point = at
+
+	if (!point) {
+		const box = frame.querySelector(".tabula-grid-active")?.getBoundingClientRect()
+
+		point = { kind: "cell", x: box?.left ?? 0, y: box?.bottom ?? 0 }
+	}
+
+	const issues = point.kind === "cell" ? issuesAt(position.row, position.col) : []
+
+	contextMenu.value = {
+		kind: point.kind,
+		left: point.x,
+		top: point.y,
+		issues: issues.map(issue => issueText(issue, props.locale, props.valueSettings))
+	}
+
+	const close = (down: MouseEvent): void => {
+		const menu = frame.querySelector(".tabula-grid-context")
+
+		if (!(down.target instanceof Node && menu?.contains(down.target))) {
+			closeContextMenu()
+		}
+	}
+
+	window.addEventListener("mousedown", close, true)
+	stopContext = () => window.removeEventListener("mousedown", close, true)
+
+	// Kept on screen: moved left or up when it would run past the window's edge.
+	void nextTick(() => {
+		const menu = frame.querySelector<HTMLElement>(".tabula-grid-context")
+		const placed = contextMenu.value
+
+		if (!menu || !placed) {
+			return
+		}
+
+		const width = menu.offsetWidth
+		const height = menu.offsetHeight
+		const left = Math.max(8, Math.min(placed.left, window.innerWidth - width - 8))
+		const top = Math.max(8, Math.min(placed.top, window.innerHeight - height - 8))
+
+		if (left !== placed.left || top !== placed.top) {
+			contextMenu.value = { ...placed, left, top }
+		}
+
+		menu.querySelector<HTMLElement>("button:not(:disabled)")?.focus()
+	})
+}
+
+function closeContextMenu(refocus = false): void {
+	stopContext?.()
+	stopContext = null
+	contextMenu.value = null
+	submenu.value = null
+
+	if (refocus) {
+		focusInput()
+	}
+}
+
+/** Runs an item: the grid's own does its work, the host's is emitted. */
+function chooseMenu(entry: MenuEntry): void {
+	if (entry.disabled) {
+		return
+	}
+
+	if (entry.children && entry.children.length > 0) {
+		submenu.value = submenu.value === entry.key ? null : entry.key
+
+		return
+	}
+
+	closeContextMenu(true)
+
+	const area = selection.range
+	const position = selection.active
+	const field = position ? fields.value[position.col] : undefined
+	const rowId = position ? view.value.rowIdAt(position.row) : undefined
+
+	switch (entry.key) {
+		case "tabula:copy":
+		case "tabula:cut":
+			if (area) {
+				void navigator.clipboard?.writeText(rangeText(area)).catch(() => undefined)
+
+				if (entry.key === "tabula:cut") {
+					clearRange("cut")
+				}
+			}
+
+			break
+		case "tabula:paste":
+			void navigator.clipboard
+				?.readText()
+				.then(pasteText)
+				.catch(() => undefined)
+			break
+		case "tabula:clear":
+			clearRange("clear")
+			break
+		case "tabula:fillDown":
+			fillFromEdge("down")
+			break
+		case "tabula:fillRight":
+			fillFromEdge("right")
+			break
+		case "tabula:insertAbove":
+			insertRows("above")
+			break
+		case "tabula:insertBelow":
+			insertRows("below")
+			break
+		case "tabula:removeRows":
+			removeRows()
+			break
+		case "tabula:filterValue":
+			if (field && rowId !== undefined) {
+				setFilter(field.key, { kind: "values", keys: filterKeys(field, store.value.get(rowId, field.key)) })
+			}
+
+			break
+		case "tabula:sortAsc":
+		case "tabula:sortDesc":
+			if (field) {
+				sort.value = Object.freeze({
+					key: field.key,
+					direction: entry.key === "tabula:sortAsc" ? "asc" : "desc"
+				})
+			}
+
+			break
+		default:
+			emit("menu", entry.key)
+	}
+}
+
+/**
+ * Up and down move between the items, Right opens an item's children and Left goes back from them;
+ * Escape closes what is open, Tab the whole menu.
+ */
+function onContextKeydown(event: KeyboardEvent): void {
+	const menu = root.value?.querySelector(".tabula-grid-context")
+	const focused = document.activeElement as HTMLElement | null
+	const inSubmenu = Boolean(focused?.closest(".tabula-grid-submenu"))
+	const scope = inSubmenu ? focused?.closest(".tabula-grid-submenu") : menu
+	const items = [
+		...(scope?.querySelectorAll<HTMLButtonElement>(
+			inSubmenu
+				? "button:not(:disabled)"
+				: ":scope > button:not(:disabled), :scope > .tabula-grid-menu-item > button:not(:disabled)"
+		) ?? [])
+	]
+	const at = items.indexOf(focused as HTMLButtonElement)
+
+	if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+		items[(at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus()
+	} else if (event.key === "ArrowRight" && !inSubmenu && focused?.dataset.key) {
+		const entry = contextEntries.value.find(item => item?.key === focused.dataset.key)
+
+		if (entry?.children?.length) {
+			submenu.value = entry.key
+			void nextTick(() => menu?.querySelector<HTMLElement>(".tabula-grid-submenu button:not(:disabled)")?.focus())
+		}
+	} else if ((event.key === "ArrowLeft" || event.key === "Escape") && inSubmenu) {
+		const parent = submenu.value
+
+		submenu.value = null
+		void nextTick(() => menu?.querySelector<HTMLElement>(`button[data-key="${parent}"]`)?.focus())
+	} else if (event.key === "Escape" || event.key === "Tab") {
+		closeContextMenu(true)
+	} else {
+		return
+	}
+
+	event.preventDefault()
+}
+
+/**
  * A cell's address as the formula bar writes it, "D8": its column as the columns stand on screen,
  * its row's number in the sheet. Null for a column not shown or a row not in the sheet.
  */
@@ -2939,6 +3383,7 @@ defineExpose({
 	writeCell,
 	adjustSelection,
 	removeRows,
+	insertRows,
 	addressOf,
 	focus: focusInput,
 	/** Fits a column to its header and contents, as a double click on its edge does. */
@@ -2981,6 +3426,7 @@ defineExpose({
 		@copy="onCopy"
 		@cut="onCut"
 		@paste="onPaste"
+		@contextmenu="onContextMenu"
 	>
 		<div ref="scroller" class="tabula-grid-scroller tabula-scroll" @scroll.passive="updateWindow">
 			<div
@@ -3009,7 +3455,10 @@ defineExpose({
 							role="columnheader"
 							:aria-colindex="c + 1"
 							:aria-sort="ariaSort(c)"
-							:class="{ 'is-right': cellClasses[c]?.includes('is-right'), 'is-selected': colSelected(c) }"
+							:class="[
+								{ 'is-right': cellClasses[c]?.includes('is-right'), 'is-selected': colSelected(c) },
+								refClass(null, c)
+							]"
 							:style="headerStyle(c)"
 							:title="headerTitle(c)"
 							@mousedown="onHeaderDown($event, c)"
@@ -3060,7 +3509,10 @@ defineExpose({
 						role="columnheader"
 						:aria-colindex="c + 1"
 						:aria-sort="ariaSort(c)"
-						:class="{ 'is-right': cellClasses[c]?.includes('is-right'), 'is-selected': colSelected(c) }"
+						:class="[
+							{ 'is-right': cellClasses[c]?.includes('is-right'), 'is-selected': colSelected(c) },
+							refClass(null, c)
+						]"
 						:style="headerStyle(c)"
 						:title="headerTitle(c)"
 						@mousedown="onHeaderDown($event, c)"
@@ -3161,7 +3613,13 @@ defineExpose({
 								:aria-selected="inRange(r, c)"
 								:aria-readonly="!isEditable(fields[c]) || rowLocked(r) || undefined"
 								:aria-invalid="issueClass(r, c) === 'is-error' ? 'true' : undefined"
-								:class="[cellClasses[c], issueClass(r, c), toneClass(r, c), changeClass(r, c)]"
+								:class="[
+									cellClasses[c],
+									issueClass(r, c),
+									toneClass(r, c),
+									changeClass(r, c),
+									refClass(r, c)
+								]"
 								:style="cellStyles[c]"
 								:title="issueTitle(r, c)"
 							>
@@ -3202,7 +3660,13 @@ defineExpose({
 							:aria-selected="inRange(r, c)"
 							:aria-readonly="!isEditable(fields[c]) || rowLocked(r) || undefined"
 							:aria-invalid="issueClass(r, c) === 'is-error' ? 'true' : undefined"
-							:class="[cellClasses[c], issueClass(r, c), toneClass(r, c), changeClass(r, c)]"
+							:class="[
+								cellClasses[c],
+								issueClass(r, c),
+								toneClass(r, c),
+								changeClass(r, c),
+								refClass(r, c)
+							]"
 							:style="cellStyles[c]"
 							:title="issueTitle(r, c)"
 						>
@@ -3348,6 +3812,68 @@ defineExpose({
 			>
 				{{ GRID_TEXT[locale].showHidden }} ({{ hiddenCount }})
 			</button>
+		</div>
+		<div
+			v-if="contextMenu"
+			class="tabula-grid-menu tabula-grid-context"
+			role="menu"
+			:aria-label="GRID_TEXT[locale].cellMenu"
+			:style="{ left: `${contextMenu.left}px`, top: `${contextMenu.top}px` }"
+			@keydown="onContextKeydown"
+			@contextmenu.prevent
+		>
+			<template v-if="contextMenu.issues.length > 0">
+				<p v-for="(line, at) in contextMenu.issues" :key="at" class="tabula-grid-menu-note" v-text="line" />
+				<span class="tabula-grid-menu-line" role="separator" />
+			</template>
+			<template v-for="(entry, at) in contextEntries" :key="entry?.key ?? `line-${at}`">
+				<span v-if="entry === null" class="tabula-grid-menu-line" role="separator" />
+				<div v-else-if="entry.children?.length" class="tabula-grid-menu-item">
+					<button
+						type="button"
+						role="menuitem"
+						aria-haspopup="menu"
+						:aria-expanded="submenu === entry.key"
+						:data-key="entry.key"
+						:disabled="entry.disabled"
+						@click="chooseMenu(entry)"
+						@mouseenter="submenu = entry.key"
+					>
+						<span v-text="entry.label" />
+						<span class="tabula-grid-menu-key" aria-hidden="true">▸</span>
+					</button>
+					<div
+						v-if="submenu === entry.key"
+						class="tabula-grid-menu tabula-grid-submenu"
+						role="menu"
+						:aria-label="entry.label"
+					>
+						<button
+							v-for="child in entry.children"
+							:key="child.key"
+							type="button"
+							role="menuitem"
+							:disabled="child.disabled"
+							@click="chooseMenu(child)"
+						>
+							<span v-text="child.label" />
+							<span v-if="child.shortcut" class="tabula-grid-menu-key" v-text="child.shortcut" />
+						</button>
+					</div>
+				</div>
+				<button
+					v-else
+					type="button"
+					role="menuitem"
+					:data-key="entry.key"
+					:disabled="entry.disabled"
+					@click="chooseMenu(entry)"
+					@mouseenter="submenu = null"
+				>
+					<span v-text="entry.label" />
+					<span v-if="entry.shortcut" class="tabula-grid-menu-key" v-text="entry.shortcut" />
+				</button>
+			</template>
 		</div>
 		<div
 			v-if="filterPanel"
@@ -3608,6 +4134,46 @@ defineExpose({
 	cursor: default;
 }
 
+/* The context menu: at the pointer, over everything, each item with its keys on the right. */
+.tabula-grid-context {
+	position: fixed;
+	z-index: 1000;
+	min-width: 230px;
+}
+
+.tabula-grid-context button {
+	display: flex;
+	gap: 24px;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+}
+
+.tabula-grid-menu-key {
+	color: var(--tabula-muted);
+	font-size: 0.9em;
+	white-space: nowrap;
+}
+
+.tabula-grid-menu-note {
+	max-width: 300px;
+	margin: 0;
+	padding: 6px 12px;
+	color: var(--tabula-issues-error);
+	font-size: 0.92em;
+	white-space: normal;
+}
+
+.tabula-grid-menu-item {
+	position: relative;
+}
+
+.tabula-grid-submenu {
+	top: -4px;
+	left: 100%;
+	min-width: 190px;
+}
+
 .tabula-grid-menu-line {
 	height: 1px;
 	margin: 3px 0;
@@ -3852,6 +4418,23 @@ defineExpose({
 
 .tabula-grid-cell.is-center {
 	text-align: center;
+}
+
+/* The columns the active cell's formula reads, each in its colour; its own row's cells stronger. */
+.tabula-grid-th.is-ref {
+	box-shadow: inset 0 3px 0 var(--tabula-ref);
+	color: var(--tabula-ref);
+}
+
+.tabula-grid-cell.is-ref {
+	box-shadow:
+		inset 2px 0 0 color-mix(in srgb, var(--tabula-ref) 55%, transparent),
+		inset -2px 0 0 color-mix(in srgb, var(--tabula-ref) 55%, transparent);
+	background: color-mix(in srgb, var(--tabula-ref) 5%, var(--tabula-bg));
+}
+
+.tabula-grid-cell.is-ref-here {
+	background: color-mix(in srgb, var(--tabula-ref) 16%, var(--tabula-bg));
 }
 
 /* A cell with an issue, Excel-style: a tint and a mark in the corner, red for an error and amber for a warning. */

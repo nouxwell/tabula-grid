@@ -17,4 +17,4 @@ export {
 	PREVIEW_TEXT
 } from "./messages.js"
 export type { FunctionHelp, GridLocale } from "./messages.js"
-export type { ActiveCell, GridTheme, SelectedCells } from "./types.js"
+export type { ActiveCell, GridMenuItem, GridTheme, SelectedCells } from "./types.js"

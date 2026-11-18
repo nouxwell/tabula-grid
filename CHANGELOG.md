@@ -9,6 +9,24 @@ The three packages are versioned together.
 
 ### Added
 
+- **The example, closer to the CRM.** The sheet, the issues and the rules drawer's items sit in
+  `AppCard`s, as every part of a CRM page does; the counts over the sheet count to their new value
+  (`AppNumberAnimation` now counts from the value it showed last), and the search waits for the
+  typing to stop with `refDebounced` from `@vueuse/core`, as the CRM's searches do.
+
+- **A right-click menu.** On a cell: cut, copy, paste, clear, fill down and right, add rows above
+  or below, take rows out, filter by the cell's value, sort. On a row's number the row items; on a
+  header, its own menu. A click outside the selection selects first; the cell's issues head the
+  menu; Shift+F10 and the menu key open it at the active cell. `menu-items` adds the host's items
+  (with `children` for a submenu) and `@menu` says which was chosen; the example adds Yüzde uygula,
+  Tutar ekle and Yuvarla. Ctrl++ and `insertRows()` add rows.
+- **Addresses in formulas** (canvas items 57–60). `formulaFromAddresses` reads "D" or "D2" as the
+  field of column D in the same row; the example's formula field offers that column first as an
+  address is typed, shows each field's letter, and writes addresses as labels when left. The
+  formula bar shows a worked-out column's formula by the fields' labels (it showed their keys),
+  each field in a colour of its own (`formulaParts`, `ActiveCell.formula` and `references`), and
+  the grid colours those columns while the cell is active (`--tabula-ref-1` to `--tabula-ref-6`).
+
 - **Mapping an older draft's fields.** A draft now keeps each field's label (`DraftField.label`;
   drafts saved before read as they were). `mapDraft` says what opening a draft would do to each
   field, its first values, the rows that lose a value and the values a new type cannot read;

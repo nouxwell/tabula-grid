@@ -814,6 +814,111 @@ describe("TabulaGrid", () => {
 		})
 	})
 
+	describe("the right-click menu", () => {
+		const menu = (page: Page): Locator => page.locator(".tabula-grid-context")
+		const item = (page: Page, name: string): Locator =>
+			menu(page).getByRole("menuitem", { name, exact: false }).first()
+		const editTo = async (page: Page, row: number, col: number, text: string): Promise<void> => {
+			await cell(page, row, col).click()
+			await page.keyboard.type(text)
+			await press(page, "Enter")
+		}
+
+		it("opens on a cell with its items and their keys, selecting the cell first, and closes on Escape", async () => {
+			await withPage(20, async page => {
+				await cell(page, 3, 2).click({ button: "right" })
+
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 3, col: 2 } })
+				await expect(menu(page).getByRole("menuitem").allInnerTexts()).resolves.toEqual([
+					"Kes\nCtrl+X",
+					"Kopyala\nCtrl+C",
+					"Yapıştır\nCtrl+V",
+					"İçeriği temizle\nDelete",
+					"Aşağı doldur\nCtrl+D",
+					"Sağa doldur\nCtrl+R",
+					"Üste satır ekle\nCtrl++",
+					"Alta satır ekle",
+					"Satırları sil\nCtrl+−",
+					"Yuvarla\n▸",
+					"Bu değere göre süz",
+					"Artan sırala",
+					"Azalan sırala"
+				])
+
+				await page.keyboard.press("Escape")
+
+				await expect(menu(page).count()).resolves.toBe(0)
+			})
+		})
+
+		it("adds a row below the selection, and filters by the cell's value", async () => {
+			await withPage(20, async page => {
+				const size = (): Promise<number> => page.evaluate(() => window.__playground!.store.size)
+
+				await cell(page, 1, 0).click({ button: "right" })
+				await item(page, "Alta satır ekle").click()
+
+				await expect(size()).resolves.toBe(21)
+				await expect(valueAt(page, 2, "productId")).resolves.toBeNull()
+				await expect(selected(page)).resolves.toMatchObject({ range: { top: 2, bottom: 2, left: 0 } })
+
+				await cell(page, 0, 5).click({ button: "right" })
+				await item(page, "Bu değere göre süz").click()
+
+				const currency = await valueAt(page, 0, "currency")
+				const shown = await page.evaluate(() => window.__playground!.view.size)
+				const holding = await page.evaluate(wanted => {
+					const { store } = window.__playground!
+
+					return store.rowIds().filter(rowId => store.get(rowId, "currency") === wanted).length
+				}, currency as string)
+
+				expect(shown).toBe(holding)
+			})
+		})
+
+		it("opens the host's items beside theirs, and emits the one chosen", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 3).click()
+				await editTo(page, 0, 3, "12,6")
+				await cell(page, 0, 3).click({ button: "right" })
+				await item(page, "Yuvarla").hover()
+				await page.locator(".tabula-grid-submenu").getByRole("menuitem", { name: "Tam sayıya" }).click()
+
+				await expect(valueAt(page, 0, "newPrice")).resolves.toBe("13")
+			})
+		})
+
+		it("opens from the keyboard at the active cell, with the issue the cell has", async () => {
+			await withPage(20, async page => {
+				await editTo(page, 1, 3, "-5")
+				await cell(page, 1, 3).click()
+				await page.keyboard.press("Shift+F10")
+
+				await expect(menu(page).locator(".tabula-grid-menu-note").allInnerTexts()).resolves.toEqual([
+					"En az 0 olmalı."
+				])
+				await expect(page.evaluate(() => document.activeElement?.textContent)).resolves.toContain("Kes")
+			})
+		})
+
+		it("opens a header's own menu on a right click there, and the row menu on a row's number", async () => {
+			await withPage(20, async page => {
+				await header(page, 2).click({ button: "right" })
+
+				await expect(page.locator(".tabula-grid-menu:not(.tabula-grid-context)").count()).resolves.toBe(1)
+
+				await page.keyboard.press("Escape")
+				await page.locator(".tabula-grid-rh").nth(4).click({ button: "right" })
+
+				await expect(selected(page)).resolves.toMatchObject({ range: { top: 4, bottom: 4, left: 0 } })
+				await expect(menu(page).getByRole("menuitem").allInnerTexts()).resolves.not.toContain(
+					"Bu değere göre süz"
+				)
+			})
+		})
+	})
+
 	describe("changes, bulk edits and taking rows out", () => {
 		const editTo = async (page: Page, row: number, col: number, text: string): Promise<void> => {
 			await cell(page, row, col).click()
@@ -1815,12 +1920,27 @@ describe("the bars around the sheet", () => {
 		})
 	})
 
-	it("shows a formula column's formula, which is not typed over", async () => {
+	it("shows a formula column's formula by the fields' names, each in its column's colour, not typed over", async () => {
 		await withPage(20, async page => {
 			await cell(page, 0, 9).click()
 
-			await expect.poll(() => value(page).inputValue()).toBe("=[newPrice] - [currentPrice]")
-			await expect(value(page).getAttribute("readonly")).resolves.not.toBeNull()
+			await expect.poll(() => value(page).innerText()).toBe("=[Yeni fiyat] - [Mevcut fiyat]")
+			await expect(value(page).getAttribute("aria-readonly")).resolves.toBe("true")
+			await expect(
+				page.locator(".tabula-formula-ref").evaluateAll(parts => parts.map(part => part.className))
+			).resolves.toEqual(["tabula-formula-ref tabula-ref-0", "tabula-formula-ref tabula-ref-1"])
+
+			// The columns it reads, in the same colours: the header, and the cells of its own row stronger.
+			await expect(header(page, 3).getAttribute("class")).resolves.toContain("tabula-ref-0")
+			await expect(header(page, 2).getAttribute("class")).resolves.toContain("tabula-ref-1")
+			await expect(cell(page, 0, 3).getAttribute("class")).resolves.toContain("is-ref-here")
+			await expect(cell(page, 1, 3).getAttribute("class")).resolves.not.toContain("is-ref-here")
+
+			// Another cell: the colours go.
+			await cell(page, 0, 1).click()
+
+			await expect.poll(() => page.locator(".tabula-grid-th.is-ref").count()).toBe(0)
+			await expect(value(page).inputValue()).resolves.toBe("SKU-000001")
 		})
 	})
 
