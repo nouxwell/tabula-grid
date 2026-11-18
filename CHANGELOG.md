@@ -7,6 +7,13 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-19
+
+How cells look, and what a spreadsheet user reaches for around them: a column's alignment and
+decimals, colours, bold and italic put on cells by hand and kept with the draft, colour rules in a
+schema or a template, columns that fill the sheet, a totals row, zoom, and find and replace. Nothing
+of how a cell looks is sent to the backend.
+
 ### Added
 
 - **How cells look** (canvas items 89–95, 100 and 103–106, designs Z, AA, AB and AC). Never what
@@ -463,7 +470,8 @@ taken to a backend through the application's own adapters, and kept as a draft.
   gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
   which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.
 
-[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/nouxwell/tabula-grid/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/nouxwell/tabula-grid/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/nouxwell/tabula-grid/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/nouxwell/tabula-grid/compare/v0.2.0...v0.2.1
