@@ -29,11 +29,15 @@ const validator = new SheetValidator(schema, store, VALUE_SETTINGS.tr)
 - **`TabulaGrid`** draws only what is on screen, so 50,000 rows draw like 50. It moves, edits,
   copies and pastes as Excel does, reads what is typed the sheet's way, marks the cells with
   issues, undoes with Ctrl+Z, pins and hides columns, and picks lookups from a searched list.
-- **`TabulaIssues`** lists the sheet's issues with counts, Previous and Next, and filters the sheet
-  to the rows that have them.
+- **`TabulaIssues`** lists the sheet's issues as cards, with counts, Previous and Next, says whether
+  the browser or the server found each, and filters the sheet to the rows that have them. On a
+  phone it is a bar that opens the list from the bottom of the screen (`variant="sheet"`).
+- **`TabulaFormulaBar`** shows the active cell's address and value, goes to an address typed into
+  it, and writes a value typed there, as a spreadsheet's formula bar.
+- **`TabulaStatusBar`** counts the rows and issues and sums and averages the numbers selected.
 
-Light, dark and system themes; every colour is a `--tabula-*` CSS variable. Turkish and English
-text. Vue 3.5 or later.
+IONSIS's palette, light, dark and following the system; a few `--tabula-*` CSS variables change it
+and the rest follow. Turkish and English text. Vue 3.5 or later.
 
 Everything is explained in the [repository's README](https://github.com/nouxwell/tabula-grid#readme);
 what each version changed is in its [changelog](https://github.com/nouxwell/tabula-grid/blob/main/CHANGELOG.md).

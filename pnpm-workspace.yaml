@@ -1,4 +1,10 @@
 packages:
   - packages/*
   - playground
+  - examples/*
   - spikes/*
+
+# Install scripts of dependencies do not run. esbuild, which Nuxt brings, works without its own:
+# pnpm installs the binary for the platform as a package of its own.
+allowBuilds:
+  esbuild: false

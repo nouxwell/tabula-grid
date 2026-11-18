@@ -22,10 +22,27 @@ export default defineConfig(
 		}
 	},
 	{
-		files: ["scripts/**/*.mjs", "packages/*/scripts/**/*.mjs"],
+		files: ["scripts/**/*.mjs", "packages/*/scripts/**/*.mjs", "examples/*/test/**/*.mjs"],
 		languageOptions: {
-			globals: { process: "readonly", console: "readonly" }
+			globals: {
+				process: "readonly",
+				console: "readonly",
+				fetch: "readonly",
+				setTimeout: "readonly",
+				URL: "readonly"
+			}
 		}
+	},
+	{
+		// An atom's props are Naive UI's, passed through: `interface AppButtonProps extends /* @vue-ignore */
+		// ButtonProps {}` says so to the type checker without Vue declaring each of them again.
+		files: ["examples/*/app/components/atoms/**/*.vue"],
+		rules: { "@typescript-eslint/no-empty-object-type": "off" }
+	},
+	{
+		// Nuxt names a page after its route: pages/index.vue is "/".
+		files: ["examples/*/app/pages/**/*.vue"],
+		rules: { "vue/multi-word-component-names": "off" }
 	},
 	prettier
 )

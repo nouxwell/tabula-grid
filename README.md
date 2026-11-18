@@ -30,6 +30,10 @@ server as well.
 
 `playground/` is a small Vite app that runs the packages from source. It is not published.
 
+[`examples/nuxt/`](examples/nuxt/README.md) is the grid in a Nuxt application set up as the IONSIS
+CRM is, with Naive UI, Tailwind and TypeScript, drawn on the server. It uses the packages as they
+are published.
+
 `spikes/` holds throwaway experiments that settled a design question, kept for their numbers.
 [spikes/render](spikes/render/README.md) is why the grid is drawn by a renderer of our own rather
 than by an existing engine.
@@ -139,8 +143,11 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
   the field's type. Copied text pastes back as the same values. Pass `value-settings` for anything
   other than Turkish.
 - **Issues.** A cell breaking a rule, or holding text it could not read, gets a red corner and
-  says why in its tooltip, in Turkish or English (`locale`). `goTo(rowId, field)` selects a cell
-  and scrolls it into view, which is what an issue's ids are for.
+  says why in its tooltip, in Turkish or English (`locale`), and its row's number carries a mark,
+  so a row with something to fix is found as the sheet scrolls past. `goTo(rowId, field)` selects
+  a cell and scrolls it into view, which is what an issue's ids are for.
+- **Colours by sign.** A numeric field with `"tone": "sign"` in its schema shows a rise in green
+  with its plus and a fall in red, as a change column wants.
 - **Undo.** Ctrl+Z takes a step back, Ctrl+Y or Ctrl+Shift+Z makes it again, and either selects
   what it changed. While a cell is being edited, Ctrl+Z belongs to the editor.
 - **Hiding and pinning.** A header's menu (⋯) pins a column, hides it, or shows the hidden ones
@@ -148,10 +155,74 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
   The user's arrangement is a `ColumnLayout`, `{ order, hidden, pinned }` by field key; bind it
   with `v-model:columns` to keep it, as a draft does. Hiding a column relaxes nothing: its issues
   are still listed, going to one shows the column again, and a paste passes over it.
-- **Themes.** `light`, `dark` or `auto`, and every colour is a `--tabula-*` CSS variable.
+- **Themes.** `light`, `dark` or `auto`, in colours an application changes (see below).
 
-With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>` is available everywhere,
-drawn in the browser only.
+With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>`, `<TabulaIssues>`,
+`<TabulaFormulaBar>` and `<TabulaStatusBar>` are available everywhere, drawn in the browser only.
+
+### The formula bar and the status bar
+
+Two components that go with a grid, placed wherever the page wants them, given the grid's ref:
+
+```vue
+<template>
+  <TabulaFormulaBar :grid="grid" />
+  <TabulaGrid ref="grid" :schema="schema" :store="store" />
+  <TabulaStatusBar :grid="grid">
+    <template #end>Taslak kaydedildi · 09:38</template>
+  </TabulaStatusBar>
+</template>
+```
+
+- **`TabulaFormulaBar`** shows the active cell's address, "D9", and its value as an editor opens
+  it. An address typed and Entered goes there; the value is edited as in the cell, Enter writes it
+  and Escape leaves it. What was typed goes into the cell it was typed for, even when a click has
+  already moved the selection on. A worked-out column shows its formula, read only.
+- **`TabulaStatusBar`** counts the rows and the issues, names the cells selected, and sums and
+  averages their numbers exactly, written as their column writes a number. `start` and `end` slots
+  take what the application adds.
+
+Both read what the grid exposes, which any other part of a page can read too: `cell` (the active
+cell, its address, field and text), `selected` (the range, with `summarizeCells` from the core
+behind its sum and average), `rows`, `issueSummary`, `goToAddress(address)`,
+`writeCell(rowId, field, text)` and `formatValue(field, value)`. Addresses follow the columns as
+they stand on screen; `columnName` and `parseAddress` turn one into the other.
+
+### Colours
+
+The grid and the issue panel are drawn in IONSIS's palette, the one its CRM uses, light and dark.
+An application changes a few colours and the rest follow: lines, the selection, the tints of a cell
+with an issue are worked out from them. Both components carry the class `tabula-theme`:
+
+```css
+.tabula-theme {
+  --tabula-accent: #2563eb; /* the selection, the active cell, a selected header */
+  --tabula-bg: #ffffff; /* cells and the panel */
+  --tabula-bg-alt: #f8fafc; /* headers and read-only cells */
+  --tabula-fg: #0f172a; /* text; lines are this over the background */
+  --tabula-muted: #475569; /* the second kind of text */
+  --tabula-error: #dc2626;
+  --tabula-warning: #d97706;
+  --tabula-success: #16a34a;
+  --tabula-radius: 6px; /* menus and lists; --tabula-radius-small for smaller parts */
+  --tabula-font-family: inherit; /* the page's font unless set */
+  --tabula-font-size: 13px;
+}
+
+.tabula-theme[data-tabula-theme="dark"] {
+  --tabula-bg: #0f172a;
+  /* … */
+}
+```
+
+Where the accent carries words, on a link or a button, the grid takes it a step towards the text
+colour, `--tabula-accent-text`: IONSIS's green reads at 2.9:1 on white, under the 4.5:1 text
+needs. A rise and a fall in a column coloured by sign are `--tabula-positive` and
+`--tabula-negative`.
+
+Every other `--tabula-*` variable, such as `--tabula-range-bg` or `--tabula-error-bg`, can still be
+set on its own. [examples/nuxt](examples/nuxt/README.md) writes an application's palette into
+these from the one file its Naive UI theme and Tailwind colours are made from.
 
 ## Rules and issues
 
@@ -161,9 +232,13 @@ sees, `unique` across the column, and values that are not of their type. After e
 checks only the cells the change touched.
 
 Each issue is bound to a row by its id and to a field by its key, never to a row number or a
-header, and carries a code and params rather than only a sentence. `TabulaIssues` lists them, with
-counts, Previous and Next; give it and the grid the same issues, and send its `select` to the
-grid's `goTo`:
+header, and carries a code and params rather than only a sentence. `TabulaIssues` lists them as
+cards, with counts, Previous and Next: where each is, what it says, and whether the browser or the
+server found it, so the user knows which they can fix themselves. Give it and the grid the same
+issues, and send its `select` to the grid's `goTo`. On a phone, `variant="sheet"` makes it a bar
+with the counts that opens the list from the bottom of the screen; choosing an issue closes it,
+`v-model:open` opens it from elsewhere, and its `actions` slot takes a button such as "Check
+again":
 
 ```vue
 <script setup lang="ts">
@@ -448,6 +523,7 @@ corepack pnpm lint
 corepack pnpm format:check
 corepack pnpm check:packages           # the packages as published: packed, installed, used
 corepack pnpm --filter playground dev  # the playground
+corepack pnpm --filter example-nuxt dev  # the Nuxt example, on the built packages
 corepack pnpm --filter playground test:browser
 ```
 

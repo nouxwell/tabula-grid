@@ -7,6 +7,62 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+### Added
+
+- **`TabulaFormulaBar`**: the active cell's address and value above the sheet. An address typed and
+  Entered goes there; a value typed is written as typing it into the cell writes it, into the cell
+  it was typed for even when a click has moved the selection on. A formula column shows its formula,
+  read only.
+- **`TabulaStatusBar`**: the rows and issues counted, the cells selected, and the sum and average of
+  their numbers, worked out exactly by the core's new **`summarizeCells`**. `start` and `end` slots
+  take what the application adds.
+- **`TabulaGrid` exposes** what the bars read: `cell`, `selected`, `rows`, `issueSummary`,
+  `goToAddress`, `writeCell` and `formatValue`. **`columnName`** and **`parseAddress`** turn a
+  column's place into its letters and back, as the columns stand on screen.
+- **Colours by sign.** A numeric field takes `"tone": "sign"` in the schema: a rise is shown in
+  green with its plus, a fall in red. `FieldTone` is its type.
+- **A row's number carries a mark** for the worst issue on any of its cells, hidden columns too.
+- **`TabulaIssues` says who found each issue**, the browser or the server, and has a `sheet`
+  variant for phones: a bar with the counts that opens the list from the bottom of the screen,
+  closes on choosing an issue, opens with `v-model:open`, and takes buttons in an `actions` slot.
+- **`examples/nuxt`**, the grid in a Nuxt 4 application set up as the IONSIS CRM is: Naive UI used
+  only through `App*` atoms, Tailwind 4 and TypeScript, one palette for Naive UI, Tailwind and the
+  grid, and server routes that answer in the grid's contract. It follows the chosen designs: a
+  side panel, the formula bar and the status bar on a desktop; icon buttons a finger wide, the
+  issues as a sheet and the actions at the bottom on a phone. Drafts are kept in the browser, CSV
+  goes in and out, and the rows are fetched by the browser rather than sent in the page. It is drawn
+  on the server; its test starts the built server and checks the page it sends, on CI with the rest.
+  Its atoms follow the CRM's: a tooltip that stays on a phone's screen, one modal shape with a
+  scrolling body, a drawer and its content, numbers that count, a button whose icon turns, and the
+  language select with flags; what changes state fades, and reduced motion turns it off.
+- **`DESIGN.md`, `CLAUDE.md` and `AGENTS.md`**: the palette, the layouts chosen for desktop and
+  phone, the parts decided for and against, the component and motion rules, and how work is done
+  here, written down once.
+
+### Changed
+
+- **`TabulaIssues` draws issues as cards**: where, what, who found it and "go to cell", tinted by
+  severity, with the counts as chips. The class names a page or a test reads stay as they were.
+- **`@nouxwell/tabula-nuxt` registers the bars** too: `TabulaFormulaBar` and `TabulaStatusBar`.
+- **Text in the accent colour is a step darker** on light and lighter on dark
+  (`--tabula-accent-text`), so links and buttons pass 4.5:1; `--tabula-positive` and
+  `--tabula-negative` colour a column by sign.
+
+- **IONSIS's palette is the default**, light and dark. The colours an application changes are a
+  few, on the class `tabula-theme` that the grid and the issue panel both carry: `--tabula-accent`,
+  `--tabula-bg`, `--tabula-bg-alt`, `--tabula-fg`, `--tabula-muted`, `--tabula-error`,
+  `--tabula-warning`, `--tabula-success`, `--tabula-radius`, `--tabula-radius-small`,
+  `--tabula-font-family` and `--tabula-font-size`. Lines, the selection and the tints of a cell with
+  an issue are worked out from them, and each can still be set on its own; the panel's
+  `--tabula-issues-*` colours follow the grid's. The grid takes the page's font unless told
+  otherwise.
+
+### Fixed
+
+- **No BigInt literals in the core.** A build that aims at an older JavaScript, as Nuxt's server
+  build does, warned that `10n` and the like may not run. The formulas' decimals now make their
+  constants with `BigInt()`; nothing else changed.
+
 ## [0.1.0] — 2026-11-18
 
 The first release: a sheet that is drawn, typed into, pasted into and checked as the user works,

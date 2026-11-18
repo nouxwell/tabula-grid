@@ -29,7 +29,7 @@ import {
 	type ProcessOutcome,
 	type TableImport
 } from "@nouxwell/tabula-core"
-import { TabulaGrid, TabulaIssues, type GridTheme } from "@nouxwell/tabula-vue"
+import { TabulaFormulaBar, TabulaGrid, TabulaIssues, TabulaStatusBar, type GridTheme } from "@nouxwell/tabula-vue"
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
 import { FakeBackend } from "./backend"
 import { clearStoredDraft, loadStoredDraft, storeDraft } from "./drafts"
@@ -38,6 +38,8 @@ import { priceUpdate, sampleRows } from "./sample"
 const params = new URLSearchParams(location.search)
 const rowCount = Number(params.get("rows") ?? 10_000)
 const initialTheme = params.get("theme")
+// `?issues=sheet`: the issues as a phone shows them, a bar that opens a sheet from the bottom.
+const issueVariant = params.get("issues") === "sheet" ? "sheet" : "panel"
 
 const schema = ModuleSchema.from(priceUpdate)
 
@@ -621,7 +623,8 @@ onMounted(() => {
 			</button>
 			<button type="button" class="playground-discard" @click="startOver">{{ words.discard }}</button>
 		</div>
-		<main class="playground-main">
+		<TabulaFormulaBar :grid="grid" :theme="theme" :locale="language" />
+		<main class="playground-main" :class="{ 'is-sheet': issueVariant === 'sheet' }">
 			<TabulaGrid
 				ref="grid"
 				v-model:column-widths="widths"
@@ -647,10 +650,12 @@ onMounted(() => {
 				:theme="theme"
 				:locale="language"
 				:value-settings="valueSettings"
+				:variant="issueVariant"
 				@select="goTo"
 				@refresh-rows="view.refresh()"
 			/>
 		</main>
+		<TabulaStatusBar class="playground-statusbar" :grid="grid" :theme="theme" :locale="language" />
 	</div>
 </template>
 
@@ -750,5 +755,16 @@ body {
 .playground-grid,
 .playground-issues {
 	min-height: 0;
+}
+
+/* The issues as a phone shows them: the sheet takes the width, the bar sits under it. */
+.playground-main.is-sheet {
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.playground-statusbar {
+	border: 1px solid var(--tabula-head-line, #d6dae4);
+	border-radius: 6px;
 }
 </style>

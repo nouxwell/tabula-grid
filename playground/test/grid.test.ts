@@ -487,7 +487,9 @@ describe("TabulaGrid", () => {
 				await expect(cell(page, 2, 3).getAttribute("title")).resolves.toBe("Bu alan zorunlu.")
 				await expect(cell(page, 2, 3).getAttribute("aria-invalid")).resolves.toBe("true")
 				await expect(items(page).count()).resolves.toBe(1)
-				await expect(items(page).first().innerText()).resolves.toBe("Satır 3 · Yeni fiyat\nBu alan zorunlu.")
+				await expect(items(page).first().innerText()).resolves.toBe(
+					"Satır 3 · Yeni fiyat\nTarayıcı\nBu alan zorunlu.\nHücreye git"
+				)
 				await expect(panel(page).locator(".tabula-issues-count.is-error").innerText()).resolves.toBe("1 hata")
 			})
 		})
@@ -588,7 +590,7 @@ describe("TabulaGrid", () => {
 
 					await expect.poll(() => cell(page, 0, 3).getAttribute("title")).toBe("This field is required.")
 					await expect(items(page).first().innerText()).resolves.toBe(
-						"Row 1 · Yeni fiyat\nThis field is required."
+						"Row 1 · Yeni fiyat\nBrowser\nThis field is required.\nGo to cell"
 					)
 				},
 				"&values=en"
@@ -832,7 +834,7 @@ describe("TabulaGrid", () => {
 				await expect(cell(page, 8, 0).getAttribute("title")).resolves.toBe("Ürün pasif; fiyatı güncellenemez.")
 				await expect(items(page).count()).resolves.toBe(2)
 				await expect(items(page).first().innerText()).resolves.toBe(
-					"Satır 9 · Ürün\nÜrün pasif; fiyatı güncellenemez."
+					"Satır 9 · Ürün\nSunucu\nÜrün pasif; fiyatı güncellenemez.\nHücreye git"
 				)
 			})
 		})
@@ -1564,11 +1566,180 @@ describe("TabulaGrid", () => {
 
 					await expect(grid.getAttribute("data-tabula-theme")).resolves.toBe("dark")
 					await expect(grid.evaluate(element => getComputedStyle(element).backgroundColor)).resolves.toBe(
-						"rgb(25, 28, 36)"
+						"rgb(38, 40, 45)"
 					)
 				},
 				"&theme=dark"
 			)
 		})
+	})
+})
+
+describe("the bars around the sheet", () => {
+	const address = (page: Page): Locator => page.locator(".tabula-formula-address")
+	const value = (page: Page): Locator => page.locator(".tabula-formula-value")
+	const status = (page: Page): Locator => page.locator(".tabula-status")
+	const gridHasFocus = (page: Page): Promise<boolean> =>
+		page.evaluate(() => document.activeElement?.closest(".tabula-grid") != null)
+
+	it("shows the active cell's address and value, and writes what is typed there into it", async () => {
+		await withPage(20, async page => {
+			await cell(page, 1, 3).click()
+
+			await expect.poll(() => address(page).inputValue()).toBe("D2")
+			await expect(value(page).inputValue()).resolves.toBe(
+				String(await valueAt(page, 1, "newPrice")).replace(".", ",")
+			)
+
+			await value(page).fill("123,5")
+			await value(page).press("Enter")
+
+			await expect.poll(() => valueAt(page, 1, "newPrice")).toBe("123.5")
+			await expect.poll(() => gridHasFocus(page)).toBe(true)
+		})
+	})
+
+	it("writes into the cell it was typed for when a click moves on, and nothing on Escape", async () => {
+		await withPage(20, async page => {
+			const before = await valueAt(page, 4, "newPrice")
+
+			await cell(page, 1, 3).click()
+			await value(page).fill("777")
+			await cell(page, 4, 3).click()
+
+			await expect.poll(() => valueAt(page, 1, "newPrice")).toBe("777")
+			await expect(valueAt(page, 4, "newPrice")).resolves.toBe(before)
+
+			const kept = await valueAt(page, 2, "newPrice")
+
+			await cell(page, 2, 3).click()
+			await value(page).fill("1")
+			await value(page).press("Escape")
+
+			await expect(valueAt(page, 2, "newPrice")).resolves.toBe(kept)
+			await expect.poll(() => value(page).inputValue()).toBe(String(kept).replace(".", ","))
+		})
+	})
+
+	it("goes to an address typed into it, and says so when there is no such cell", async () => {
+		await withPage(20, async page => {
+			await address(page).fill("b5")
+			await address(page).press("Enter")
+
+			await expect.poll(async () => (await selected(page)).active).toEqual({ row: 4, col: 1 })
+			await expect(value(page).inputValue()).resolves.toBe("SKU-000005")
+
+			await address(page).fill("Z99")
+			await address(page).press("Enter")
+
+			await expect(address(page).getAttribute("aria-invalid")).resolves.toBe("true")
+			await expect((await selected(page)).active).toEqual({ row: 4, col: 1 })
+		})
+	})
+
+	it("shows a formula column's formula, which is not typed over", async () => {
+		await withPage(20, async page => {
+			await cell(page, 0, 9).click()
+
+			await expect.poll(() => value(page).inputValue()).toBe("=[newPrice] - [currentPrice]")
+			await expect(value(page).getAttribute("readonly")).resolves.not.toBeNull()
+		})
+	})
+
+	it("counts the rows and the issues, and sums the numbers selected exactly", async () => {
+		await withPage(20, async page => {
+			await expect.poll(() => status(page).innerText()).toContain("20 satır")
+
+			await cell(page, 0, 2).click()
+			await press(page, "Shift+ArrowDown", 2)
+
+			const prices = await Promise.all([0, 1, 2].map(row => valueAt(page, row, "currentPrice")))
+			const cents = prices.reduce<number>((total, price) => total + Math.round(Number(price) * 100), 0)
+			const sum = (cents / 100).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+			await expect.poll(() => status(page).innerText()).toContain("Seçili: C1:C3")
+			await expect(status(page).locator(".tabula-status-sum").innerText()).resolves.toBe(`Toplam: ${sum}`)
+			await expect(status(page).locator(".tabula-status-average").innerText()).resolves.toMatch(
+				/^Ortalama: [\d.]+,\d{2}$/
+			)
+
+			await cell(page, 2, 3).click()
+			await press(page, "Delete")
+
+			await expect.poll(() => status(page).innerText()).toContain("20 satır · 1 sorun")
+		})
+	})
+
+	it("marks a row with an issue by its number, and colours a change by its sign", async () => {
+		await withPage(20, async page => {
+			await cell(page, 2, 3).click()
+			await press(page, "Delete")
+
+			const mark = page.locator(".tabula-grid-rh").nth(2).locator(".tabula-grid-rh-mark")
+
+			await expect.poll(() => mark.getAttribute("class")).toContain("is-error")
+			await expect(page.locator(".tabula-grid-rh").nth(3).locator(".tabula-grid-rh-mark").count()).resolves.toBe(
+				0
+			)
+
+			await cell(page, 0, 4).click()
+			await page.keyboard.type("12,5")
+			await press(page, "Enter")
+
+			await expect.poll(() => cell(page, 0, 4).innerText()).toMatch(/^\+12,5/)
+			await expect(cell(page, 0, 4).getAttribute("class")).resolves.toContain("is-positive")
+
+			await cell(page, 0, 4).click()
+			await page.keyboard.type("-3")
+			await press(page, "Enter")
+
+			await expect.poll(() => cell(page, 0, 4).getAttribute("class")).toContain("is-negative")
+			await expect(cell(page, 0, 4).innerText()).resolves.toMatch(/^-3/)
+		})
+	})
+
+	it("says whether the browser or the server found each issue", async () => {
+		await withPage(20, async page => {
+			await cell(page, 2, 3).click()
+			await press(page, "Delete")
+
+			const source = (text: string): Locator =>
+				page.locator(".tabula-issues-item", { hasText: text }).locator(".tabula-issues-source")
+
+			await expect.poll(() => source("Satır 3").innerText()).toBe("Tarayıcı")
+
+			await page.locator(".playground-check").click()
+
+			await expect.poll(() => source("Satır 9").innerText()).toBe("Sunucu")
+		})
+	})
+
+	it("lists the issues in a sheet from the bottom on a phone, and steps aside for the cell chosen", async () => {
+		await withPage(
+			20,
+			async page => {
+				const bar = page.locator(".tabula-issues-bar")
+				const sheet = page.locator('.tabula-issues-body[role="dialog"]')
+
+				await expect.poll(() => bar.innerText()).toBe("Sorun yok.")
+
+				await cell(page, 2, 3).click()
+				await press(page, "Delete")
+
+				await expect.poll(() => bar.innerText()).toBe("1 hata")
+				await expect(bar.getAttribute("class")).resolves.toContain("is-error")
+				await expect(sheet.count()).resolves.toBe(0)
+
+				await cell(page, 0, 0).click()
+				await bar.click()
+				await expect.poll(() => sheet.count()).toBe(1)
+
+				await sheet.locator(".tabula-issues-item").click()
+
+				await expect.poll(() => sheet.count()).toBe(0)
+				await expect.poll(async () => (await selected(page)).active).toEqual({ row: 2, col: 3 })
+			},
+			"&issues=sheet"
+		)
 	})
 })

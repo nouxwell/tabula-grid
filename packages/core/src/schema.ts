@@ -72,14 +72,22 @@ export interface TextField extends FieldBase {
 	readonly type: "string"
 }
 
+/**
+ * How a number's own value colours it: `sign` shows a rise in the positive colour, with its plus, and
+ * a fall in the negative one, as a change column wants.
+ */
+export type FieldTone = "sign"
+
 export interface IntegerField extends FieldBase {
 	readonly type: "integer"
+	readonly tone: FieldTone | null
 }
 
 export interface DecimalField extends FieldBase {
 	readonly type: "decimal" | "quantity" | "percent"
 	/** Digits after the point; null leaves it to the sheet's settings for the type. */
 	readonly decimals: number | null
+	readonly tone: FieldTone | null
 }
 
 export interface MoneyField extends FieldBase {
@@ -87,6 +95,7 @@ export interface MoneyField extends FieldBase {
 	readonly decimals: number | null
 	/** A fixed currency code, or null when the currency comes from elsewhere. */
 	readonly currency: string | null
+	readonly tone: FieldTone | null
 }
 
 export interface BoolField extends FieldBase {
@@ -145,6 +154,8 @@ export interface FieldInput {
 	decimals?: number
 	/** money */
 	currency?: string
+	/** integer, decimal, quantity, percent and money */
+	tone?: FieldTone
 	/** options */
 	options?: OptionInput[]
 	/** options */
@@ -181,11 +192,11 @@ const FORMULA_TYPES: readonly FieldType[] = [
 
 const TYPE_PROPERTIES: Readonly<Record<FieldType, readonly string[]>> = {
 	string: [],
-	integer: [],
-	decimal: ["decimals"],
-	money: ["decimals", "currency"],
-	quantity: ["decimals"],
-	percent: ["decimals"],
+	integer: ["tone"],
+	decimal: ["decimals", "tone"],
+	money: ["decimals", "currency", "tone"],
+	quantity: ["decimals", "tone"],
+	percent: ["decimals", "tone"],
 	bool: [],
 	date: ["pattern"],
 	datetime: ["pattern"],
@@ -312,11 +323,19 @@ function fieldToJson(field: FieldSchema): FieldInput {
 	}
 
 	switch (field.type) {
+		case "integer":
+			if (field.tone !== null) {
+				json.tone = field.tone
+			}
+			break
 		case "decimal":
 		case "quantity":
 		case "percent":
 			if (field.decimals !== null) {
 				json.decimals = field.decimals
+			}
+			if (field.tone !== null) {
+				json.tone = field.tone
 			}
 			break
 		case "money":
@@ -325,6 +344,9 @@ function fieldToJson(field: FieldSchema): FieldInput {
 			}
 			if (field.currency !== null) {
 				json.currency = field.currency
+			}
+			if (field.tone !== null) {
+				json.tone = field.tone
 			}
 			break
 		case "options":
@@ -588,9 +610,11 @@ function readField(raw: unknown, path: string, problems: Problems): FieldSchema 
 
 	switch (type) {
 		case "string":
-		case "integer":
 		case "bool":
 			field = { ...base, type }
+			break
+		case "integer":
+			field = { ...base, type, tone: readTone(raw, path, problems) }
 			break
 		case "date":
 		case "datetime":
@@ -599,14 +623,15 @@ function readField(raw: unknown, path: string, problems: Problems): FieldSchema 
 		case "decimal":
 		case "quantity":
 		case "percent":
-			field = { ...base, type, decimals: readDecimals(raw, path, problems) }
+			field = { ...base, type, decimals: readDecimals(raw, path, problems), tone: readTone(raw, path, problems) }
 			break
 		case "money":
 			field = {
 				...base,
 				type,
 				decimals: readDecimals(raw, path, problems),
-				currency: readText(raw, "currency", path, problems, false)
+				currency: readText(raw, "currency", path, problems, false),
+				tone: readTone(raw, path, problems)
 			}
 			break
 		case "options":
@@ -700,6 +725,22 @@ function readDecimals(raw: Json, path: string, problems: Problems): number | nul
 
 	if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
 		problems.add(at(path, "decimals"), `must be a whole number, 0 or more; got ${describe(value)}`)
+
+		return null
+	}
+
+	return value
+}
+
+function readTone(raw: Json, path: string, problems: Problems): FieldTone | null {
+	const value = raw.tone
+
+	if (value === undefined || value === null) {
+		return null
+	}
+
+	if (value !== "sign") {
+		problems.add(at(path, "tone"), `must be "sign"; got ${describe(value)}`)
 
 		return null
 	}

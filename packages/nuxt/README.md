@@ -11,11 +11,11 @@ npm install @nouxwell/tabula-core @nouxwell/tabula-nuxt
 // nuxt.config.ts
 export default defineNuxtConfig({
   modules: ["@nouxwell/tabula-nuxt"],
-  tabula: { prefix: "" } // "App" registers AppTabulaGrid and AppTabulaIssues
+  tabula: { prefix: "" } // "App" registers AppTabulaGrid, AppTabulaIssues and the rest
 })
 ```
 
-`<TabulaGrid>` and `<TabulaIssues>` from
+`<TabulaGrid>`, `<TabulaIssues>`, `<TabulaFormulaBar>` and `<TabulaStatusBar>` from
 [@nouxwell/tabula-vue](https://www.npmjs.com/package/@nouxwell/tabula-vue) are then available in
 every page, with their stylesheet. They are drawn in the browser only: the grid measures text and
 reads the clipboard, and a server has neither. The schema, the rows and the checks come from

@@ -255,6 +255,24 @@ describe("ModuleSchema", () => {
 		).toEqual(['fields[3].options[1].value: "1" is already the value of fields[3].options[0]'])
 	})
 
+	it("colours a number by its sign when a numeric field asks for it, and nowhere else", () => {
+		const schema = ModuleSchema.from(
+			withField(1, { key: "currentPrice", type: "money", decimals: 2, tone: "sign", editable: false })
+		)
+
+		expect(schema.field("currentPrice")).toMatchObject({ type: "money", tone: "sign" })
+		expect(schema.field("newPrice")).toMatchObject({ tone: null })
+		expect(ModuleSchema.from(JSON.parse(JSON.stringify(schema))).field("currentPrice")).toMatchObject({
+			tone: "sign"
+		})
+		expect(problemsOf(withField(5, { key: "note", type: "string", tone: "sign" }))).toEqual([
+			"fields[5].tone: does not apply to a string field"
+		])
+		expect(problemsOf(withField(2, { key: "newPrice", type: "money", tone: "green" }))).toEqual([
+			'fields[2].tone: must be "sign"; got "green"'
+		])
+	})
+
 	it("refuses a key with spaces around it", () => {
 		expect(problemsOf(withField(5, { key: "note ", type: "string" }))).toEqual([
 			'fields[5].key: "note " starts or ends with a space; a key is an identifier, not a label'

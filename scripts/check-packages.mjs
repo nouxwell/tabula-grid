@@ -173,7 +173,7 @@ function writeConsumer() {
 	fs.writeFileSync(
 		path.join(consumer, "check.ts"),
 		`import { ModuleSchema, RowStore, SheetValidator, VALUE_SETTINGS, type Issue } from "@nouxwell/tabula-core"
-import { TabulaGrid, TabulaIssues, type GridTheme } from "@nouxwell/tabula-vue"
+import { columnName, TabulaFormulaBar, TabulaGrid, TabulaIssues, TabulaStatusBar, type GridTheme, type SelectedCells } from "@nouxwell/tabula-vue"
 import tabula, { type ModuleOptions } from "@nouxwell/tabula-nuxt"
 
 const schema: ModuleSchema = ModuleSchema.from({
@@ -185,6 +185,8 @@ const issues: Issue[] = new SheetValidator(schema, new RowStore(), VALUE_SETTING
 const theme: GridTheme = "dark"
 const options: ModuleOptions = { prefix: "App" }
 const goTo: InstanceType<typeof TabulaGrid>["goTo"] = () => true
+const selected: SelectedCells | null = null as InstanceType<typeof TabulaGrid>["selected"]
+const letters: string = columnName(27)
 
 // @ts-expect-error rows are a list of rows, not a count
 new RowStore({ rows: 4 })
@@ -195,7 +197,7 @@ const nothing: InstanceType<typeof TabulaGrid>["noSuchMethod"] = null
 // @ts-expect-error an option the module does not have
 const wrongOptions: ModuleOptions = { prefix: "App", suffix: "" }
 
-export { goTo, issues, nothing, options, tabula, TabulaIssues, theme, wrongOptions, wrongTheme }
+export { goTo, issues, letters, nothing, options, selected, tabula, TabulaFormulaBar, TabulaIssues, TabulaStatusBar, theme, wrongOptions, wrongTheme }
 `
 	)
 
@@ -205,7 +207,7 @@ export { goTo, issues, nothing, options, tabula, TabulaIssues, theme, wrongOptio
 import fs from "node:fs"
 import { fileURLToPath } from "node:url"
 import { ModuleSchema, RowStore, SheetValidator, VALUE_SETTINGS, readInput, version } from "@nouxwell/tabula-core"
-import { TabulaGrid, TabulaIssues } from "@nouxwell/tabula-vue"
+import { columnName, TabulaFormulaBar, TabulaGrid, TabulaIssues, TabulaStatusBar } from "@nouxwell/tabula-vue"
 import tabula from "@nouxwell/tabula-nuxt"
 
 assert.equal(version, ${JSON.stringify(version)})
@@ -223,6 +225,9 @@ assert.equal(readInput(schema.field("price"), "1.234,5 ₺", VALUE_SETTINGS.tr).
 
 assert.equal(typeof TabulaGrid, "object")
 assert.equal(typeof TabulaIssues, "object")
+assert.equal(typeof TabulaFormulaBar, "object")
+assert.equal(typeof TabulaStatusBar, "object")
+assert.equal(columnName(27), "AB")
 assert.ok(fs.existsSync(fileURLToPath(import.meta.resolve("@nouxwell/tabula-vue/style.css"))))
 
 const meta = await tabula.getMeta()

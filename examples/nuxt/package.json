@@ -1,0 +1,28 @@
+{
+	"name": "example-nuxt",
+	"private": true,
+	"description": "Tabula Grid in a Nuxt application set up as the IONSIS CRM is: Naive UI, Tailwind and TypeScript.",
+	"type": "module",
+	"scripts": {
+		"dev": "nuxt dev",
+		"build": "nuxt build",
+		"preview": "nuxt preview",
+		"typecheck": "nuxt typecheck",
+		"test": "node test/ssr.mjs"
+	},
+	"dependencies": {
+		"@css-render/vue3-ssr": "^0.15.14",
+		"@nouxwell/tabula-core": "workspace:^",
+		"@nouxwell/tabula-nuxt": "workspace:^",
+		"@nouxwell/tabula-vue": "workspace:^",
+		"naive-ui": "^2.45.3",
+		"nuxt": "^4.6.4",
+		"vue": "^3.5.45"
+	},
+	"devDependencies": {
+		"@tailwindcss/vite": "^4.3.5",
+		"tailwindcss": "^4.3.5",
+		"typescript": "~6.0.3",
+		"vue-tsc": "^3.3.14"
+	}
+}

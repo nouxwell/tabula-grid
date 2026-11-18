@@ -15,7 +15,8 @@ concurrency:
 
 jobs:
   # package.json claims Node 22.13+, 24 and 26+. The maintainer's machine runs one of them; this
-  # matrix is what makes the other two more than a claim.
+  # matrix is what makes the other two more than a claim. The Nuxt example is built, type-checked
+  # and tested with the rest: its test starts the built server and reads the page it renders.
   checks:
     name: Build, types, tests — Node ${{ matrix.node }}
     runs-on: ubuntu-latest
@@ -95,8 +96,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm -r build
+      - name: Build the packages
+        run: pnpm --filter "./packages/**" build
 
       - name: Pack, install and use
         run: pnpm check:packages

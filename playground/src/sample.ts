@@ -33,6 +33,7 @@ export const priceUpdate: ModuleSchemaInput = {
 			type: "percent",
 			label: "Değişim %",
 			decimals: 1,
+			tone: "sign",
 			rules: [
 				{ rule: "min", value: "-100" },
 				{ rule: "max", value: "100" }

@@ -1,0 +1,98 @@
+/*
+ * The colours of the grid and the issue panel, which both carry the class "tabula-theme".
+ *
+ * A host changes the first group, on .tabula-theme in a stylesheet of its own, and everything else
+ * follows: the lines, the selection, the tints of a cell with an issue. Any of the rest can still
+ * be set on its own. Dark values go on .tabula-theme[data-tabula-theme="dark"].
+ *
+ * The defaults are IONSIS's palette, the one its CRM is drawn in.
+ */
+
+.tabula-theme {
+	/* What a host sets. */
+	--tabula-accent: rgb(0 178 123);
+	--tabula-bg: #ffffff;
+	--tabula-bg-alt: #fafbfc;
+	--tabula-fg: #000000;
+	--tabula-muted: #495465;
+	--tabula-error: #ff0156;
+	--tabula-warning: #ffb600;
+	--tabula-success: #00b27b;
+	--tabula-radius: 6px;
+	--tabula-radius-small: 3px;
+	--tabula-font-size: 13px;
+
+	/*
+	 * Worked out from the above. Lines and hovers are the text colour over the background, as the
+	 * palette's dividers are: black on light, white on dark. Text in a signal colour is mixed
+	 * towards the text colour, so amber and red stay readable on either background.
+	 */
+	/*
+	 * The accent as text, buttons' and links' words: the palette's green on white reads at 2.9:1, under
+	 * the 4.5:1 text needs, so text takes it a step towards the text colour (darker on light, lighter
+	 * on dark). Borders, the selection and fills keep the accent itself.
+	 */
+	--tabula-accent-text: color-mix(in srgb, var(--tabula-accent) 72%, var(--tabula-fg));
+	/* A number's sign, in a column whose schema asks for it (`tone: "sign"`). */
+	--tabula-positive: var(--tabula-accent-text);
+	--tabula-negative: var(--tabula-required);
+	--tabula-line: color-mix(in srgb, var(--tabula-fg) 10%, var(--tabula-bg));
+	--tabula-head-bg: var(--tabula-bg-alt);
+	--tabula-head-line: color-mix(in srgb, var(--tabula-fg) 20%, var(--tabula-bg));
+	--tabula-head-selected-bg: color-mix(in srgb, var(--tabula-accent) 15%, var(--tabula-bg-alt));
+	--tabula-readonly-bg: var(--tabula-bg-alt);
+	--tabula-range-bg: color-mix(in srgb, var(--tabula-accent) 10%, transparent);
+	--tabula-hover-bg: color-mix(in srgb, var(--tabula-fg) 5%, var(--tabula-bg));
+	--tabula-required: color-mix(in srgb, var(--tabula-error) 85%, var(--tabula-fg));
+	--tabula-error-bg: color-mix(in srgb, var(--tabula-error) 8%, var(--tabula-bg));
+	--tabula-error-mark: var(--tabula-error);
+	--tabula-warning-bg: color-mix(in srgb, var(--tabula-warning) 12%, var(--tabula-bg));
+	--tabula-warning-mark: color-mix(in srgb, var(--tabula-warning) 70%, var(--tabula-fg));
+	--tabula-stale-mark: var(--tabula-muted);
+	--tabula-success-bg: color-mix(in srgb, var(--tabula-success) 10%, var(--tabula-bg));
+	--tabula-success-mark: color-mix(in srgb, var(--tabula-success) 85%, var(--tabula-fg));
+
+	--tabula-issues-bg: var(--tabula-bg);
+	--tabula-issues-fg: var(--tabula-fg);
+	--tabula-issues-muted: var(--tabula-muted);
+	--tabula-issues-line: var(--tabula-head-line);
+	--tabula-issues-hover: var(--tabula-hover-bg);
+	--tabula-issues-current: color-mix(in srgb, var(--tabula-accent) 15%, var(--tabula-bg));
+	--tabula-issues-error: var(--tabula-required);
+	--tabula-issues-warning: color-mix(in srgb, var(--tabula-warning) 60%, var(--tabula-fg));
+	--tabula-issues-error-bg: color-mix(in srgb, var(--tabula-error) 5%, var(--tabula-bg));
+	--tabula-issues-error-line: color-mix(in srgb, var(--tabula-error) 35%, var(--tabula-bg));
+	--tabula-issues-warning-bg: color-mix(in srgb, var(--tabula-warning) 8%, var(--tabula-bg));
+	--tabula-issues-warning-line: color-mix(in srgb, var(--tabula-warning) 50%, var(--tabula-bg));
+
+	font-family: var(--tabula-font-family, inherit);
+	font-size: var(--tabula-font-size);
+}
+
+.tabula-theme[data-tabula-theme="dark"] {
+	--tabula-accent: rgb(0 225 155);
+	--tabula-bg: #26282d;
+	--tabula-bg-alt: #1d1f25;
+	--tabula-fg: #ffffff;
+	--tabula-muted: #acb5be;
+	--tabula-error: #ff0156;
+	--tabula-warning: #ffb600;
+	--tabula-success: #00e19b;
+
+	color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+	.tabula-theme[data-tabula-theme="auto"] {
+		--tabula-accent: rgb(0 225 155);
+		--tabula-bg: #26282d;
+		--tabula-bg-alt: #1d1f25;
+		--tabula-fg: #ffffff;
+		--tabula-muted: #acb5be;
+		--tabula-error: #ff0156;
+		--tabula-warning: #ffb600;
+		--tabula-success: #00e19b;
+
+		color-scheme: dark;
+	}
+}

@@ -1,0 +1,209 @@
+# Tabula Grid — Design & Styling Guide (READ THIS FIRST)
+
+> **Before any design, UI or styling work in this repository, read this file.** Its rules hold for
+> the packages, the playground and the examples, and for anyone building a screen with the grid.
+>
+> Tasarım işlerinin ana kaynağı bu dosyadır. Her arayüz isteğinde önce buraya bakılır; burada
+> yazanı tekrar sormaya gerek yoktur.
+
+The look was chosen on 2026-11-18 on the design canvas
+[Tabula Grid tasarım önerileri](https://claude.ai/artifact/HiDLYFc6Q3kVq5QmzYT4Dp): layout A on a
+desktop, C and D on a phone, the parts sheet for every state. Colours, type and the component
+rules follow the IONSIS CRM (`crm-frontend/DESIGN.md`), so a screen made with the grid looks like
+the rest of the CRM.
+
+---
+
+## Two kinds of code, two sets of rules
+
+### 1. The packages (`packages/vue`, `packages/core`)
+
+They are installed into any application, so they bring nothing of their own taste with them.
+
+- **No UI kit, no CSS framework, no icon library.** No Naive UI, no Tailwind, no Iconify in a
+  package. Plain elements, styled in the component's own `<style>` block.
+- **Colours only from `packages/vue/src/theme.css`.** A component uses `--tabula-*` variables and
+  nothing else; a new colour is a new variable there, worked out from the root ones with
+  `color-mix()` so it follows when an application changes the accent. A hex in a component's CSS
+  is a bug (shadows are the one exception).
+- **Class names start with `tabula-`** and stay stable: hosts style them and the browser tests
+  read them. Change one only with the tests and the changelog.
+- **Accessible as drawn.** Real `<button>`s and `<input>`s with labels; text at 4.5:1 (the accent
+  carries words only as `--tabula-accent-text`); 44px touch targets wherever a phone is meant.
+- **Words in both languages**, in `messages.ts` (`tr` and `en`, the same keys).
+
+### 2. Applications and examples (`examples/nuxt`, the CRM)
+
+- **Naive UI only through `App*` atoms** in `app/components/atoms/`: `AppButton`, never
+  `<n-button>`, on any screen. A component the set lacks is wrapped as a new `App*` atom first
+  (Naive UI's props and slots pass through), then used. One change to an atom changes every screen.
+- **Tailwind utilities for layout and text**, colours from the palette's tokens (`bg-surface`,
+  `text-muted`, `border-divider`, `text-primary-text`…). No hex in a component, no bespoke class
+  names; a `<style>` block only where a utility cannot say it (an atom's transition).
+- **One palette file** (`app/theme/palette.ts`) makes Naive UI's theme, the CSS variables behind
+  Tailwind's colours and the grid's `--tabula-*` colours. Change a colour there, nowhere else.
+- **Mobile first**, checked at 375px and 1440px. No sideways page scroll; wide content scrolls
+  inside its own box.
+
+---
+
+## Colours
+
+The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same values.
+
+| Token            | Light                | Dark                       | Grid variable                |
+| ---------------- | -------------------- | -------------------------- | ---------------------------- |
+| Page             | `#f5f7f9`            | `#14161a`                  | —                            |
+| Surface          | `#ffffff`            | `#26282d`                  | `--tabula-bg`                |
+| Second surface   | `#fafbfc`            | `#1d1f25`                  | `--tabula-bg-alt`            |
+| Text             | `#000000`            | `#ffffff`                  | `--tabula-fg`                |
+| Second text      | `#495465`            | `#acb5be`                  | `--tabula-muted`             |
+| Primary (accent) | `#00b27b`            | `#00e19b`                  | `--tabula-accent`            |
+| Primary as text  | `#00835a`            | `#00e19b`                  | `--tabula-accent-text`       |
+| Error            | `#ff0156`            | `#ff0156`                  | `--tabula-error`             |
+| Warning          | `#ffb600`            | `#ffb600`                  | `--tabula-warning`           |
+| Success          | `#00b27b`            | `#00e19b`                  | `--tabula-success`           |
+| Info             | `#6267ff`            | `#6267ff`                  | —                            |
+| Divider          | `rgba(0, 0, 0, 0.1)` | `rgba(255, 255, 255, 0.1)` | `--tabula-line` (worked out) |
+
+- **The green that carries words is a step darker on light.** `#00b27b` on white reads at 2.9:1,
+  under the 4.5:1 text needs, so buttons' and links' words use `#00835a` (4.8:1). Borders, the
+  selection, fills and the logo keep `#00b27b`. On dark, a green button's words are dark
+  (`#04140e`): white on that green does not read.
+- **Signal colours as text** are mixed towards the text colour (`--tabula-issues-error`,
+  `--tabula-issues-warning`): amber and red stay readable on either background.
+- **A number coloured by its sign** (`"tone": "sign"` in the schema): a rise in
+  `--tabula-positive` with its plus, a fall in `--tabula-negative`.
+- **Radius** 6px (`--tabula-radius`), 3px for small parts (`--tabula-radius-small`).
+- **Type**: the page's font (`"Helvetica Neue", "Segoe UI", system-ui, sans-serif`); Lexend for
+  page titles; a monospace for cell addresses. 15px body, 13px in the grid. The CRM's token says
+  `'Helvatica Neue'`, a typo that matches no font; use `Helvetica Neue`.
+
+---
+
+## The layout chosen
+
+### Desktop (768px and wider) — design A
+
+1. **Top bar**: logo, where the page is (Ürünler / Toplu işlemler), theme switch, language select
+   with flags.
+2. **Page header**: title, "Taslak" tag (its tooltip says nothing is written before İşle), the row
+   count (counting up), the save status, then Taslağı kaydet · Kontrol et · **İşle** (primary).
+3. **Toolbar**: undo and redo (icon buttons with tooltips), İçe aktar ▾, Dışa aktar ▾, Sütunlar.
+4. **Formula bar** (`TabulaFormulaBar`): address and value of the active cell.
+5. **The sheet** (`TabulaGrid`) and, on its right, **the issues** (`TabulaIssues`, 340px).
+6. **Status bar** (`TabulaStatusBar`): rows and issues, the selection, its sum and average.
+
+### Phone (under 768px) — designs C and D
+
+1. **App bar**: logo, theme switch, ⋯ (language, with flags).
+2. Title, "Taslak", save status.
+3. **Icon toolbar**, every button 44px, scrolling sideways when it must.
+4. Formula bar.
+5. The sheet, rows 40px high.
+6. **Issues bar** (`TabulaIssues variant="sheet"`): the counts; it opens the issues as a sheet
+   from the bottom, with "Yeniden kontrol et"; choosing an issue closes it and goes to the cell.
+7. **Action bar** at the bottom: Taslağı kaydet · Kontrol et · İşle, İşle disabled while an error
+   stands.
+
+### The parts, as decided
+
+| #   | Part                                                | Where       | State                        |
+| --- | --------------------------------------------------- | ----------- | ---------------------------- |
+| 1   | Issues in a side panel                              | package     | done                         |
+| 2   | Issues in a bottom panel with tabs, and run history | package     | not chosen                   |
+| 3   | Issues as a sheet on a phone                        | package     | done                         |
+| 4   | Formula bar                                         | package     | done                         |
+| 5   | Column letters over the headers                     | package     | not chosen                   |
+| 6   | Colour by sign                                      | package     | done                         |
+| 7   | A mark by a row's number                            | package     | done                         |
+| 8   | Who found an issue (browser or server)              | package     | done                         |
+| 9   | Search in the sheet                                 | package     | not chosen                   |
+| 10  | Filter and sort in the header                       | package     | phase two                    |
+| 11  | Fill handle                                         | package     | phase two                    |
+| 12  | Status bar with sum and average                     | package     | done                         |
+| 13  | Sheet tabs                                          | package     | not chosen (large)           |
+| 14  | Zoom                                                | package     | not chosen                   |
+| 15  | Save status                                         | application | done                         |
+| 16  | Top bar                                             | application | done                         |
+| 17  | Toolbar with import and export menus                | application | done; rules screen phase two |
+| 18  | Phone layout                                        | application | done                         |
+| 19  | Darker green for words                              | both        | done                         |
+
+A part marked "not chosen" is not built without asking first.
+
+---
+
+## Components (`App*` atoms)
+
+Every screen takes these; none uses the Naive UI component underneath directly.
+
+- **`AppButton`**: `size="small"` by default, `size="large"` on a phone. `icon` names an
+  `AppIcon`; when it changes (sun ↔ moon) the new one turns in. An icon-only button has an
+  `aria-label` and an `AppTooltip`, and is at least 44px on a phone (`min-h-11 min-w-11`).
+- **`AppIcon`**: the one icon set, by name; a name it lacks is a type error. Stroke icons,
+  1.8 wide.
+- **`AppTooltip`**: every hint. It keeps itself on a phone's screen (capped to the screen less
+  32px, slid sideways to 16px from each edge, arrow still on the trigger), so a call never carries
+  a phone width or a phone placement. Long text goes in `AppFitText` with
+  `:content-style="FIT_TOOLTIP_STYLE"`; short labels need neither. Never a raw `n-tooltip`.
+- **`AppModal`**: one shape. A card at most `width` wide (680px by default) and never wider than
+  the screen less 32px, never taller than the screen less 48px, centred; header and footer fixed.
+  Its body goes in **`AppModalScrollWrapper`**, which scrolls inside the card with its bar in the
+  card's padding, clear of the fields.
+- **`AppDrawer`** + **`AppDrawerContent`**: the drawer is as wide as it asks (420px) and never
+  wider than the screen; the content brings the header with its close button, a body that scrolls
+  and a footer that stays.
+- **`AppDropdown`**: a menu that drops from a button, opened by a click (a finger, a mouse and the
+  keyboard alike). Options may carry an `icon`.
+- **`AppSelect`**; **`LocaleSelect`** for the language: Türkçe and English, each with its flag
+  (`AppFlag`, drawn inline, so it is there with the page).
+- **`AppNumberAnimation`**: a number that counts to its new value, 300ms, thousands separated in
+  the locale given.
+- **`AppTag`**, **`AppSwitch`**, **`AppCard`**, **`AppCollapse`** + **`AppCollapseItem`**.
+
+---
+
+## Motion
+
+- **Everything that changes state moves softly**, 150–300ms, `ease-out` or `ease-in-out`; nothing
+  snaps. Named transitions: `fade` (200ms), `fade-up` (250ms, 8px), `icon-swap` (inside
+  `AppButton`).
+- **Everything that opens and closes animates**: drawers, modals, dropdowns and collapses do so
+  through Naive UI; a `v-if` that swaps one thing for another sits in a `<Transition>` (the grid
+  fading in for "Tablo hazırlanıyor…", the save status changing).
+- **Numbers count** with `AppNumberAnimation` rather than jump.
+- **`prefers-reduced-motion: reduce`** turns every transition off. A new transition does the
+  same.
+- No keyframe animations of our own.
+
+---
+
+## Things that bite
+
+- **Naive UI's styles are not in a CSS layer; Tailwind's utilities are.** A display utility on a
+  Naive UI component (`class="hidden md:block"` on an `AppSelect`, `md:hidden` on an `AppButton`)
+  loses to Naive UI's own `display`. Put such utilities on a plain wrapper element.
+- **Naive UI's config provider renders an element**: give it `h-full`, or a page cannot fill the
+  window.
+- **Server rendering**: Naive UI's styles are gathered by `@css-render/vue3-ssr` and written into
+  the head by `app/plugins/naive-ui.server.ts`. The `nuxtjs-naive-ui` module (1.0.2) hands them to
+  `ssrContext.styles`, which Nuxt 4 no longer writes.
+- **Ids in components** come from `useId()`, never a counter: a counter differs between the server
+  and the browser.
+- **The grid is drawn in the browser only.** Its rows are fetched by the browser
+  (`useFetch(…, { server: false })`); in the page's payload they would be sent twice.
+
+---
+
+## Pre-flight checklist
+
+- [ ] Packages: no UI kit, no Tailwind, colours only from `theme.css`, classes `tabula-*`.
+- [ ] Applications: every Naive UI component through an `App*` atom; a missing one wrapped first.
+- [ ] No hex in a component; colours from the palette or `--tabula-*`.
+- [ ] Words in the accent colour use the darker step; text at 4.5:1 in light and dark.
+- [ ] Checked at 375px and 1440px, light and dark; 44px targets on a phone; no sideways page scroll.
+- [ ] Every hint is an `AppTooltip`; every modal the `AppModal` shape; every drawer
+      `AppDrawer` + `AppDrawerContent`.
+- [ ] What opens, closes or swaps animates; reduced motion turns it off.
+- [ ] A part marked "not chosen" above was asked about before it was built.

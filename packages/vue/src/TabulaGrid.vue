@@ -10,6 +10,7 @@ import {
 	readInput,
 	REDO_ORIGIN,
 	RowView,
+	summarizeCells,
 	resolveColumnSizing,
 	Selection,
 	SheetValidator,
@@ -47,10 +48,11 @@ import {
 	watch,
 	type PropType
 } from "vue"
+import { columnName, parseAddress } from "./address.js"
 import { alignmentOf } from "./alignment.js"
 import { GRID_TEXT, issueText, type GridLocale } from "./messages.js"
 import { horizontalPadding, textMeasurer, type Measure } from "./measure.js"
-import type { GridTheme } from "./types.js"
+import type { ActiveCell, GridTheme, SelectedCells } from "./types.js"
 
 const props = defineProps({
 	/** The module schema: which columns there are, in which order, and what each may hold. */
@@ -427,9 +429,48 @@ function text(row: number, col: number): string {
 	const rowId = view.value.rowIdAt(row)
 	const field = fields.value[col]
 
-	return rowId === undefined || field === undefined
-		? ""
-		: formatCell(field, store.value.get(rowId, field.key), props.valueSettings)
+	if (rowId === undefined || field === undefined) {
+		return ""
+	}
+
+	const value = store.value.get(rowId, field.key)
+	const shown = formatCell(field, value, props.valueSettings)
+
+	// A rise carries its plus, as a change column writes it; only on screen, never copied.
+	return hasSignTone(field) && signOf(value) > 0 ? `+${shown}` : shown
+}
+
+function hasSignTone(field: FieldSchema): boolean {
+	return "tone" in field && field.tone === "sign"
+}
+
+/** A number's sign: 1, -1, or 0 for zero and for anything that is not a number. */
+function signOf(value: CellValue): number {
+	if (typeof value === "number") {
+		return Math.sign(value)
+	}
+
+	if (typeof value !== "string" || !/^-?\d+(\.\d+)?$/.test(value)) {
+		return 0
+	}
+
+	return /^-?0+(\.0+)?$/.test(value) ? 0 : value.startsWith("-") ? -1 : 1
+}
+
+/** A rise or a fall, in a column whose schema colours numbers by their sign. */
+function toneClass(row: number, col: number): string | undefined {
+	const field = fields.value[col]
+
+	if (field === undefined || !hasSignTone(field)) {
+		return undefined
+	}
+
+	void dataVersion.value
+
+	const rowId = view.value.rowIdAt(row)
+	const sign = rowId === undefined ? 0 : signOf(store.value.get(rowId, field.key))
+
+	return sign > 0 ? "is-positive" : sign < 0 ? "is-negative" : undefined
 }
 
 /** The issues on a cell, as the issue set has them now. */
@@ -516,6 +557,28 @@ function rowClass(row: number): string[] {
 	const severity = severityClass(issueSet.value.rowIssues(rowId))
 
 	return [status ? `is-${status}` : "", severity ?? ""].filter(Boolean)
+}
+
+/**
+ * The worst issue standing anywhere on the row, its hidden columns too, as a mark by its number:
+ * a row with something to fix is found by its number as the sheet scrolls past.
+ */
+function rowMark(row: number): string | undefined {
+	void issueVersion.value
+
+	const rowId = view.value.rowIdAt(row)
+
+	if (rowId === undefined || !issueSet.value.hasIssues(rowId)) {
+		return undefined
+	}
+
+	const issues = [...issueSet.value.rowIssues(rowId)]
+
+	for (const field of schema.value.fields) {
+		issues.push(...issueSet.value.issuesAt(rowId, field.key))
+	}
+
+	return severityClass(issues)
 }
 
 /** The row number's tooltip: where the row stands, then the issues about the row as a whole. */
@@ -1912,10 +1975,140 @@ function go(rowId: string, field: string | null, mayShow: boolean): boolean {
 	return true
 }
 
+// ---------------------------------------------------------------- what a formula bar and a status bar read
+
+const NUMERIC_TYPES: ReadonlySet<FieldSchema["type"]> = new Set(["integer", "decimal", "money", "quantity", "percent"])
+
+/** The active cell with its address and the text an editor would open with. */
+const cell = computed<ActiveCell | null>(() => {
+	void dataVersion.value
+	void resultVersion.value
+
+	const at = active.value
+	const field = at ? fields.value[at.col] : undefined
+	const rowId = at ? view.value.rowIdAt(at.row) : undefined
+
+	if (!at || field === undefined || rowId === undefined) {
+		return null
+	}
+
+	return Object.freeze({
+		rowId,
+		field,
+		address: `${columnName(at.col)}${sheetRow(at.row)}`,
+		text: editText(field, store.value.get(rowId, field.key), props.valueSettings),
+		editable: isEditable(field) && !isLockedRow(rowId)
+	})
+})
+
+/**
+ * The cells selected, summed as a spreadsheet's status bar sums them. Worked out only when read,
+ * and again when the selection or the data changes.
+ */
+const selected = computed<SelectedCells | null>(() => {
+	void dataVersion.value
+
+	const area = range.value
+
+	if (!area) {
+		return null
+	}
+
+	const rows = view.value
+	const columns = fields.value.slice(area.left, area.right + 1)
+	const from = `${columnName(area.left)}${sheetRow(area.top)}`
+	const to = `${columnName(area.right)}${sheetRow(area.bottom)}`
+	const values = function* () {
+		for (let row = area.top; row <= area.bottom; row++) {
+			const rowId = rows.rowIdAt(row)
+
+			if (rowId !== undefined) {
+				for (const field of columns) {
+					yield { field, value: store.value.get(rowId, field.key) }
+				}
+			}
+		}
+	}
+
+	return Object.freeze({
+		...summarizeCells(values()),
+		address: from === to ? from : `${from}:${to}`,
+		rows: area.bottom - area.top + 1,
+		columns: columns.length,
+		field: columns.find(field => NUMERIC_TYPES.has(field.type)) ?? null
+	})
+})
+
+/**
+ * Goes to a cell by its address, such as "D9" typed into a formula bar. False when there is no such
+ * column on screen or no such row.
+ */
+function goToAddress(address: string): boolean {
+	const place = parseAddress(address)
+	const field = place ? fields.value[place.col] : undefined
+	const rowId = place ? store.value.rowIdAt(place.row - 1) : undefined
+
+	return field !== undefined && rowId !== undefined && go(rowId, field.key, false)
+}
+
+/**
+ * Writes text into a cell, read as typing it there reads it, such as from a formula bar. A bar
+ * names the cell it started on: a click elsewhere moves the selection before the bar lets go.
+ * False when the cell cannot be changed; the same text as is there writes nothing.
+ */
+function writeCell(rowId: string, key: string, input: string): boolean {
+	const field = schema.value.has(key) ? schema.value.field(key) : undefined
+
+	if (!isEditable(field) || !store.value.has(rowId) || isLockedRow(rowId)) {
+		return false
+	}
+
+	if (editing.value) {
+		commitEdit(false)
+	}
+
+	if (input !== editText(field, store.value.get(rowId, key), props.valueSettings)) {
+		store.value.setCell(rowId, key, valueOf(field, input))
+	}
+
+	return true
+}
+
+/** How many rows are shown, and how many the sheet has. */
+const rows = computed(() => {
+	void dataVersion.value
+	void viewVersion.value
+
+	return Object.freeze({ shown: view.value.size, total: store.value.size })
+})
+
+/** The issues counted, as the issue panel counts them. */
+const issueSummary = computed(() => {
+	void issueVersion.value
+
+	return issueSet.value.summary()
+})
+
+/** A value written as the grid writes it, in its settings. */
+function formatValue(field: FieldSchema, value: CellValue): string {
+	return formatCell(field, value, props.valueSettings)
+}
+
 defineExpose({
 	/** The selection, in on-screen positions. */
 	selection,
+	/** The active cell: its address, field and text. Null before anything is selected. */
+	cell,
+	/** The cells selected, with the sum and average of their numbers. Null before anything is selected. */
+	selected,
+	/** How many rows are shown, and how many the sheet has. */
+	rows,
+	/** The issues counted: errors, warnings, those waiting to be checked again, and rows. */
+	issueSummary,
+	formatValue,
 	goTo,
+	goToAddress,
+	writeCell,
 	focus: focusInput,
 	/** Fits a column to its header and contents, as a double click on its edge does. */
 	autoFit,
@@ -1937,7 +2130,7 @@ defineExpose({
 <template>
 	<div
 		ref="root"
-		class="tabula-grid"
+		class="tabula-grid tabula-theme"
 		role="grid"
 		:tabindex="active ? -1 : 0"
 		:data-tabula-theme="theme"
@@ -2050,6 +2243,7 @@ defineExpose({
 						@mousedown="onGutterDown($event, r)"
 					>
 						{{ sheetRow(r) }}
+						<span v-if="rowMark(r)" class="tabula-grid-rh-mark" :class="rowMark(r)" />
 					</div>
 				</div>
 				<div
@@ -2090,7 +2284,7 @@ defineExpose({
 								:aria-selected="inRange(r, c)"
 								:aria-readonly="!isEditable(fields[c]) || rowLocked(r) || undefined"
 								:aria-invalid="issueClass(r, c) === 'is-error' ? 'true' : undefined"
-								:class="[cellClasses[c], issueClass(r, c)]"
+								:class="[cellClasses[c], issueClass(r, c), toneClass(r, c)]"
 								:style="cellStyles[c]"
 								:title="issueTitle(r, c)"
 							>
@@ -2121,7 +2315,7 @@ defineExpose({
 							:aria-selected="inRange(r, c)"
 							:aria-readonly="!isEditable(fields[c]) || rowLocked(r) || undefined"
 							:aria-invalid="issueClass(r, c) === 'is-error' ? 'true' : undefined"
-							:class="[cellClasses[c], issueClass(r, c)]"
+							:class="[cellClasses[c], issueClass(r, c), toneClass(r, c)]"
 							:style="cellStyles[c]"
 							:title="issueTitle(r, c)"
 						>
@@ -2222,28 +2416,11 @@ defineExpose({
 	</div>
 </template>
 
-<style>
-.tabula-grid {
-	--tabula-bg: #ffffff;
-	--tabula-fg: #161922;
-	--tabula-muted: #586074;
-	--tabula-line: #e3e6ee;
-	--tabula-head-bg: #eceef4;
-	--tabula-head-line: #d6dae4;
-	--tabula-head-selected-bg: #dbe1f6;
-	--tabula-readonly-bg: #f6f7fa;
-	--tabula-accent: #2946c9;
-	--tabula-range-bg: rgb(41 70 201 / 10%);
-	--tabula-required: #ad2a22;
-	--tabula-error-bg: #fbe8e6;
-	--tabula-warning-bg: #fdf1dc;
-	--tabula-error-mark: #c0392b;
-	--tabula-warning-mark: #c27c0e;
-	--tabula-stale-mark: #8a93a8;
-	--tabula-success-bg: #e3f4e8;
-	--tabula-success-mark: #1e8a4c;
-	--tabula-font-size: 13px;
+<style src="./theme.css"></style>
 
+<style>
+/* The colours are in theme.css, shared with the issue panel. */
+.tabula-grid {
 	position: relative;
 	display: flex;
 	flex-direction: column;
@@ -2258,54 +2435,6 @@ defineExpose({
 	line-height: 1.35;
 	font-variant-numeric: tabular-nums;
 	user-select: none;
-}
-
-.tabula-grid[data-tabula-theme="dark"] {
-	--tabula-bg: #191c24;
-	--tabula-fg: #e7e9f0;
-	--tabula-muted: #9aa2b6;
-	--tabula-line: #2c3140;
-	--tabula-head-bg: #222632;
-	--tabula-head-line: #343a4c;
-	--tabula-head-selected-bg: #2c3660;
-	--tabula-readonly-bg: #1e212a;
-	--tabula-accent: #92a6ff;
-	--tabula-range-bg: rgb(146 166 255 / 16%);
-	--tabula-required: #ff9087;
-	--tabula-error-bg: #3b2220;
-	--tabula-warning-bg: #3a2c12;
-	--tabula-error-mark: #ff8a80;
-	--tabula-warning-mark: #f0b860;
-	--tabula-stale-mark: #7d869c;
-	--tabula-success-bg: #1d3427;
-	--tabula-success-mark: #6fd39a;
-
-	color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-	.tabula-grid[data-tabula-theme="auto"] {
-		--tabula-bg: #191c24;
-		--tabula-fg: #e7e9f0;
-		--tabula-muted: #9aa2b6;
-		--tabula-line: #2c3140;
-		--tabula-head-bg: #222632;
-		--tabula-head-line: #343a4c;
-		--tabula-head-selected-bg: #2c3660;
-		--tabula-readonly-bg: #1e212a;
-		--tabula-accent: #92a6ff;
-		--tabula-range-bg: rgb(146 166 255 / 16%);
-		--tabula-required: #ff9087;
-		--tabula-error-bg: #3b2220;
-		--tabula-warning-bg: #3a2c12;
-		--tabula-error-mark: #ff8a80;
-		--tabula-warning-mark: #f0b860;
-		--tabula-stale-mark: #7d869c;
-		--tabula-success-bg: #1d3427;
-		--tabula-success-mark: #6fd39a;
-
-		color-scheme: dark;
-	}
 }
 
 .tabula-grid-scroller {
@@ -2404,7 +2533,7 @@ defineExpose({
 	display: none;
 	padding: 0 5px;
 	border: 1px solid var(--tabula-head-line);
-	border-radius: 3px;
+	border-radius: var(--tabula-radius-small);
 	background: var(--tabula-head-bg);
 	color: var(--tabula-muted);
 	font: inherit;
@@ -2425,7 +2554,7 @@ defineExpose({
 	min-width: 190px;
 	padding: 3px 0;
 	border: 1px solid var(--tabula-head-line);
-	border-radius: 4px;
+	border-radius: var(--tabula-radius);
 	background: var(--tabula-bg);
 	box-shadow: 0 6px 18px rgb(0 0 0 / 14%);
 }
@@ -2622,6 +2751,35 @@ defineExpose({
 	color: var(--tabula-muted);
 }
 
+/* A column coloured by its numbers' sign: a rise and a fall, read or not. */
+.tabula-grid-cell.is-positive {
+	color: var(--tabula-positive);
+}
+
+.tabula-grid-cell.is-negative {
+	color: var(--tabula-negative);
+}
+
+/* The worst issue on any of the row's cells, by its number. */
+.tabula-grid-rh-mark {
+	position: absolute;
+	top: 50%;
+	left: 6px;
+	width: 6px;
+	height: 6px;
+	margin-top: -3px;
+	border-radius: 50%;
+	background: var(--tabula-error-mark);
+}
+
+.tabula-grid-rh-mark.is-warning {
+	background: var(--tabula-warning-mark);
+}
+
+.tabula-grid-rh-mark.is-stale {
+	background: var(--tabula-stale-mark);
+}
+
 /* A cell no one types into can still be wrong, such as a formula that cannot be worked out. */
 .tabula-grid-cell.is-readonly.is-error {
 	background: var(--tabula-error-bg);
@@ -2696,7 +2854,7 @@ defineExpose({
 	padding: 2px 0;
 	overflow: auto;
 	border: 1px solid var(--tabula-head-line);
-	border-radius: 0 0 4px 4px;
+	border-radius: 0 0 var(--tabula-radius) var(--tabula-radius);
 	background: var(--tabula-bg);
 	box-shadow: 0 6px 18px rgb(0 0 0 / 14%);
 	list-style: none;

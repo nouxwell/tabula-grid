@@ -61,7 +61,12 @@ export const PANEL_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, str
 		more: "sorun daha",
 		onlyIssueRows: "Yalnız sorunlu satırlar",
 		refresh: "Yenile",
-		refreshHint: "Süzgeci tablonun şimdiki hâline yeniden uygula"
+		refreshHint: "Süzgeci tablonun şimdiki hâline yeniden uygula",
+		local: "Tarayıcı",
+		server: "Sunucu",
+		goToCell: "Hücreye git",
+		open: "Sorunları göster",
+		close: "Kapat"
 	},
 	en: {
 		title: "Issues",
@@ -78,7 +83,42 @@ export const PANEL_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, str
 		more: "more issues",
 		onlyIssueRows: "Only rows with issues",
 		refresh: "Refresh",
-		refreshHint: "Apply the filter again to the sheet as it is now"
+		refreshHint: "Apply the filter again to the sheet as it is now",
+		local: "Browser",
+		server: "Server",
+		goToCell: "Go to cell",
+		open: "Show issues",
+		close: "Close"
+	}
+}
+
+/** The words of the formula bar and the status bar. */
+export const BAR_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, string>>>> = {
+	tr: {
+		formulaBar: "Formül çubuğu",
+		address: "Hücre adresi",
+		addressHint: "Bir adres yazıp Enter'a basın, örneğin D9",
+		noAddress: "Böyle bir hücre yok",
+		value: "Hücrenin değeri",
+		statusBar: "Durum çubuğu",
+		rows: "satır",
+		issues: "sorun",
+		selected: "Seçili",
+		sum: "Toplam",
+		average: "Ortalama"
+	},
+	en: {
+		formulaBar: "Formula bar",
+		address: "Cell address",
+		addressHint: "Type an address and press Enter, such as D9",
+		noAddress: "There is no such cell",
+		value: "The cell's value",
+		statusBar: "Status bar",
+		rows: "rows",
+		issues: "issues",
+		selected: "Selected",
+		sum: "Sum",
+		average: "Average"
 	}
 }
 

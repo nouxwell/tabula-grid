@@ -21,6 +21,7 @@ export type {
 	FieldOption,
 	FieldRule,
 	FieldSchema,
+	FieldTone,
 	FieldType,
 	IntegerField,
 	LookupField,
@@ -80,6 +81,8 @@ export type { FormulaErrorCode, FormulaErrorValue } from "./formula/error.js"
 
 export { RowView, rowsWithIssues, rowsWithResult } from "./view.js"
 export type { RowFilter } from "./view.js"
+export { summarizeCells } from "./summary.js"
+export type { CellSummary } from "./summary.js"
 
 export { Selection } from "./selection.js"
 export type { CellPosition, CellRange, Direction, IsBlank, MoveOptions } from "./selection.js"

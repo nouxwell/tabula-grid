@@ -14,8 +14,16 @@ export const DIVISION_PLACES = 20
 
 const TEXT = /^([+-]?)(\d+)(?:\.(\d+))?$/
 
-export const ZERO: Decimal = Object.freeze({ units: 0n, scale: 0 })
-export const ONE: Decimal = Object.freeze({ units: 1n, scale: 0 })
+// BigInt(…) rather than literals such as 10n: a build that aims at an older JavaScript, as Nuxt's
+// server build does, warns that the literals may not run, though anything that runs this has BigInt.
+const B0 = BigInt(0)
+const B1 = BigInt(1)
+const B2 = BigInt(2)
+const B10 = BigInt(10)
+const B1000 = BigInt(1000)
+
+export const ZERO: Decimal = Object.freeze({ units: B0, scale: 0 })
+export const ONE: Decimal = Object.freeze({ units: B1, scale: 0 })
 
 /** A decimal from text such as `"-12.50"`; null for anything else. */
 export function parseDecimal(text: string): Decimal | null {
@@ -33,7 +41,7 @@ export function parseDecimal(text: string): Decimal | null {
 
 /** The decimal as `normalizeDecimal` writes numbers: `"-12.5"`, `"0"`. */
 export function decimalToText(value: Decimal): string {
-	const negative = value.units < 0n
+	const negative = value.units < B0
 	const digits = (negative ? -value.units : value.units).toString().padStart(value.scale + 1, "0")
 	const whole = digits.slice(0, digits.length - value.scale)
 	const fraction = digits.slice(digits.length - value.scale).replace(/0+$/, "")
@@ -60,14 +68,14 @@ export function multiply(a: Decimal, b: Decimal): Decimal {
 
 /** Null when dividing by zero. Carried to `DIVISION_PLACES` places, rounded half away from zero. */
 export function divide(a: Decimal, b: Decimal): Decimal | null {
-	if (b.units === 0n) {
+	if (b.units === B0) {
 		return null
 	}
 
 	// a / b = (a.units / 10^a.scale) / (b.units / 10^b.scale); one place more than kept, to round on.
 	const places = DIVISION_PLACES + 1
-	const numerator = a.units * 10n ** BigInt(places + b.scale)
-	const denominator = b.units * 10n ** BigInt(a.scale)
+	const numerator = a.units * B10 ** BigInt(places + b.scale)
+	const denominator = b.units * B10 ** BigInt(a.scale)
 
 	return round({ units: numerator / denominator, scale: places }, DIVISION_PLACES, "half")
 }
@@ -77,7 +85,7 @@ export function negate(value: Decimal): Decimal {
 }
 
 export function absolute(value: Decimal): Decimal {
-	return value.units < 0n ? negate(value) : value
+	return value.units < B0 ? negate(value) : value
 }
 
 /** -1, 0 or 1. */
@@ -88,7 +96,7 @@ export function compare(a: Decimal, b: Decimal): -1 | 0 | 1 {
 }
 
 export function isZero(value: Decimal): boolean {
-	return value.units === 0n
+	return value.units === B0
 }
 
 export function isInteger(value: Decimal): boolean {
@@ -104,52 +112,52 @@ export function round(value: Decimal, places: number, mode: "half" | "up" | "dow
 		return value
 	}
 
-	const drop = 10n ** BigInt(value.scale - places)
-	const negative = value.units < 0n
+	const drop = B10 ** BigInt(value.scale - places)
+	const negative = value.units < B0
 	const magnitude = negative ? -value.units : value.units
 	let kept = magnitude / drop
 	const rest = magnitude % drop
 
-	if (rest !== 0n && (mode === "up" || (mode === "half" && rest * 2n >= drop))) {
-		kept += 1n
+	if (rest !== B0 && (mode === "up" || (mode === "half" && rest * B2 >= drop))) {
+		kept += B1
 	}
 
 	const units = negative ? -kept : kept
 
 	return places >= 0
 		? simplify({ units, scale: places })
-		: simplify({ units: units * 10n ** BigInt(-places), scale: 0 })
+		: simplify({ units: units * B10 ** BigInt(-places), scale: 0 })
 }
 
 /** A whole power: exact for a whole exponent, null for any other, which the caller reports. */
 export function power(base: Decimal, exponent: Decimal): Decimal | null {
-	if (!isInteger(exponent) || exponent.units > 1000n || exponent.units < -1000n) {
+	if (!isInteger(exponent) || exponent.units > B1000 || exponent.units < -B1000) {
 		return null
 	}
 
-	const times = Number(exponent.units < 0n ? -exponent.units : exponent.units)
+	const times = Number(exponent.units < B0 ? -exponent.units : exponent.units)
 	let result: Decimal = ONE
 
 	for (let step = 0; step < times; step++) {
 		result = multiply(result, base)
 	}
 
-	return exponent.units < 0n ? divide(ONE, result) : result
+	return exponent.units < B0 ? divide(ONE, result) : result
 }
 
 /** Both as integers of the same scale. */
 function aligned(a: Decimal, b: Decimal): [bigint, bigint, number] {
 	const scale = Math.max(a.scale, b.scale)
 
-	return [a.units * 10n ** BigInt(scale - a.scale), b.units * 10n ** BigInt(scale - b.scale), scale]
+	return [a.units * B10 ** BigInt(scale - a.scale), b.units * B10 ** BigInt(scale - b.scale), scale]
 }
 
 /** Without trailing zeros after the point. */
 function simplify(value: Decimal): Decimal {
 	let { units, scale } = value
 
-	while (scale > 0 && units % 10n === 0n) {
-		units /= 10n
+	while (scale > 0 && units % B10 === B0) {
+		units /= B10
 		scale--
 	}
 
