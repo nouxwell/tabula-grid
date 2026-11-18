@@ -7,6 +7,11 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-11-19
+
+A patch: the issues panel can be closed from its head, and the example's toolbar and sheet are in
+cards on one edge, with the issues panel there only while there are issues.
+
 ### Added
 
 - **A closable issues panel.** `TabulaIssues` takes `closable`: the `panel` variant then has a
@@ -436,7 +441,8 @@ taken to a backend through the application's own adapters, and kept as a draft.
   gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
   which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.
 
-[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/nouxwell/tabula-grid/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/nouxwell/tabula-grid/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/nouxwell/tabula-grid/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/nouxwell/tabula-grid/compare/v0.1.0...v0.2.0
