@@ -84,7 +84,7 @@ export type { RowFilter, RowOrder } from "./view.js"
 export { summarizeCells } from "./summary.js"
 export { compareValues, distinctValues, filterKey, hasRange, rowOrder, rowsMatching } from "./filters.js"
 export { fillValues } from "./fill.js"
-export { breaksCheck, checkFields, COMPARISONS, CONDITION_OPS } from "./checks.js"
+export { breaksCheck, checkFields, COMPARISONS, CONDITION_OPS, rowsBreaking } from "./checks.js"
 export type {
 	CheckInput,
 	CheckSeverity,

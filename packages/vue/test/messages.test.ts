@@ -1,6 +1,6 @@
 import { ModuleSchema, RowStore, SheetValidator, VALUE_SETTINGS, type Issue } from "@nouxwell/tabula-core"
 import { describe, expect, it } from "vitest"
-import { dateExample, issueText } from "../src/messages"
+import { dateExample, describeCheck, issueText } from "../src/messages"
 
 const schema = ModuleSchema.from({
 	module: "messages",
@@ -16,6 +16,45 @@ function issuesFor(values: Record<string, unknown>): Issue[] {
 
 	return new SheetValidator(schema, store).issues()
 }
+
+describe("describeCheck", () => {
+	const schema = ModuleSchema.from({
+		module: "prices",
+		schemaVersion: 1,
+		fields: [
+			{ key: "currentPrice", type: "money", label: "Mevcut fiyat" },
+			{ key: "newPrice", type: "money", label: "Aralık fiyatı" },
+			{ key: "currency", type: "options", label: "Para birimi", options: [{ value: "TRY" }, { value: "USD" }] },
+			{ key: "validFrom", type: "date", label: "Geçerlilik" },
+			{ key: "note", type: "string", label: "İç not" }
+		],
+		checks: [
+			{
+				id: "below",
+				assert: { field: "newPrice", op: ">=", other: "currentPrice" },
+				when: [{ field: "currency", op: "=", value: "TRY" }]
+			},
+			{
+				id: "early",
+				assert: { field: "note", op: "filled" },
+				when: [{ field: "validFrom", op: "<", value: "2026-12-01" }]
+			}
+		]
+	})
+	const [below, early] = schema.checks
+
+	it("says a check as a sentence, with labels and values as the sheet writes them", () => {
+		expect(describeCheck(below!, schema, "tr", VALUE_SETTINGS.tr)).toBe(
+			"Aralık fiyatı, Mevcut fiyat değerinden küçük olamaz (Para birimi = TRY olduğunda)"
+		)
+		expect(describeCheck(early!, schema, "tr", VALUE_SETTINGS.tr)).toBe(
+			"İç not dolu olmalı (Geçerlilik < 01.12.2026 olduğunda)"
+		)
+		expect(describeCheck(below!, schema, "en", VALUE_SETTINGS.en)).toBe(
+			"Aralık fiyatı: cannot be less than Mevcut fiyat when Para birimi = TRY"
+		)
+	})
+})
 
 describe("issueText", () => {
 	it("words a row check from its comparison and conditions, or says its own words", () => {

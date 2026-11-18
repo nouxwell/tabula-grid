@@ -89,7 +89,14 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
    with flags.
 2. **Page header**: title, "Taslak" tag (its tooltip says nothing is written before İşle), the row
    count (counting up), the save status, then Taslağı kaydet · Kontrol et · **İşle** (primary).
-3. **Toolbar**: undo and redo (icon buttons with tooltips), İçe aktar ▾, Dışa aktar ▾, Sütunlar.
+3. **Toolbar**: undo and redo (icon buttons with tooltips), İçe aktar ▾, Dışa aktar ▾, Sütunlar,
+   the template ▾, **Kurallar** (only with a template; its tooltip says why otherwise), the view ▾.
+   - **The rules drawer** (design E, 560px, on the right) has no mask: the sheet stays in view and in
+     reach while a rule is written. Each rule is a card with its sentence and how many rows it
+     catches now; one at a time opens as a form (field, what it must be, against what, Ne zaman,
+     Hata or Uyarı, its own words). The count follows every pick and keystroke, and "Satırları
+     göster" narrows the sheet to those rows until the form closes. Nothing is kept before
+     "Şablonu kaydet", which spins until the server answers.
 4. **Formula bar** (`TabulaFormulaBar`): address and value of the active cell.
 5. **The sheet** (`TabulaGrid`) and, on its right, **the issues** (`TabulaIssues`, 340px).
 6. **Status bar** (`TabulaStatusBar`): rows and issues, the selection, its sum and average.
@@ -108,29 +115,35 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 
 ### The parts, as decided
 
-| #   | Part                                                | Where       | State                        |
-| --- | --------------------------------------------------- | ----------- | ---------------------------- |
-| 1   | Issues in a side panel                              | package     | done                         |
-| 2   | Issues in a bottom panel with tabs, and run history | package     | not chosen                   |
-| 3   | Issues as a sheet on a phone                        | package     | done                         |
-| 4   | Formula bar                                         | package     | done                         |
-| 5   | Column letters over the headers                     | package     | not chosen                   |
-| 6   | Colour by sign                                      | package     | done                         |
-| 7   | A mark by a row's number                            | package     | done                         |
-| 8   | Who found an issue (browser or server)              | package     | done                         |
-| 9   | Search in the sheet                                 | package     | not chosen                   |
-| 10  | Filter and sort in the header                       | package     | done (phase two)             |
-| 11  | Fill handle                                         | package     | done (phase two)             |
-| 12  | Status bar with sum and average                     | package     | done                         |
-| 13  | Sheet tabs                                          | package     | not chosen (large)           |
-| 14  | Zoom                                                | package     | not chosen                   |
-| 15  | Save status                                         | application | done                         |
-| 16  | Top bar                                             | application | done                         |
-| 17  | Toolbar with import and export menus                | application | done; rules screen phase two |
-| 18  | Phone layout                                        | application | done                         |
-| 19  | Darker green for words                              | both        | done                         |
-| 20  | Saved views (personal views)                        | both        | done (phase two)             |
-| 21  | Templates (the layer between schema and views)      | both        | done (phase two)             |
+| #   | Part                                                | Where       | State              |
+| --- | --------------------------------------------------- | ----------- | ------------------ |
+| 1   | Issues in a side panel                              | package     | done               |
+| 2   | Issues in a bottom panel with tabs, and run history | package     | not chosen         |
+| 3   | Issues as a sheet on a phone                        | package     | done               |
+| 4   | Formula bar                                         | package     | done               |
+| 5   | Column letters over the headers                     | package     | not chosen         |
+| 6   | Colour by sign                                      | package     | done               |
+| 7   | A mark by a row's number                            | package     | done               |
+| 8   | Who found an issue (browser or server)              | package     | done               |
+| 9   | Search in the sheet                                 | package     | not chosen         |
+| 10  | Filter and sort in the header                       | package     | done (phase two)   |
+| 11  | Fill handle                                         | package     | done (phase two)   |
+| 12  | Status bar with sum and average                     | package     | done               |
+| 13  | Sheet tabs                                          | package     | not chosen (large) |
+| 14  | Zoom                                                | package     | not chosen         |
+| 15  | Save status                                         | application | done               |
+| 16  | Top bar                                             | application | done               |
+| 17  | Toolbar with import and export menus                | application | done               |
+| 18  | Phone layout                                        | application | done               |
+| 19  | Darker green for words                              | both        | done               |
+| 20  | Rules in a drawer beside the sheet (E)              | application | done (phase two)   |
+| 21  | Rules in a centred modal (F)                        | application | not chosen         |
+| 22  | Live count of the rows a rule catches               | application | done (phase two)   |
+| 23  | A rule's own words, Turkish and English             | both        | done (phase two)   |
+| 24  | Field limits tab in the rules drawer                | application | not chosen (later) |
+| 25  | Comparison with a worked-out value                  | package     | not chosen         |
+| —   | Saved views (personal views)                        | both        | done (phase two)   |
+| —   | Templates (the layer between schema and views)      | both        | done (phase two)   |
 
 A part marked "not chosen" is not built without asking first.
 

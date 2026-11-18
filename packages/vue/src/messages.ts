@@ -1,4 +1,11 @@
-import type { Issue, ValueSettings } from "@nouxwell/tabula-core"
+import {
+	formatCell,
+	type Issue,
+	type ModuleSchema,
+	type RowCheck,
+	type RowCondition,
+	type ValueSettings
+} from "@nouxwell/tabula-core"
 
 /**
  * What the grid and the issue panel say, in Turkish or English.
@@ -268,6 +275,52 @@ export function issueText(issue: Issue, locale: GridLocale, settings: ValueSetti
 	const wording = ISSUES[locale][issue.code]
 
 	return wording ? wording(issue.params, settings) : issue.message
+}
+
+/**
+ * A row check as a sentence, for a list of rules: "Aralık fiyatı, Mevcut fiyat değerinden küçük
+ * olamaz (Para birimi = TRY olduğunda)". Fields by their labels, values as the sheet writes them.
+ */
+export function describeCheck(
+	check: RowCheck,
+	schema: ModuleSchema,
+	locale: GridLocale,
+	settings: ValueSettings
+): string {
+	const label = (key: string): string => (schema.has(key) ? schema.field(key).label : key)
+	const operand = (condition: RowCondition): string =>
+		condition.other !== null
+			? label(condition.other)
+			: condition.value === null || !schema.has(condition.field)
+				? ""
+				: formatCell(schema.field(condition.field), condition.value, settings)
+	const params: Record<string, string> = { when: String(check.when.length) }
+
+	check.when.forEach((condition, index) => {
+		params[`when${index}Field`] = label(condition.field)
+		params[`when${index}Op`] = condition.op
+		params[`when${index}Value`] = operand(condition)
+	})
+
+	const field = label(check.assert.field)
+	const op = check.assert.op
+	let said: string
+
+	if (op === "filled" || op === "empty") {
+		said =
+			locale === "tr"
+				? `${field} ${op === "filled" ? "dolu" : "boş"} olmalı`
+				: `${field} must be ${op === "filled" ? "filled" : "empty"}`
+	} else {
+		const compared = COMPARED[locale][op]?.(operand(check.assert)) ?? ""
+
+		said =
+			locale === "tr"
+				? `${field}, ${compared}`
+				: `${field}: ${compared.charAt(0).toLowerCase()}${compared.slice(1)}`
+	}
+
+	return `${said}${when(params, locale)}`
 }
 
 /** A decimal limit such as "0.5" written the sheet's way: "0,5". */

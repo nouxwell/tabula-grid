@@ -347,6 +347,11 @@ cannot be below Mevcut fiyat". A schema, or a template, writes them as `checks`:
 - **Checked as the user types.** A change checks again only the checks that read the field it
   changed, on that row. The schema refuses a check it cannot apply, each problem where it is: an
   unknown field, an order on text, a value that is not the field's, two checks with one id.
+- **For an editor.** `rowsBreaking(schema, store, check, settings)` lists the rows a check catches
+  now, before it is saved anywhere, and `describeCheck(check, schema, locale, settings)` from
+  `@nouxwell/tabula-vue` says it as a sentence. [examples/nuxt](examples/nuxt/README.md) builds its
+  rules drawer from them: a template's rules as cards with their counts, a form for one, the sheet
+  narrowed to the rows it catches, and the template saved to the server, which checks it again.
 
 ### Only the rows with issues
 

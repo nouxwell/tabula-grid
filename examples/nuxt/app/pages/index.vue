@@ -155,6 +155,23 @@
 							<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
 						</AppButton>
 					</AppDropdown>
+					<AppTooltip :disabled="Boolean(sheet?.template)">
+						<template #trigger>
+							<span>
+								<AppButton
+									:size="controlSize"
+									:disabled="!sheet?.template"
+									class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+									@click="rulesOpen = true"
+								>
+									<template #icon><AppIcon name="rules" /></template>
+									<span class="hidden md:inline">Kurallar</span>
+									<span class="sr-only md:hidden">Kurallar</span>
+								</AppButton>
+							</span>
+						</template>
+						Kurallar bir şablona yazılır; önce bir şablon seçin.
+					</AppTooltip>
 					<AppDropdown :options="viewOptions" @select="chooseView">
 						<AppButton
 							:size="controlSize"
@@ -335,6 +352,18 @@
 			</template>
 		</AppModal>
 
+		<RulesDrawer
+			v-if="sheet && sheet.template && input && templateInput"
+			v-model:show="rulesOpen"
+			:sheet="sheet"
+			:module-input="input"
+			:template="templateInput"
+			:locale="locale"
+			:settings="valueSettings"
+			:save="saveTemplate"
+			@show-rows="showRuleRows"
+		/>
+
 		<AppModal
 			v-model:show="nameOpen"
 			:title="naming === 'rename' ? 'Görünümü yeniden adlandır' : 'Yeni görünüm'"
@@ -388,8 +417,10 @@ import {
 	withColumn,
 	type ColumnFilters,
 	type ColumnLayout,
+	type CheckInput,
 	type ColumnSort,
 	type ModuleSchemaInput,
+	type RowId,
 	type RowInit,
 	type ViewNameProblem
 } from "@nouxwell/tabula-core"
@@ -411,9 +442,9 @@ const {
 	refresh: refreshRows
 } = useFetch<RowInit[]>("/api/price-updates/rows", { server: false })
 // The templates prepared for the module: small, so they come with the page, and the menu is drawn.
-const { data: templates } = await useFetch<readonly { readonly id: string; readonly name: string }[]>(
-	"/api/modules/price-update/templates"
-)
+const { data: templates, refresh: refreshTemplates } = await useFetch<
+	readonly { readonly id: string; readonly name: string; readonly checks?: readonly CheckInput[] }[]
+>("/api/modules/price-update/templates")
 
 /** Fetches the rows again after a failure; the button spins until they are in. */
 function loadRows(): Promise<void> {
@@ -644,6 +675,59 @@ function labelOf(key: string): string {
 }
 
 // ---------------------------------------------------------------- templates
+
+const rulesOpen = ref(false)
+/** The template the sheet works with, as the server sent it: what the rules drawer edits. */
+const templateInput = computed(() => templates.value?.find(item => item.id === templateId.value) ?? null)
+
+/**
+ * Saves the template the rules drawer changed. Kept, the sheet is made again with it and the same
+ * rows; refused, the server's reasons are said. Resolves to whether it was kept.
+ */
+async function saveTemplate(template: unknown): Promise<boolean> {
+	const id = templateId.value
+
+	if (!id || !sheet.value || !input.value || !rows.value) {
+		return false
+	}
+
+	try {
+		await $fetch(`/api/modules/price-update/templates/${id}`, { method: "PUT", body: template as object })
+	} catch (error) {
+		const problems = (error as { data?: { data?: { problems?: string[] } } }).data?.data?.problems
+
+		message.error(problems?.[0] ? `Şablon kaydedilemedi: ${problems[0]}` : "Şablon kaydedilemedi.")
+
+		return false
+	}
+
+	await refreshTemplates()
+
+	const carried = sheet.value.store.snapshot()
+
+	sheet.value.dispose()
+	makeSheet(input.value, rows.value, carried)
+	message.success("Şablon kaydedildi; kurallar tabloda.")
+
+	return true
+}
+
+/** Narrows the sheet to the rows a rule being written catches, or with null shows them all again. */
+function showRuleRows(rowIds: readonly RowId[] | null): void {
+	const view = sheet.value?.view
+
+	if (!view) {
+		return
+	}
+
+	if (rowIds === null) {
+		view.clear("rules")
+	} else {
+		const caught = new Set(rowIds)
+
+		view.filter(rowId => caught.has(rowId), "rules")
+	}
+}
 
 const templateLabel = computed(() => templates.value?.find(item => item.id === templateId.value)?.name ?? "Şablonsuz")
 

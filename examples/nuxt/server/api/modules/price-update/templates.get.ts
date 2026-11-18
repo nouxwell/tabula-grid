@@ -1,2 +1,2 @@
 // The module's templates. A backend keeps them for the module, each prepared by an authorized user.
-export default defineEventHandler(() => PRICE_TEMPLATES)
+export default defineEventHandler(() => priceTemplates())

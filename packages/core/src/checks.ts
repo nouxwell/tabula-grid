@@ -1,5 +1,6 @@
 import { compareDecimal, normalizeDecimal } from "./decimal.js"
-import type { FieldSchema, FieldType } from "./schema.js"
+import type { RowId, RowStore } from "./rows.js"
+import type { FieldSchema, FieldType, ModuleSchema } from "./schema.js"
 import type { CellValue } from "./value.js"
 import { decimalText } from "./values/number.js"
 import { canonicalValue, isFieldValue, isLookupValue, valueProblem } from "./values/read.js"
@@ -160,6 +161,17 @@ export function breaksCheck(
 	}
 
 	return holds(check.assert, field, get, settings) === false
+}
+
+/**
+ * The rows that break a check, in the order they stand in the sheet: what a rule editor counts and
+ * shows while the rule is still being written, before it is saved anywhere. `schema` is one that has
+ * the check, such as the template applied with it.
+ */
+export function rowsBreaking(schema: ModuleSchema, store: RowStore, check: RowCheck, settings: ValueSettings): RowId[] {
+	const field = (key: string): FieldSchema => schema.field(key)
+
+	return store.rowIds().filter(rowId => breaksCheck(check, field, key => store.get(rowId, key), settings))
 }
 
 // ---------------------------------------------------------------- inside

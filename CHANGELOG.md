@@ -17,6 +17,12 @@ The three packages are versioned together.
   column beside goes. Ctrl+D and Ctrl+R copy the selection's first row down or first column across.
   A fill is one step to undo, writes only into the rows shown and passes over columns that cannot
   be edited. Not drawn on a touch screen.
+- **A rules drawer in the example** (design E): the template's row checks as sentences with the
+  rows each catches now, and a form to write one: the field, what it must be, against a value or
+  another field, when, Hata or Uyarı, and its own Turkish and English words. The count follows
+  every keystroke, "Satırları göster" narrows the sheet to those rows, and "Şablonu kaydet" sends
+  the template to the example's server, which checks it against the module schema before keeping
+  it. For an editor of its own: `rowsBreaking` in the core and `describeCheck` in the Vue package.
 - **Row checks**: rules about a row rather than one cell, in a schema's or a template's `checks`.
   A check asserts a condition on one field (filled, empty, or compared with a value or another field)
   when its conditions hold: "Not is required when Aktif is no", "Yeni fiyat cannot be below Mevcut

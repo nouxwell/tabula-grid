@@ -3,10 +3,12 @@ import {
 	applyTemplate,
 	ModuleSchema,
 	readTemplate,
+	rowsBreaking,
 	RowStore,
 	SchemaError,
 	SheetValidator,
 	templateProblems,
+	VALUE_SETTINGS,
 	type CheckInput,
 	type ModuleSchemaInput
 } from "../src/index"
@@ -175,6 +177,21 @@ describe("row checks", () => {
 		store.setCell("r1", "validFrom", "2026-12-01")
 		expect(validator.issuesAt("r1", "note")).toEqual([])
 		validator.dispose()
+	})
+
+	it("lists the rows a check breaks, in sheet order, for an editor to count", () => {
+		const schema = withChecks([notBelowCost])
+		let next = 0
+		const store = new RowStore({
+			createRowId: () => `r${++next}`,
+			rows: [
+				{ values: { currentPrice: "100", newPrice: "90" } },
+				{ values: { currentPrice: "100", newPrice: "120" } },
+				{ values: { currentPrice: "50", newPrice: "49.99" } }
+			]
+		})
+
+		expect(rowsBreaking(schema, store, schema.checks[0]!, VALUE_SETTINGS.tr)).toEqual(["r1", "r3"])
 	})
 
 	it("takes a template's checks after the schema's, its problems where the template wrote them", () => {
