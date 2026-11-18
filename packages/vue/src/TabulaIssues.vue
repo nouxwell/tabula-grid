@@ -8,8 +8,8 @@ import {
 	type ValueSettings
 } from "@nouxwell/tabula-core"
 import { computed, shallowRef, toRaw, watch, type PropType } from "vue"
-import { issueText, PANEL_TEXT, type GridLocale } from "./messages"
-import type { GridTheme } from "./types"
+import { issueText, PANEL_TEXT, type GridLocale } from "./messages.js"
+import type { GridTheme } from "./types.js"
 
 /**
  * The list of a sheet's issues: how many there are, what each says, and where. Choosing one emits

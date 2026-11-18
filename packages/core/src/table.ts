@@ -1,10 +1,10 @@
-import type { CsvDelimiter } from "./csv"
-import type { RowId, RowInit, RowStore } from "./rows"
-import type { FieldSchema, ModuleSchema } from "./schema"
-import type { CellValue } from "./value"
-import { editText } from "./values/format"
-import { isFieldValue, readInput } from "./values/read"
-import type { ValueSettings } from "./values/settings"
+import type { CsvDelimiter } from "./csv.js"
+import type { RowId, RowInit, RowStore } from "./rows.js"
+import type { FieldSchema, ModuleSchema } from "./schema.js"
+import type { CellValue } from "./value.js"
+import { editText } from "./values/format.js"
+import { isFieldValue, readInput } from "./values/read.js"
+import type { ValueSettings } from "./values/settings.js"
 
 /**
  * A sheet as a table of text and back: what a CSV file, or any file a backend has read, holds.

@@ -1,7 +1,7 @@
-import { TabulaError } from "./errors"
-import { Listeners } from "./listeners"
-import { LOOKUP_ORIGIN } from "./lookup"
-import type { RowStore, StoreChange } from "./rows"
+import { TabulaError } from "./errors.js"
+import { Listeners } from "./listeners.js"
+import { LOOKUP_ORIGIN } from "./lookup.js"
+import type { RowStore, StoreChange } from "./rows.js"
 
 export interface UndoHistoryOptions {
 	/** How many steps can be taken back; the oldest is forgotten past that. 100 by default. */

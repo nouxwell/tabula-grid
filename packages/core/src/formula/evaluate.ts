@@ -13,9 +13,9 @@ import {
 	subtract,
 	ZERO,
 	type Decimal
-} from "./decimal"
-import type { FormulaErrorCode } from "./error"
-import type { FormulaNode } from "./parse"
+} from "./decimal.js"
+import type { FormulaErrorCode } from "./error.js"
+import type { FormulaNode } from "./parse.js"
 
 /** A value while a formula is worked out. */
 export type FormulaValue =

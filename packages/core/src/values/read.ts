@@ -1,9 +1,9 @@
-import type { FieldSchema, OptionsField } from "../schema"
-import type { CellValue } from "../value"
-import { isIsoDate, readDate } from "./date"
-import { decimalText, isTooLarge, isWholeNumberText, readMoney, readNumber, readPercent } from "./number"
-import type { ValueSettings } from "./settings"
-import { clean, fold } from "./text"
+import type { FieldSchema, OptionsField } from "../schema.js"
+import type { CellValue } from "../value.js"
+import { isIsoDate, readDate } from "./date.js"
+import { decimalText, isTooLarge, isWholeNumberText, readMoney, readNumber, readPercent } from "./number.js"
+import type { ValueSettings } from "./settings.js"
+import { clean, fold } from "./text.js"
 
 /**
  * Reading what a person typed or pasted into a cell, and telling whether what a cell holds is a

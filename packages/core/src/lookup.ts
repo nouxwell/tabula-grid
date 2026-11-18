@@ -1,12 +1,12 @@
-import { neverAborted, raced } from "./async"
-import type { AdapterContext } from "./contract"
-import { TabulaError } from "./errors"
-import { sequence } from "./ids"
-import { Listeners } from "./listeners"
-import type { CellWrite, RowId, RowStore, StoreChange } from "./rows"
-import type { LookupField, ModuleSchema } from "./schema"
-import type { CellValue } from "./value"
-import { clean } from "./values/text"
+import { neverAborted, raced } from "./async.js"
+import type { AdapterContext } from "./contract.js"
+import { TabulaError } from "./errors.js"
+import { sequence } from "./ids.js"
+import { Listeners } from "./listeners.js"
+import type { CellWrite, RowId, RowStore, StoreChange } from "./rows.js"
+import type { LookupField, ModuleSchema } from "./schema.js"
+import type { CellValue } from "./value.js"
+import { clean } from "./values/text.js"
 
 /**
  * Lookups: a record picked by its name, kept as `{ id, label }`. The user sees the label, the

@@ -1,14 +1,26 @@
 {
 	"name": "@nouxwell/tabula-vue",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"description": "The Vue 3 components of Tabula Grid.",
+	"keywords": [
+		"vue",
+		"vue3",
+		"spreadsheet",
+		"data-grid",
+		"bulk-edit",
+		"excel",
+		"tabula"
+	],
 	"license": "MIT",
 	"author": "Hüseyin Niyazi Balın",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/nouxwell/tabula-grid.git",
 		"directory": "packages/vue"
+	},
+	"homepage": "https://github.com/nouxwell/tabula-grid/tree/main/packages/vue#readme",
+	"bugs": {
+		"url": "https://github.com/nouxwell/tabula-grid/issues"
 	},
 	"type": "module",
 	"sideEffects": [
@@ -24,13 +36,16 @@
 	"files": [
 		"dist"
 	],
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
-		"build": "vite build && vue-tsc -p tsconfig.build.json",
+		"build": "vite build && vue-tsc -p tsconfig.build.json && node scripts/fix-declarations.mjs",
 		"typecheck": "vue-tsc -p tsconfig.json",
 		"test": "vitest run"
 	},
 	"dependencies": {
-		"@nouxwell/tabula-core": "workspace:*"
+		"@nouxwell/tabula-core": "workspace:^"
 	},
 	"peerDependencies": {
 		"vue": "^3.5.0"

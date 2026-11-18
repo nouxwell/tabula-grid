@@ -1,7 +1,7 @@
-import { TabulaError } from "./errors"
-import type { RowId } from "./rows"
-import type { IssueScope, IssueSeverity, IssueTarget } from "./validation"
-import type { CellValue } from "./value"
+import { TabulaError } from "./errors.js"
+import type { RowId } from "./rows.js"
+import type { IssueScope, IssueSeverity, IssueTarget } from "./validation.js"
+import type { CellValue } from "./value.js"
 
 /**
  * What passes between a sheet and the backend of the application that embeds it.

@@ -1,10 +1,10 @@
-import type { ColumnLayout } from "./columns"
-import type { ProcessRequest } from "./contract"
-import { TabulaError } from "./errors"
-import type { RowEntry, RowInit, RowStore } from "./rows"
-import { FIELD_TYPES, type FieldType, type ModuleSchema } from "./schema"
-import type { PendingRun, PersistedSession, RowResult, SheetSession } from "./session"
-import { toCellValue, type CellValue } from "./value"
+import type { ColumnLayout } from "./columns.js"
+import type { ProcessRequest } from "./contract.js"
+import { TabulaError } from "./errors.js"
+import type { RowEntry, RowInit, RowStore } from "./rows.js"
+import { FIELD_TYPES, type FieldType, type ModuleSchema } from "./schema.js"
+import type { PendingRun, PersistedSession, RowResult, SheetSession } from "./session.js"
+import { toCellValue, type CellValue } from "./value.js"
 
 /**
  * A sheet saved to go on with later. Saving a draft creates no business record: it is the sheet as

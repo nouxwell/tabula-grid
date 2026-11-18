@@ -1,7 +1,7 @@
-import { compareDecimal, normalizeDecimal } from "./decimal"
-import { SchemaError, TabulaError, type SchemaProblem } from "./errors"
-import { formulaFields, parseFormula } from "./formula/parse"
-import { compilePattern } from "./values/date"
+import { compareDecimal, normalizeDecimal } from "./decimal.js"
+import { SchemaError, TabulaError, type SchemaProblem } from "./errors.js"
+import { formulaFields, parseFormula } from "./formula/parse.js"
+import { compilePattern } from "./values/date.js"
 
 /**
  * The module schema: the developer's definition of a sheet, as the backend sends it.

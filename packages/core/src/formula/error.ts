@@ -1,4 +1,4 @@
-import type { CellValue } from "../value"
+import type { CellValue } from "../value.js"
 
 /**
  * What a formula gives when it cannot give a value, as Excel writes it: `#DIV/0!` for a division by

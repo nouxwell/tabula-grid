@@ -1,6 +1,6 @@
-import { compareDecimal, normalizeDecimal } from "../decimal"
-import type { ValueSettings } from "./settings"
-import { clean, escapeRegex, phpTrim } from "./text"
+import { compareDecimal, normalizeDecimal } from "../decimal.js"
+import type { ValueSettings } from "./settings.js"
+import { clean, escapeRegex, phpTrim } from "./text.js"
 
 /**
  * Numbers as a cell holds them: decimal text such as "1234.56", never a float, so a price is

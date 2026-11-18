@@ -1,5 +1,5 @@
-import { TabulaError } from "./errors"
-import { Listeners } from "./listeners"
+import { TabulaError } from "./errors.js"
+import { Listeners } from "./listeners.js"
 
 /**
  * Which cells are selected, in the positions the user sees: row and column indexes on screen, after

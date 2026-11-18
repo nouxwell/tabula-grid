@@ -21,5 +21,11 @@ export default defineConfig(
 			"no-undef": "off"
 		}
 	},
+	{
+		files: ["scripts/**/*.mjs", "packages/*/scripts/**/*.mjs"],
+		languageOptions: {
+			globals: { process: "readonly", console: "readonly" }
+		}
+	},
 	prettier
 )

@@ -1,4 +1,4 @@
-import { TabulaError } from "./errors"
+import { TabulaError } from "./errors.js"
 
 /**
  * How wide a column may be, and how much of its header is shown.

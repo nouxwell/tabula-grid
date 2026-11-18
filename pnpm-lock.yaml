@@ -217,7 +217,7 @@ importers:
   packages/nuxt:
     dependencies:
       '@nouxwell/tabula-vue':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../vue
       '@nuxt/kit':
         specifier: ^4.6.4
@@ -230,7 +230,7 @@ importers:
   packages/vue:
     dependencies:
       '@nouxwell/tabula-core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
     devDependencies:
       vue:

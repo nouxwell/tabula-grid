@@ -1,6 +1,6 @@
-import { TabulaError } from "../errors"
-import { compilePattern } from "./date"
-import { fold } from "./text"
+import { TabulaError } from "../errors.js"
+import { compilePattern } from "./date.js"
+import { fold } from "./text.js"
 
 /**
  * How values are written and read in one language: separators, digits, currency symbols, date

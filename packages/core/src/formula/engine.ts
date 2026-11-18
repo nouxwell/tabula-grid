@@ -1,10 +1,10 @@
-import type { RowId, RowInit, RowStore, StoreOperation } from "../rows"
-import type { FieldSchema, ModuleSchema } from "../schema"
-import { sameValue, type CellValue } from "../value"
-import { decimalText } from "../values/number"
-import { describeValue, isLookupValue } from "../values/read"
-import { decimalToText, parseDecimal, round } from "./decimal"
-import { formulaErrorValue, isFormulaError } from "./error"
+import type { RowId, RowInit, RowStore, StoreOperation } from "../rows.js"
+import type { FieldSchema, ModuleSchema } from "../schema.js"
+import { sameValue, type CellValue } from "../value.js"
+import { decimalText } from "../values/number.js"
+import { describeValue, isLookupValue } from "../values/read.js"
+import { decimalToText, parseDecimal, round } from "./decimal.js"
+import { formulaErrorValue, isFormulaError } from "./error.js"
 import {
 	boolValue,
 	EMPTY,
@@ -16,8 +16,8 @@ import {
 	toText,
 	type FormulaFunction,
 	type FormulaValue
-} from "./evaluate"
-import { formulaFields, parseFormula, type FormulaNode } from "./parse"
+} from "./evaluate.js"
+import { formulaFields, parseFormula, type FormulaNode } from "./parse.js"
 
 /**
  * The origin of the change that works out, as an engine starts, the formulas of rows a store was

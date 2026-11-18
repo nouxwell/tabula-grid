@@ -7,11 +7,20 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-11-18
+
+The first release: a sheet that is drawn, typed into, pasted into and checked as the user works,
+taken to a backend through the application's own adapters, and kept as a draft.
+
 ### Added
 
-- **The repository skeleton.** A pnpm workspace holding `@nouxwell/tabula-core`,
-  `@nouxwell/tabula-vue` and `@nouxwell/tabula-nuxt`, a playground that runs them from source, and
-  the build, type-check, test and lint set-up.
+- **Three packages on npm**: `@nouxwell/tabula-core`, `@nouxwell/tabula-vue` and
+  `@nouxwell/tabula-nuxt`, versioned together, each with its readme and licence. Their types work
+  under the module resolution Vite and Nuxt use and under Node's (`NodeNext`). The script
+  `check:packages` packs them, installs the tarballs into an empty project and uses them from
+  there, on CI as well.
+- **The repository skeleton.** A pnpm workspace holding the three packages, a playground that runs
+  them from source, and the build, type-check, test and lint set-up.
 - **`ModuleSchema`** reads and checks the module schema a backend sends. The field types are
   nouxwell/tabula's (`enum` arrives as `options`) plus `percent` and `lookup`. The rules are `min`
   and `max` as decimal text, `minLength`, `maxLength` and `unique`. Every problem is reported at
@@ -27,7 +36,7 @@ The three packages are versioned together.
 - **Column sizing**: `resolveColumnSizing`, `autoColumnWidth`, `clampColumnWidth` and
   `headerDisplayText`, with a 100 to 320 pixel automatic width, a separate 1,000 pixel limit for
   dragging, and headers cut at 100 characters.
-- **`TabulaGrid`** in `@nouxwell/tabula-vue`, replacing the empty `TabulaWorkspace`: draws only what
+- **`TabulaGrid`** in `@nouxwell/tabula-vue` draws only what
   is on screen, moves and edits as Excel does, copies and pastes blocks, sizes columns from their
   headers and lets the user drag or fit them, and comes in light, dark and system themes. Text that
   arrives without a key press, from an input method or dictation, starts an edit like typing does.
@@ -75,7 +84,7 @@ The three packages are versioned together.
   Only fields with `submit` are sent, a lookup as its id.
 - **Issues** carry `blocking` and `stale`, and the summary counts stale ones apart. `IssueSet` is
   what the grid and the panel read: a `SheetValidator`, or a session's `issues`.
-- **`TabulaGrid` and `TabulaIssues`** take `issues` instead of `validator`. The grid takes
+- **`TabulaGrid` and `TabulaIssues`** take `issues`, a validator's or a session's. The grid takes
   `results`: each row's number shows its result, an issue about a whole row is shown there, and a
   processed row cannot be changed. A stale issue has a grey corner, and the panel lists it apart.
 - New error code `invalid_response`, for an answer that is not in the contract's shape.
@@ -89,7 +98,7 @@ The three packages are versioned together.
   application's `resolve` adapter: all the names of a paste in one request per lookup, in batches
   of 200, with answers kept for a minute. A name that means exactly one record becomes it; others
   stay as typed. It also serves the editor's `search`.
-- **A lookup holding text is now an error**, `not_matched`: only a record has an id to send.
+- **A lookup holding text is an error**, `not_matched`: only a record has an id to send.
 - **`TabulaGrid` lists a lookup's records under the editor** as the user types (`lookups`), and
   an options field's choices, Alt+Down for all of them. Arrows, Enter, Tab, Escape and the mouse
   work the list; Enter picks on its own only the one record that fits, and a disabled record is
@@ -138,3 +147,6 @@ The three packages are versioned together.
   integer column goes as 12.5, for the server to refuse for the same reason. `SheetValidator`
   gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
   which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.
+
+[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/nouxwell/tabula-grid/releases/tag/v0.1.0

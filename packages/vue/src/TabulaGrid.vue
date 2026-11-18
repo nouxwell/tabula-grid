@@ -47,10 +47,10 @@ import {
 	watch,
 	type PropType
 } from "vue"
-import { alignmentOf } from "./alignment"
-import { GRID_TEXT, issueText, type GridLocale } from "./messages"
-import { horizontalPadding, textMeasurer, type Measure } from "./measure"
-import type { GridTheme } from "./types"
+import { alignmentOf } from "./alignment.js"
+import { GRID_TEXT, issueText, type GridLocale } from "./messages.js"
+import { horizontalPadding, textMeasurer, type Measure } from "./measure.js"
+import type { GridTheme } from "./types.js"
 
 const props = defineProps({
 	/** The module schema: which columns there are, in which order, and what each may hold. */

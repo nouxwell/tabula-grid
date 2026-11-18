@@ -1,12 +1,12 @@
-import { compareDecimal } from "./decimal"
-import { isFormulaError } from "./formula/error"
-import { Listeners } from "./listeners"
-import type { RowId, RowStore, StoreChange } from "./rows"
-import type { FieldRule, FieldSchema, ModuleSchema } from "./schema"
-import type { CellValue } from "./value"
-import { decimalText } from "./values/number"
-import { canonicalValue, isLookupValue, valueProblem, type ValueProblemCode } from "./values/read"
-import { VALUE_SETTINGS, type ValueSettings } from "./values/settings"
+import { compareDecimal } from "./decimal.js"
+import { isFormulaError } from "./formula/error.js"
+import { Listeners } from "./listeners.js"
+import type { RowId, RowStore, StoreChange } from "./rows.js"
+import type { FieldRule, FieldSchema, ModuleSchema } from "./schema.js"
+import type { CellValue } from "./value.js"
+import { decimalText } from "./values/number.js"
+import { canonicalValue, isLookupValue, valueProblem, type ValueProblemCode } from "./values/read.js"
+import { VALUE_SETTINGS, type ValueSettings } from "./values/settings.js"
 
 /**
  * What is wrong in a sheet, bound to rows by id and to fields by key, never to a row number or a

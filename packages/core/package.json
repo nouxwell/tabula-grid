@@ -1,14 +1,26 @@
 {
 	"name": "@nouxwell/tabula-core",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"description": "The framework-free core of Tabula Grid.",
+	"keywords": [
+		"spreadsheet",
+		"data-grid",
+		"bulk-edit",
+		"validation",
+		"excel",
+		"import",
+		"tabula"
+	],
 	"license": "MIT",
 	"author": "Hüseyin Niyazi Balın",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/nouxwell/tabula-grid.git",
 		"directory": "packages/core"
+	},
+	"homepage": "https://github.com/nouxwell/tabula-grid/tree/main/packages/core#readme",
+	"bugs": {
+		"url": "https://github.com/nouxwell/tabula-grid/issues"
 	},
 	"type": "module",
 	"sideEffects": false,
@@ -21,6 +33,9 @@
 	"files": [
 		"dist"
 	],
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
 		"build": "vite build && tsc -p tsconfig.build.json",
 		"typecheck": "tsc -p tsconfig.json",

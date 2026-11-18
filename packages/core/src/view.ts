@@ -1,8 +1,8 @@
-import type { RowOutcome } from "./contract"
-import { Listeners } from "./listeners"
-import type { RowId, RowStore, StoreChange } from "./rows"
-import type { RowResults } from "./session"
-import type { IssueSet } from "./validation"
+import type { RowOutcome } from "./contract.js"
+import { Listeners } from "./listeners.js"
+import type { RowId, RowStore, StoreChange } from "./rows.js"
+import type { RowResults } from "./session.js"
+import type { IssueSet } from "./validation.js"
 
 /** Whether a row is to be shown. */
 export type RowFilter = (rowId: RowId) => boolean

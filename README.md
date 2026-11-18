@@ -5,11 +5,11 @@ for Vue and Nuxt. It is the browser side of [nouxwell/tabula](https://github.com
 the PHP library that defines a column once and uses that one definition to export, to build
 templates and to import.
 
-> **Status: early.** A sheet can be drawn, navigated, typed into, copied from and pasted into;
-> what is typed is read the way nouxwell/tabula reads it, checked against the schema's rules as
-> the user types, taken back with undo, checked by a backend, sent to it to be processed, and kept
-> as a draft to go on with later; a lookup is picked from a searched list. No release has been made
-> and none of the three packages is on npm; each is marked `private` until its first release.
+> **Status: 0.1.0, the first release.** A sheet can be drawn, navigated, typed into, copied from
+> and pasted into; what is typed is read the way nouxwell/tabula reads it, checked against the
+> schema's rules as the user types, taken back with undo, checked by a backend, sent to it to be
+> processed, and kept as a draft to go on with later; a lookup is picked from a searched list.
+> Below 1.0 a minor version may change what came before; [CHANGELOG.md](CHANGELOG.md) says when.
 
 ## Packages
 
@@ -19,15 +19,24 @@ templates and to import.
 | `@nouxwell/tabula-vue`  | Vue 3 components built on the core.                                 |
 | `@nouxwell/tabula-nuxt` | A thin Nuxt module that registers the components, client-side only. |
 
+```bash
+npm install @nouxwell/tabula-core @nouxwell/tabula-vue   # Vue 3.5 or later
+npm install @nouxwell/tabula-core @nouxwell/tabula-nuxt  # Nuxt 4 or later
+```
+
+They are ES modules with their types. TypeScript reads the types under the module resolution Vite
+and Nuxt set (`Bundler`) and under Node's (`NodeNext`), so the core can check rows on a Node
+server as well.
+
 `playground/` is a small Vite app that runs the packages from source. It is not published.
 
 `spikes/` holds throwaway experiments that settled a design question, kept for their numbers.
 [spikes/render](spikes/render/README.md) is why the grid is drawn by a renderer of our own rather
 than by an existing engine.
 
-## What the core holds so far
+## The core
 
-`@nouxwell/tabula-core` has no Vue and no DOM in it. Three pieces are in place:
+`@nouxwell/tabula-core` has no Vue and no DOM in it. Three pieces carry the rest:
 
 - **`ModuleSchema`** reads the schema a backend sends: one field per column with a key that never
   changes, a type, and the rules nobody further down may loosen. It checks all of it and reports
@@ -427,7 +436,8 @@ never to be trusted by the backend.
 
 ## Development
 
-Needs Node 22.13 or later (22, 24 or 26+) and pnpm, run through Corepack, which ships with Node:
+Needs Node 22.13 or later (22, 24 or 26+) and pnpm, run through Corepack, which ships with Node 22
+and 24 (on later versions, `npm install --global corepack`):
 
 ```bash
 corepack pnpm install
@@ -436,9 +446,14 @@ corepack pnpm -r typecheck
 corepack pnpm -r test
 corepack pnpm lint
 corepack pnpm format:check
+corepack pnpm check:packages           # the packages as published: packed, installed, used
 corepack pnpm --filter playground dev  # the playground
 corepack pnpm --filter playground test:browser
 ```
+
+`check:packages` needs the packages built. It packs them as `pnpm publish` would, installs the
+tarballs into an empty project with npm, imports them in Node, and type-checks against them as
+Vite and as Node resolve modules; `--keep` leaves the project behind to look at.
 
 The browser tests build the playground and drive it with the keyboard, the mouse and the
 clipboard. They use the installed Microsoft Edge; set `TABULA_BROWSER` to `chrome` for Chrome, or
@@ -453,6 +468,17 @@ rather than wrapped in root scripts on purpose: a script that calls `pnpm` again
 The same rule as `nouxwell/tabula`: below 1.0, a **minor** bump is where a breaking change lands.
 The three packages are versioned together, one `vX.Y.Z` tag per release.
 [CHANGELOG.md](CHANGELOG.md) says what each release changed.
+
+A release, on `main`:
+
+1. One commit sets the version in the three `package.json` files and in `version` in
+   `packages/core/src/index.ts` (a test holds the two together), and turns the changelog's
+   Unreleased into the version's heading, with its link at the bottom.
+2. An annotated tag `vX.Y.Z` on that commit, pushed with it. CI runs on the tag.
+3. With `main` at the tag: `corepack pnpm install --frozen-lockfile`, `corepack pnpm -r build`,
+   `corepack pnpm check:packages`, then `corepack pnpm -r publish`, signed in to npm as an owner of
+   the `@nouxwell` scope. pnpm, not npm: only pnpm turns `workspace:^` into the version. Add
+   `--dry-run` first to see what would go out.
 
 ## License
 

@@ -11,19 +11,19 @@ import {
 	type SheetAdapters,
 	type SheetRequest,
 	type StatusQuery
-} from "./contract"
-import { neverAborted, raced, wait } from "./async"
-import { TabulaError } from "./errors"
-import { isFormulaError } from "./formula/error"
-import type { UndoHistory } from "./history"
-import { randomPart, sequence } from "./ids"
-import { Listeners } from "./listeners"
-import type { RowId, RowStore, StoreChange } from "./rows"
-import type { ModuleSchema } from "./schema"
-import { SheetValidator, type Issue, type IssueScope, type IssueSet, type IssueSummary } from "./validation"
-import type { CellValue } from "./value"
-import { canonicalValue, isLookupValue } from "./values/read"
-import type { ValueSettings } from "./values/settings"
+} from "./contract.js"
+import { neverAborted, raced, wait } from "./async.js"
+import { TabulaError } from "./errors.js"
+import { isFormulaError } from "./formula/error.js"
+import type { UndoHistory } from "./history.js"
+import { randomPart, sequence } from "./ids.js"
+import { Listeners } from "./listeners.js"
+import type { RowId, RowStore, StoreChange } from "./rows.js"
+import type { ModuleSchema } from "./schema.js"
+import { SheetValidator, type Issue, type IssueScope, type IssueSet, type IssueSummary } from "./validation.js"
+import type { CellValue } from "./value.js"
+import { canonicalValue, isLookupValue } from "./values/read.js"
+import type { ValueSettings } from "./values/settings.js"
 
 export interface SheetSessionOptions {
 	readonly schema: ModuleSchema

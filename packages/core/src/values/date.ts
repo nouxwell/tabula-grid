@@ -1,4 +1,4 @@
-import { clean, escapeRegex } from "./text"
+import { clean, escapeRegex } from "./text.js"
 
 /**
  * Dates as a cell holds them: ISO text, "2026-12-31" for a date and "2026-12-31T09:30:00" for a

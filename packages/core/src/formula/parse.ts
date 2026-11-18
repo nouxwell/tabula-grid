@@ -1,4 +1,4 @@
-import { TabulaError } from "../errors"
+import { TabulaError } from "../errors.js"
 
 /**
  * The formula language: what a spreadsheet user already writes, minus cell addresses. A formula

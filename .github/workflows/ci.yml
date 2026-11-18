@@ -75,6 +75,32 @@ jobs:
       - name: Browser tests
         run: pnpm --filter playground test:browser
 
+  # The packages as they would be published: packed, installed from the tarballs into an empty
+  # project, imported in Node and type-checked against as Vite and as Node resolve modules. The
+  # tests above run the sources; this is what someone installing from npm gets.
+  packages:
+    name: Packages as published
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm -r build
+
+      - name: Pack, install and use
+        run: pnpm check:packages
+
   # Lint and formatting read the same source on every Node version, so they run once.
   static:
     name: Lint and formatting

@@ -1,7 +1,7 @@
-import { TabulaError } from "./errors"
-import { sequence } from "./ids"
-import { Listeners } from "./listeners"
-import { sameValue, toCellValue, type CellValue } from "./value"
+import { TabulaError } from "./errors.js"
+import { sequence } from "./ids.js"
+import { Listeners } from "./listeners.js"
+import { sameValue, toCellValue, type CellValue } from "./value.js"
 
 /**
  * A row's identity: the same from the moment the row is created until it is deleted, whatever is

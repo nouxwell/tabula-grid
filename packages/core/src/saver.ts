@@ -1,11 +1,11 @@
-import type { AdapterContext } from "./contract"
-import { createDraft, type Draft, type DraftView } from "./draft"
-import { TabulaError } from "./errors"
-import { sequence } from "./ids"
-import { Listeners } from "./listeners"
-import type { RowStore } from "./rows"
-import type { ModuleSchema } from "./schema"
-import type { SheetSession } from "./session"
+import type { AdapterContext } from "./contract.js"
+import { createDraft, type Draft, type DraftView } from "./draft.js"
+import { TabulaError } from "./errors.js"
+import { sequence } from "./ids.js"
+import { Listeners } from "./listeners.js"
+import type { RowStore } from "./rows.js"
+import type { ModuleSchema } from "./schema.js"
+import type { SheetSession } from "./session.js"
 
 export interface DraftSaverOptions {
 	readonly schema: ModuleSchema

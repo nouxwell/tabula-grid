@@ -1,4 +1,4 @@
-import { TabulaError } from "./errors"
+import { TabulaError } from "./errors.js"
 
 /**
  * What a cell holds.

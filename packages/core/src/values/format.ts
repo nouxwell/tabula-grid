@@ -1,10 +1,10 @@
-import { isFormulaError } from "../formula/error"
-import type { FieldSchema } from "../schema"
-import type { CellValue } from "../value"
-import { formatDate } from "./date"
-import { decimalText, editNumber, formatNumber, symbolFor } from "./number"
-import { datePatternOf, describeValue, isFieldValue, isLookupValue } from "./read"
-import type { ValueSettings } from "./settings"
+import { isFormulaError } from "../formula/error.js"
+import type { FieldSchema } from "../schema.js"
+import type { CellValue } from "../value.js"
+import { formatDate } from "./date.js"
+import { decimalText, editNumber, formatNumber, symbolFor } from "./number.js"
+import { datePatternOf, describeValue, isFieldValue, isLookupValue } from "./read.js"
+import type { ValueSettings } from "./settings.js"
 
 /**
  * What a cell shows: its value written the sheet's way, "1.571,41 ₺", "31.12.2026", "Evet". A cell
