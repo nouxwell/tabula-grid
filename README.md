@@ -529,6 +529,27 @@ const formulas = new FormulaEngine({
 What the browser works out is shown to the user and sent like any value, never trusted: the
 backend works it out again. A field with `submit: false` is not sent at all.
 
+### Writing a formula
+
+A formula editor helps as it is written, from three pieces:
+
+- **`formulaCaret(text, caret)`** in the core reads the formula up to the caret as the parser
+  does, quotes and brackets passed over: what is being typed there (a field after "[", or a
+  function's name, with the stretch a completion replaces) and the call the caret is inside, at
+  which argument.
+- **`formulaWithLabels` and `formulaWithKeys`** write a formula with the fields' labels, as a
+  person reads it ("ROUND([Aralık fiyatı] * 1.2, 2)"), and back with their keys, as it is saved. A
+  label two fields share is left as written, for the parser to refuse.
+- **`functionHelp(name, locale)`** in `@nouxwell/tabula-vue` says what each of the 16 functions
+  takes and does, in Turkish and English: `ROUND(sayı, basamak)`, "Sayıyı verilen ondalık
+  basamağa yuvarlar". An application's own function has none, and is listed by its name.
+
+[examples/nuxt](examples/nuxt/README.md) puts them together in the rules drawer's "Hesaplanan
+sütunlar" tab: the template's own columns, and a formula field that lists the fields after "[" and
+the functions on a letter, shows the call's arguments with the one being written in bold, and the
+values the formula gives on the first rows as it is typed. A column kept shows in the sheet at once,
+not saved until the template is.
+
 ## Lookups
 
 A lookup holds a record as `{ id, label }`: the user sees the label, the backend receives the id.

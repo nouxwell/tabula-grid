@@ -75,6 +75,8 @@ export {
 } from "./formula/evaluate.js"
 export type { FormulaFunction, FormulaValue } from "./formula/evaluate.js"
 export { formulaFields, parseFormula } from "./formula/parse.js"
+export { formulaCaret, formulaWithKeys, formulaWithLabels } from "./formula/assist.js"
+export type { FormulaCall, FormulaCaret, FormulaToken, NamedField } from "./formula/assist.js"
 export type { BinaryOperator, FormulaNode } from "./formula/parse.js"
 export { isFormulaError } from "./formula/error.js"
 export type { FormulaErrorCode, FormulaErrorValue } from "./formula/error.js"

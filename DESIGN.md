@@ -97,6 +97,12 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
      Hata or Uyarı, its own words). The count follows every pick and keystroke, and "Satırları
      göster" narrows the sheet to those rows until the form closes. Nothing is kept before
      "Şablonu kaydet", which spins until the server answers.
+   - **Its second tab, Hesaplanan sütunlar** (design G): the template's own columns, a formula or a
+     helper each. The formula is written with the fields' labels; "[" lists the fields, a letter
+     the functions, Enter or Tab puts one in, and above the field the call's arguments show with
+     the one being written in bold and what the function does. Under it, the values on the first
+     rows and how many rows fail, as it is typed. A column kept shows in the sheet at once, marked
+     as not saved in the footer; Vazgeç and closing the drawer put the sheet back as saved.
 4. **Formula bar** (`TabulaFormulaBar`): address and value of the active cell.
 5. **The sheet** (`TabulaGrid`) and, on its right, **the issues** (`TabulaIssues`, 340px).
 6. **Status bar** (`TabulaStatusBar`): rows and issues, the selection, its sum and average.
@@ -142,6 +148,11 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 23  | A rule's own words, Turkish and English             | both        | done (phase two)   |
 | 24  | Field limits tab in the rules drawer                | application | not chosen (later) |
 | 25  | Comparison with a worked-out value                  | package     | not chosen         |
+| 26  | Computed columns tab in the rules drawer (G)        | application | done (phase two)   |
+| 27  | Formula completion: fields and functions            | both        | done (phase two)   |
+| 28  | A function's help and its arguments, as written     | both        | done (phase two)   |
+| 29  | Live preview of a formula                           | application | done (phase two)   |
+| 30  | A formula typed into one cell with "="              | package     | not chosen         |
 | —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
 | —   | Saved views (personal views)                        | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)      | both        | done (phase two)   |

@@ -327,6 +327,127 @@ export function describeCheck(
 	return `${said}${when(params, locale)}`
 }
 
+/** What a formula function takes and does, for a formula editor's hint and its list. */
+export interface FunctionHelp {
+	/** Its arguments by name; "…" last when it takes as many as are given. */
+	readonly params: readonly string[]
+	/** A few words for a list of suggestions. */
+	readonly short: string
+	/** A sentence for the hint above the formula. */
+	readonly text: string
+}
+
+const SOME_TR = ["sayı1", "sayı2", "…"]
+const SOME_EN = ["number1", "number2", "…"]
+
+const FUNCTION_HELP: Readonly<Record<GridLocale, Readonly<Record<string, FunctionHelp>>>> = {
+	tr: {
+		ABS: { params: ["sayı"], short: "işaretsiz değer", text: "Sayının işaretsiz değeri: -5 için 5." },
+		AND: {
+			params: ["koşul1", "koşul2", "…"],
+			short: "hepsi doğruysa",
+			text: "Koşulların hepsi doğruysa DOĞRU, biri yanlışsa YANLIŞ."
+		},
+		AVERAGE: { params: SOME_TR, short: "ortalama", text: "Sayıların ortalaması; boş alanlar sayılmaz." },
+		CONCAT: {
+			params: ["metin1", "metin2", "…"],
+			short: "metinleri birleştirir",
+			text: "Metinleri art arda ekler."
+		},
+		IF: {
+			params: ["koşul", "doğruysa", "yanlışsa"],
+			short: "koşula göre değer",
+			text: "Koşul doğruysa ikinci değeri, değilse üçüncüyü verir; yalnız gereken hesaplanır."
+		},
+		IFERROR: {
+			params: ["değer", "hatada"],
+			short: "hata yerine değer",
+			text: "Değer bir hataysa (#DIV/0! gibi) yerine ikinci değeri verir."
+		},
+		ISBLANK: { params: ["değer"], short: "boş mu", text: "Değer boşsa DOĞRU." },
+		LEN: { params: ["metin"], short: "karakter sayısı", text: "Metindeki karakter sayısı." },
+		MAX: { params: SOME_TR, short: "en büyük değer", text: "En büyük sayı; boş alanlar sayılmaz." },
+		MIN: { params: SOME_TR, short: "en küçük değer", text: "En küçük sayı; boş alanlar sayılmaz." },
+		NOT: { params: ["koşul"], short: "tersi", text: "Koşul doğruysa YANLIŞ, yanlışsa DOĞRU." },
+		OR: {
+			params: ["koşul1", "koşul2", "…"],
+			short: "biri doğruysa",
+			text: "Koşullardan biri doğruysa DOĞRU, hepsi yanlışsa YANLIŞ."
+		},
+		ROUND: {
+			params: ["sayı", "basamak"],
+			short: "yuvarlar",
+			text: "Sayıyı verilen ondalık basamağa yuvarlar: yarım ve üstü yukarı."
+		},
+		ROUNDDOWN: {
+			params: ["sayı", "basamak"],
+			short: "aşağı yuvarlar",
+			text: "Sayıyı verilen basamakta sıfıra doğru keser."
+		},
+		ROUNDUP: {
+			params: ["sayı", "basamak"],
+			short: "yukarı yuvarlar",
+			text: "Sayıyı verilen basamakta sıfırdan uzağa yuvarlar."
+		},
+		SUM: { params: SOME_TR, short: "toplam", text: "Sayıların toplamı; boş alanlar sayılmaz." }
+	},
+	en: {
+		ABS: { params: ["number"], short: "without its sign", text: "The number without its sign: 5 for -5." },
+		AND: {
+			params: ["condition1", "condition2", "…"],
+			short: "true if all are",
+			text: "TRUE when every condition holds, FALSE when one does not."
+		},
+		AVERAGE: {
+			params: SOME_EN,
+			short: "average",
+			text: "The average of the numbers; empty fields are not counted."
+		},
+		CONCAT: { params: ["text1", "text2", "…"], short: "joins texts", text: "The texts one after another." },
+		IF: {
+			params: ["condition", "if true", "if false"],
+			short: "a value by a condition",
+			text: "The second value when the condition holds, the third when not; only the one needed is worked out."
+		},
+		IFERROR: {
+			params: ["value", "on error"],
+			short: "a value for an error",
+			text: "The second value in place of the first when it is an error, such as #DIV/0!."
+		},
+		ISBLANK: { params: ["value"], short: "is it empty", text: "TRUE when the value is empty." },
+		LEN: { params: ["text"], short: "number of characters", text: "How many characters the text has." },
+		MAX: { params: SOME_EN, short: "the largest", text: "The largest number; empty fields are not counted." },
+		MIN: { params: SOME_EN, short: "the smallest", text: "The smallest number; empty fields are not counted." },
+		NOT: { params: ["condition"], short: "the opposite", text: "FALSE when the condition holds, TRUE when not." },
+		OR: {
+			params: ["condition1", "condition2", "…"],
+			short: "true if one is",
+			text: "TRUE when a condition holds, FALSE when none does."
+		},
+		ROUND: {
+			params: ["number", "places"],
+			short: "rounds",
+			text: "The number rounded to the decimal places given: a half and above goes up."
+		},
+		ROUNDDOWN: {
+			params: ["number", "places"],
+			short: "rounds down",
+			text: "The number cut towards zero at the places given."
+		},
+		ROUNDUP: {
+			params: ["number", "places"],
+			short: "rounds up",
+			text: "The number rounded away from zero at the places given."
+		},
+		SUM: { params: SOME_EN, short: "sum", text: "The sum of the numbers; empty fields are not counted." }
+	}
+}
+
+/** A formula function's help in the sheet's language; null for one it does not know, an application's own. */
+export function functionHelp(name: string, locale: GridLocale): FunctionHelp | null {
+	return FUNCTION_HELP[locale][name.toUpperCase()] ?? null
+}
+
 /** A decimal limit such as "0.5" written the sheet's way: "0,5". */
 function number(value: string | undefined, settings: ValueSettings): string {
 	return (value ?? "").replace(".", settings.decimalSeparator)

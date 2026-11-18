@@ -362,6 +362,7 @@
 			:settings="valueSettings"
 			:save="saveTemplate"
 			@show-rows="showRuleRows"
+			@preview="previewTemplate"
 		/>
 
 		<AppModal
@@ -418,6 +419,7 @@ import {
 	type ColumnFilters,
 	type ColumnLayout,
 	type CheckInput,
+	type FieldInput,
 	type ColumnSort,
 	type ModuleSchemaInput,
 	type RowId,
@@ -443,7 +445,12 @@ const {
 } = useFetch<RowInit[]>("/api/price-updates/rows", { server: false })
 // The templates prepared for the module: small, so they come with the page, and the menu is drawn.
 const { data: templates, refresh: refreshTemplates } = await useFetch<
-	readonly { readonly id: string; readonly name: string; readonly checks?: readonly CheckInput[] }[]
+	readonly {
+		readonly id: string
+		readonly name: string
+		readonly checks?: readonly CheckInput[]
+		readonly columns?: readonly FieldInput[]
+	}[]
 >("/api/modules/price-update/templates")
 
 /** Fetches the rows again after a failure; the button spins until they are in. */
@@ -505,8 +512,14 @@ const sheetKey = ref(0)
  * the template's arrangement. `carried` rows are the sheet's own, when it is made again for another
  * template: what the user typed stays.
  */
-function makeSheet(schemaInput: ModuleSchemaInput, rowList: readonly RowInit[], carried?: readonly RowInit[]): void {
-	const template = templates.value?.find(item => item.id === templateId.value) ?? null
+function makeSheet(
+	schemaInput: ModuleSchemaInput,
+	rowList: readonly RowInit[],
+	carried?: readonly RowInit[],
+	/** A template to show in place of the saved one, keeping the columns as the user has them. */
+	preview?: { readonly template: unknown }
+): void {
+	const template = preview ? preview.template : (templates.value?.find(item => item.id === templateId.value) ?? null)
 	const made = createSheet(
 		schemaInput,
 		carried ?? rowList,
@@ -517,7 +530,10 @@ function makeSheet(schemaInput: ModuleSchemaInput, rowList: readonly RowInit[], 
 
 	sheetKey.value++
 	sheet.value = made
-	savedViews.open(made.schema, made.restored, made.template?.view ?? undefined)
+
+	if (!preview) {
+		savedViews.open(made.schema, made.restored, made.template?.view ?? undefined)
+	}
 
 	if (made.templateError) {
 		message.error("Şablon uygulanamadı; tablo modül şemasıyla açıldı.")
@@ -710,6 +726,23 @@ async function saveTemplate(template: unknown): Promise<boolean> {
 	message.success("Şablon kaydedildi; kurallar tabloda.")
 
 	return true
+}
+
+/**
+ * Shows the sheet with a template the rules drawer has changed and not saved, such as a column just
+ * written, or with null as the template is saved. The same rows, and the columns as they are.
+ */
+function previewTemplate(template: unknown): void {
+	const current = sheet.value
+
+	if (!current || !input.value || !rows.value) {
+		return
+	}
+
+	const carried = current.store.snapshot()
+
+	current.dispose()
+	makeSheet(input.value, rows.value, carried, { template: template ?? templateInput.value })
 }
 
 /** Narrows the sheet to the rows a rule being written catches, or with null shows them all again. */

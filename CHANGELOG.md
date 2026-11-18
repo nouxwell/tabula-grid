@@ -17,6 +17,13 @@ The three packages are versioned together.
   column beside goes. Ctrl+D and Ctrl+R copy the selection's first row down or first column across.
   A fill is one step to undo, writes only into the rows shown and passes over columns that cannot
   be edited. Not drawn on a touch screen.
+- **Writing formulas, with help.** `formulaCaret` in the core says what is being typed at a
+  caret (a field after "[", or a function's name) and which call and argument the caret is in;
+  `formulaWithLabels` and `formulaWithKeys` write a formula with the fields' labels and back.
+  `functionHelp` in the Vue package says what each of the 16 functions takes and does, in Turkish
+  and English. The example's rules drawer has a second tab, Hesaplanan sütunlar (design G): the
+  template's own columns, a formula field that completes fields and functions and shows the call's
+  arguments, the values on the first rows as it is typed, and the column in the sheet once kept.
 - **Multi-select cells**: a field of several options is edited in a list of them to tick, under
   the cell. Typing finds them, Space or a click ticks, Enter ticks what a search found and, with
   nothing typed, writes what is ticked in the options' own order; Escape leaves the cell as it was.

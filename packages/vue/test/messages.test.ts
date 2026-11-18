@@ -1,6 +1,13 @@
-import { ModuleSchema, RowStore, SheetValidator, VALUE_SETTINGS, type Issue } from "@nouxwell/tabula-core"
+import {
+	FORMULA_FUNCTIONS,
+	ModuleSchema,
+	RowStore,
+	SheetValidator,
+	VALUE_SETTINGS,
+	type Issue
+} from "@nouxwell/tabula-core"
 import { describe, expect, it } from "vitest"
-import { dateExample, describeCheck, issueText } from "../src/messages"
+import { dateExample, describeCheck, functionHelp, issueText } from "../src/messages"
 
 const schema = ModuleSchema.from({
 	module: "messages",
@@ -16,6 +23,23 @@ function issuesFor(values: Record<string, unknown>): Issue[] {
 
 	return new SheetValidator(schema, store).issues()
 }
+
+describe("functionHelp", () => {
+	it("helps with every function a formula has, in both languages", () => {
+		for (const name of FORMULA_FUNCTIONS) {
+			for (const locale of ["tr", "en"] as const) {
+				const help = functionHelp(name, locale)
+
+				expect(help, `${name} in ${locale}`).not.toBeNull()
+				expect(help?.params.length).toBeGreaterThan(0)
+				expect(help?.text.length).toBeGreaterThan(10)
+			}
+		}
+
+		expect(functionHelp("round", "tr")?.params).toEqual(["sayı", "basamak"])
+		expect(functionHelp("VLOOKUP", "tr")).toBeNull()
+	})
+})
 
 describe("describeCheck", () => {
 	const schema = ModuleSchema.from({
