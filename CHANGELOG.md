@@ -7,6 +7,13 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-18
+
+Several sheets of one module kept together, as a spreadsheet keeps its tabs: a workbook in the
+core, the tabs under the sheet in the Vue package, which rename, duplicate, reorder and delete
+them, and the example's sheets kept that way. The example also keeps a change made just before
+its page goes.
+
 ### Added
 
 - **Workbooks: several sheets of one module, as tabs.** `Workbook` in the core keeps the sheets in
@@ -411,7 +418,8 @@ taken to a backend through the application's own adapters, and kept as a draft.
   gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
   which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.
 
-[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/nouxwell/tabula-grid/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/nouxwell/tabula-grid/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/nouxwell/tabula-grid/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nouxwell/tabula-grid/releases/tag/v0.1.0
