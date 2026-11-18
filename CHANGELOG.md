@@ -7,6 +7,11 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-11-18
+
+A patch: the grid keeps the user's place when it is made again over the same rows, the example's
+templates outlive a restart, and the menu's Paste says why when the browser refuses it.
+
 ### Added
 
 - **Where the user is.** `position()` on the grid gives the active cell, by its row's id and field,
@@ -386,6 +391,7 @@ taken to a backend through the application's own adapters, and kept as a draft.
   gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
   which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.
 
-[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/nouxwell/tabula-grid/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/nouxwell/tabula-grid/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nouxwell/tabula-grid/releases/tag/v0.1.0
