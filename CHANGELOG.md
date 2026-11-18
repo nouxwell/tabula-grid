@@ -7,6 +7,22 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+### Added
+
+- **Where the user is.** `position()` on the grid gives the active cell, by its row's id and field,
+  and the scroll; `restorePosition()` puts the user back there. A grid made again over the same rows
+  takes up where the old one stood.
+
+### Fixed
+
+- **The example keeps its place when it makes the sheet again**: after "Sütunu kaydet", a template
+  saved or chosen, the sheet is scrolled where it was and the same cell is active. It used to go
+  back to the top.
+- **The example's templates outlive a restart.** The ones saved or made are kept on disk, in the
+  `templates` storage (`.data/templates`); they were in memory only.
+- **The menu's Paste says so when the browser will not read the clipboard**, and stays open: "paste
+  with Ctrl+V", which needs no leave. It did nothing before.
+
 ## [0.2.0] — 2026-11-18
 
 The second release: the sheet as a spreadsheet user expects it, with filters and sorting, search,

@@ -13,6 +13,7 @@ import type {
 	SheetValidator,
 	UndoHistory
 } from "@nouxwell/tabula-core"
+import type { GridPosition } from "@nouxwell/tabula-vue"
 import type { FakeBackend } from "./backend"
 
 /** What the playground puts on the page for the browser tests to read. */
@@ -32,6 +33,9 @@ export interface PlaygroundHandle {
 	readonly changes: SheetChanges
 	/** The grid's `adjustSelection`: how many cells it changed. */
 	readonly adjust: (adjustment: Adjustment) => number
+	/** The grid's `position()` and `restorePosition()`. */
+	readonly position: () => GridPosition | null
+	readonly restorePosition: (position: GridPosition) => void
 	readonly widths: () => Readonly<Record<string, number>>
 	readonly columns: () => ColumnLayout
 }

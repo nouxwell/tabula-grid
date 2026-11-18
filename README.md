@@ -204,7 +204,8 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
   stays, for the text. `menu-items` adds the host's own items after the grid's, one with
   `children` opening them beside it, and `@menu` gives the key of the one chosen. Ctrl++ adds rows
   as Ctrl+− takes them out, and `insertRows("above" | "below")` does it for a button. Menu
-  pasting reads the clipboard, which a browser may ask the user to allow; Ctrl+V needs nothing.
+  pasting reads the clipboard, which a browser may ask the user to allow; refused, the menu stays
+  open and says to paste with Ctrl+V, which needs nothing.
 - **Themes.** `light`, `dark` or `auto`, in colours an application changes (see below).
 
 With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>`, `<TabulaIssues>`,
@@ -236,7 +237,9 @@ Two components that go with a grid, placed wherever the page wants them, given t
 Both read what the grid exposes, which any other part of a page can read too: `cell` (the active
 cell, its address, field and text), `selected` (the range, with `summarizeCells` from the core
 behind its sum and average), `rows`, `issueSummary`, `goToAddress(address)`,
-`addressOf(rowId, field)`, `writeCell(rowId, field, text)` and `formatValue(field, value)`. Addresses follow the columns as
+`addressOf(rowId, field)`, `writeCell(rowId, field, text)` and `formatValue(field, value)`. `position()`
+gives the active cell and the scroll, and `restorePosition(position)` puts the user back there, as a
+host does when it makes the grid again over the same rows. Addresses follow the columns as
 they stand on screen; `columnName` and `parseAddress` turn one into the other.
 
 ### Sorting and filtering

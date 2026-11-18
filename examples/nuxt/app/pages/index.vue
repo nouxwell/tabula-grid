@@ -686,7 +686,7 @@ import {
 	type RowInit,
 	type ViewNameProblem
 } from "@nouxwell/tabula-core"
-import { columnName, type GridMenuItem, type TabulaGrid as Grid } from "@nouxwell/tabula-vue"
+import { columnName, type GridMenuItem, type GridPosition, type TabulaGrid as Grid } from "@nouxwell/tabula-vue"
 import { useMessage, type DropdownOption } from "naive-ui"
 import { refDebounced } from "@vueuse/core"
 import { h } from "vue"
@@ -769,6 +769,19 @@ const templateId = computed(() => (typeof route.query.template === "string" ? ro
 /** Counts the sheets made, so the grid is made afresh for a new one. */
 const sheetKey = ref(0)
 
+/** Where the user was in a sheet being made again over the same rows. */
+let pendingPosition: GridPosition | null = null
+
+// A grid made again: put back the scroll and the active cell of the one it replaced.
+watch(grid, made => {
+	const place = pendingPosition
+
+	if (made && place) {
+		pendingPosition = null
+		void nextTick(() => made.restorePosition(place))
+	}
+})
+
 /**
  * Makes the sheet with the template the address names, and opens it in the user's default view or
  * the template's arrangement. `carried` rows are the sheet's own, when it is made again for another
@@ -783,6 +796,11 @@ function makeSheet(
 	/** The kept draft, opened with its fields mapped as the user chose. */
 	draft?: { readonly rename: Readonly<Record<string, string>> }
 ): void {
+	// The same rows again: the user stays where they were, once the new grid is there.
+	if (carried) {
+		pendingPosition = grid.value?.position() ?? null
+	}
+
 	const template = preview ? preview.template : (templates.value?.find(item => item.id === templateId.value) ?? null)
 	const made = createSheet(
 		schemaInput,

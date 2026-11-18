@@ -28,5 +28,12 @@ export default defineNuxtConfig({
 	},
 	typescript: {
 		strict: true
+	},
+	nitro: {
+		// The templates users save or make, on disk beside the app, so a restart loses none of them. A
+		// backend keeps them in its database.
+		storage: {
+			templates: { driver: "fs", base: "./.data/templates" }
+		}
 	}
 })

@@ -25,6 +25,18 @@ export interface ActiveCell {
 	readonly references: readonly string[]
 }
 
+/**
+ * Where the user is in the sheet (`TabulaGrid`'s `position()`): the active cell, by its row's id
+ * and its field, and how far the sheet is scrolled. Given back to `restorePosition()`, such as by a
+ * grid made again over the same rows, it puts the user where they were.
+ */
+export interface GridPosition {
+	readonly rowId: RowId | null
+	readonly field: string | null
+	readonly top: number
+	readonly left: number
+}
+
 /** An item the host adds to the menu a right click opens on a cell or a row's number. */
 export interface GridMenuItem {
 	/** What `menu` is emitted with when it is chosen. */

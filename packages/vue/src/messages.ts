@@ -357,7 +357,8 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		insertAbove: "Üste satır ekle",
 		insertBelow: "Alta satır ekle",
 		removeRows: "Satırları sil",
-		filterValue: "Bu değere göre süz"
+		filterValue: "Bu değere göre süz",
+		pasteRefused: "Tarayıcı panoyu okumaya izin vermedi; Ctrl+V ile yapıştırın."
 	},
 	en: {
 		cellMenu: "Cell menu",
@@ -371,6 +372,7 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		insertBelow: "Insert row below",
 		removeRows: "Delete rows",
 		filterValue: "Filter by this value",
+		pasteRefused: "The browser did not let the clipboard be read; paste with Ctrl+V.",
 		succeeded: "Processed",
 		failed: "Failed",
 		skipped: "Not processed",

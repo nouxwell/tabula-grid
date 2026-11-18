@@ -68,7 +68,7 @@ import ScrollThumbs from "./ScrollThumbs.vue"
 import { alignmentOf } from "./alignment.js"
 import { GRID_TEXT, issueText, type GridLocale } from "./messages.js"
 import { horizontalPadding, textMeasurer, type Measure } from "./measure.js"
-import type { ActiveCell, GridMenuItem, GridTheme, SelectedCells } from "./types.js"
+import type { ActiveCell, GridMenuItem, GridPosition, GridTheme, SelectedCells } from "./types.js"
 
 const props = defineProps({
 	/** The module schema: which columns there are, in which order, and what each may hold. */
@@ -3011,6 +3011,8 @@ const contextMenu = shallowRef<{
 } | null>(null)
 /** The host's item whose children are open beside it. */
 const submenu = ref<string | null>(null)
+/** The browser refused to read the clipboard for the menu's Paste: the menu says to use the keys. */
+const pasteRefused = ref(false)
 let stopContext: (() => void) | null = null
 
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
@@ -3212,6 +3214,7 @@ function closeContextMenu(refocus = false): void {
 	stopContext = null
 	contextMenu.value = null
 	submenu.value = null
+	pasteRefused.value = false
 
 	if (refocus) {
 		focusInput()
@@ -3226,6 +3229,12 @@ function chooseMenu(entry: MenuEntry): void {
 
 	if (entry.children && entry.children.length > 0) {
 		submenu.value = submenu.value === entry.key ? null : entry.key
+
+		return
+	}
+
+	if (entry.key === "tabula:paste") {
+		void pasteFromMenu()
 
 		return
 	}
@@ -3248,12 +3257,6 @@ function chooseMenu(entry: MenuEntry): void {
 				}
 			}
 
-			break
-		case "tabula:paste":
-			void navigator.clipboard
-				?.readText()
-				.then(pasteText)
-				.catch(() => undefined)
 			break
 		case "tabula:clear":
 			clearRange("clear")
@@ -3291,6 +3294,21 @@ function chooseMenu(entry: MenuEntry): void {
 			break
 		default:
 			emit("menu", entry.key)
+	}
+}
+
+/**
+ * The menu's Paste reads the clipboard through the browser, which may ask the user first. Refused,
+ * the menu stays open and says to paste with the keys, which need no leave.
+ */
+async function pasteFromMenu(): Promise<void> {
+	try {
+		const copied = await navigator.clipboard.readText()
+
+		closeContextMenu(true)
+		pasteText(copied)
+	} catch {
+		pasteRefused.value = true
 	}
 }
 
@@ -3333,6 +3351,40 @@ function onContextKeydown(event: KeyboardEvent): void {
 	}
 
 	event.preventDefault()
+}
+
+/** Where the user is: the active cell by its row's id and field, and how far the sheet is scrolled. */
+function position(): GridPosition {
+	const at = selection.active
+	const element = scroller.value
+
+	return Object.freeze({
+		rowId: at ? (view.value.rowIdAt(at.row) ?? null) : null,
+		field: at ? (fields.value[at.col]?.key ?? null) : null,
+		top: element?.scrollTop ?? 0,
+		left: element?.scrollLeft ?? 0
+	})
+}
+
+/**
+ * Puts the user back where `position()` said, such as in a grid made again over the same rows: the
+ * scroll as it was, and the active cell when its row and column are still shown.
+ */
+function restorePosition(at: GridPosition): void {
+	const row = at.rowId === null ? -1 : view.value.indexOf(at.rowId)
+	const col = at.field === null ? -1 : fields.value.findIndex(field => field.key === at.field)
+
+	if (row >= 0 && col >= 0) {
+		selection.moveTo(row, col)
+	}
+
+	const element = scroller.value
+
+	if (element) {
+		element.scrollTop = at.top
+		element.scrollLeft = at.left
+		updateWindow()
+	}
 }
 
 /**
@@ -3385,6 +3437,8 @@ defineExpose({
 	removeRows,
 	insertRows,
 	addressOf,
+	position,
+	restorePosition,
 	focus: focusInput,
 	/** Fits a column to its header and contents, as a double click on its edge does. */
 	autoFit,
@@ -3822,6 +3876,12 @@ defineExpose({
 			@keydown="onContextKeydown"
 			@contextmenu.prevent
 		>
+			<p
+				v-if="pasteRefused"
+				class="tabula-grid-menu-note is-hint"
+				role="status"
+				v-text="GRID_TEXT[locale].pasteRefused"
+			/>
 			<template v-if="contextMenu.issues.length > 0">
 				<p v-for="(line, at) in contextMenu.issues" :key="at" class="tabula-grid-menu-note" v-text="line" />
 				<span class="tabula-grid-menu-line" role="separator" />
@@ -4162,6 +4222,10 @@ defineExpose({
 	color: var(--tabula-issues-error);
 	font-size: 0.92em;
 	white-space: normal;
+}
+
+.tabula-grid-menu-note.is-hint {
+	color: var(--tabula-muted);
 }
 
 .tabula-grid-menu-item {

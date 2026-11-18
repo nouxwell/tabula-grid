@@ -583,6 +583,8 @@ onMounted(() => {
 		view,
 		changes,
 		adjust: adjustment => grid.value?.adjustSelection(adjustment) ?? 0,
+		position: () => grid.value?.position() ?? null,
+		restorePosition: position => grid.value?.restorePosition(position),
 		widths: () => widths.value,
 		columns: () => columns.value
 	}

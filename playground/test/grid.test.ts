@@ -917,6 +917,46 @@ describe("TabulaGrid", () => {
 				)
 			})
 		})
+
+		it("stays open and says to use the keys when the browser will not read the clipboard", async () => {
+			await withPage(20, async page => {
+				await page.evaluate(() => {
+					navigator.clipboard.readText = () => Promise.reject(new DOMException("Denied", "NotAllowedError"))
+				})
+				await cell(page, 1, 3).click({ button: "right" })
+				await item(page, "Yapıştır").click()
+
+				await expect
+					.poll(() => menu(page).locator(".tabula-grid-menu-note").allInnerTexts())
+					.toEqual(["Tarayıcı panoyu okumaya izin vermedi; Ctrl+V ile yapıştırın."])
+			})
+		})
+	})
+
+	describe("where the user is", () => {
+		it("gives back the active cell and the scroll, and puts the user there again", async () => {
+			await withPage(300, async page => {
+				const scroller = page.locator(".tabula-grid-scroller")
+
+				await cell(page, 0, 3).click()
+				await press(page, "PageDown", 4)
+				await press(page, "ArrowRight", 2)
+
+				const place = await page.evaluate(() => window.__playground!.position())
+				const top = await scroller.evaluate(element => element.scrollTop)
+
+				expect(place).toMatchObject({ field: "currency", rowId: expect.any(String) })
+				expect(top).toBeGreaterThan(0)
+
+				await press(page, "Control+Home")
+				await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBe(0)
+
+				await page.evaluate(at => window.__playground!.restorePosition(at!), place)
+
+				await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBe(top)
+				await expect(page.evaluate(() => window.__playground!.position())).resolves.toEqual(place)
+			})
+		})
 	})
 
 	describe("changes, bulk edits and taking rows out", () => {
