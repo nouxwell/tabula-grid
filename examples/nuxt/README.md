@@ -50,8 +50,8 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
   one as it is, and each row's fields from the old value to the new. Choosing a row goes to it;
   "N satırı uygula" sends the rows.
 - **Sheets as tabs.** Under the sheet, "Fiyat listesi" and any other sheet: + adds one from the
-  server's rows, a double click renames, a right click duplicates or deletes, each with its errors
-  counted. Each tab keeps its own rows and template; Kontrol et and Değişiklikleri uygula are about
+  server's rows, a double click renames, a right click duplicates or deletes, a drag reorders,
+  each with its errors counted. Each tab keeps its own rows and template; Kontrol et and Değişiklikleri uygula are about
   the open one. The whole workbook is kept in the browser's storage
   ([app/utils/workbook.ts](app/utils/workbook.ts)); a draft from before tabs opens as the first.
 - **An older draft.** A draft saved under another schema opens "Taslak eski bir şemayla

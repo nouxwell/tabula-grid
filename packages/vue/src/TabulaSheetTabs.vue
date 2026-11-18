@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, type PropType } from "vue"
+import { computed, nextTick, onBeforeUnmount, ref, type PropType } from "vue"
 import { TABS_TEXT, type GridLocale } from "./messages.js"
 import type { GridTheme, SheetTab } from "./types.js"
 
 /**
  * A workbook's sheets as tabs under the sheet, as a spreadsheet has them: one open, each with its
  * errors counted or a tick once processed, and + to add one. A double click or F2 renames a tab in
- * place; a right click opens its menu: rename, duplicate, delete. Arrows move between the tabs,
+ * place; a right click opens its menu: rename, duplicate, move left or right, delete. A tab is
+ * dragged to another place, or moved with Ctrl+Shift and an arrow. Arrows move between the tabs,
  * Enter or Space opens one.
  *
  * The tabs only say what the user asked for; the host keeps the workbook and does it.
@@ -24,6 +25,8 @@ const emit = defineEmits<{
 	rename: [id: string, name: string]
 	duplicate: [id: string]
 	remove: [id: string]
+	/** The tab moved to place `to`, counted among the others: 0 first. */
+	move: [id: string, to: number]
 }>()
 
 /** The open tab, by its id. */
@@ -89,8 +92,11 @@ function focusTab(id: string | null): void {
 
 function onTabKeydown(event: KeyboardEvent, id: string): void {
 	const at = props.tabs.findIndex(tab => tab.id === id)
+	const mod = event.ctrlKey || event.metaKey
 
-	if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+	if (mod && event.shiftKey && (event.key === "ArrowRight" || event.key === "ArrowLeft")) {
+		moveBy(id, event.key === "ArrowRight" ? 1 : -1)
+	} else if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
 		const next = props.tabs[(at + (event.key === "ArrowRight" ? 1 : -1) + props.tabs.length) % props.tabs.length]
 
 		focusTab(next?.id ?? null)
@@ -109,6 +115,129 @@ function onTabKeydown(event: KeyboardEvent, id: string): void {
 	}
 
 	event.preventDefault()
+}
+
+/** One place left or right, kept on the tab; nothing past either end. */
+function moveBy(id: string, by: -1 | 1): void {
+	const at = props.tabs.findIndex(tab => tab.id === id)
+	const to = at + by
+
+	if (!props.disabled && at >= 0 && to >= 0 && to < props.tabs.length) {
+		emit("move", id, to)
+		focusTab(id)
+	}
+}
+
+// ---------------------------------------------------------------- dragging
+
+/**
+ * A tab being dragged: where it was, and where it would land, counted among the others. It is a
+ * drag once the pointer has gone a few pixels; a shorter press is a click.
+ */
+const drag = ref<{ readonly id: string; readonly from: number; readonly to: number; readonly moved: boolean } | null>(
+	null
+)
+let stopDrag: (() => void) | null = null
+/** A drag just ended: the click it ends with opens nothing. */
+let dragged = false
+
+function onPointerDown(event: PointerEvent, id: string): void {
+	if (event.button !== 0 || props.disabled || renaming.value !== null || props.tabs.length < 2) {
+		return
+	}
+
+	const from = props.tabs.findIndex(tab => tab.id === id)
+	const startX = event.clientX
+
+	drag.value = { id, from, to: from, moved: false }
+
+	const move = (moving: PointerEvent): void => {
+		const current = drag.value
+
+		if (current && (current.moved || Math.abs(moving.clientX - startX) >= 5)) {
+			drag.value = { ...current, moved: true, to: dropAt(moving.clientX, current.from) }
+		}
+	}
+	const up = (): void => {
+		const current = drag.value
+
+		endDrag()
+
+		if (current?.moved) {
+			dragged = true
+			setTimeout(() => (dragged = false), 0)
+
+			if (current.to !== current.from) {
+				emit("move", current.id, current.to)
+			}
+		}
+	}
+	const escape = (key: KeyboardEvent): void => {
+		if (key.key === "Escape") {
+			key.preventDefault()
+			endDrag()
+		}
+	}
+
+	window.addEventListener("pointermove", move)
+	window.addEventListener("pointerup", up)
+	// A touch the browser took for scrolling ends the drag where it began.
+	window.addEventListener("pointercancel", endDrag)
+	window.addEventListener("keydown", escape, true)
+	stopDrag = () => {
+		window.removeEventListener("pointermove", move)
+		window.removeEventListener("pointerup", up)
+		window.removeEventListener("pointercancel", endDrag)
+		window.removeEventListener("keydown", escape, true)
+	}
+}
+
+onBeforeUnmount(endDrag)
+
+function endDrag(): void {
+	stopDrag?.()
+	stopDrag = null
+	drag.value = null
+}
+
+/** Where a tab dropped at `x` lands, counted among the others: before the first tab whose middle is past it. */
+function dropAt(x: number, from: number): number {
+	const tabs = [...(list.value?.querySelectorAll<HTMLElement>(".tabula-tabs-tab") ?? [])]
+	let slot = tabs.length
+
+	for (const [index, element] of tabs.entries()) {
+		const box = element.getBoundingClientRect()
+
+		if (x < box.left + box.width / 2) {
+			slot = index
+			break
+		}
+	}
+
+	return slot > from ? slot - 1 : slot
+}
+
+/** The line where the dragged tab would land: before this tab, or after the last. */
+function dropClass(index: number): string | undefined {
+	const current = drag.value
+
+	if (!current?.moved || current.to === current.from) {
+		return undefined
+	}
+
+	const slot = current.to > current.from ? current.to + 1 : current.to
+
+	if (slot === index) {
+		return "is-drop-before"
+	}
+
+	return slot === props.tabs.length && index === props.tabs.length - 1 ? "is-drop-after" : undefined
+}
+
+function onTabClick(id: string): void {
+	if (!dragged) {
+		open(id)
+	}
 }
 
 function onContextMenu(event: MouseEvent, id: string): void {
@@ -155,7 +284,7 @@ function closeMenu(): void {
 	menu.value = null
 }
 
-function choose(action: "rename" | "duplicate" | "remove"): void {
+function choose(action: "rename" | "duplicate" | "remove" | "left" | "right"): void {
 	const id = menu.value?.id
 
 	closeMenu()
@@ -168,6 +297,8 @@ function choose(action: "rename" | "duplicate" | "remove"): void {
 		startRename(id)
 	} else if (action === "duplicate") {
 		emit("duplicate", id)
+	} else if (action === "left" || action === "right") {
+		moveBy(id, action === "right" ? 1 : -1)
 	} else {
 		emit("remove", id)
 	}
@@ -191,6 +322,15 @@ function onMenuKeydown(event: KeyboardEvent): void {
 	event.preventDefault()
 }
 
+/** Where the tab whose menu is open stands. */
+const menuAt = computed(() => (menu.value ? props.tabs.findIndex(tab => tab.id === menu.value?.id) : -1))
+
+const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+
+function moveKeys(arrow: string): string {
+	return MAC ? `⌘⇧${arrow}` : `Ctrl+Shift+${arrow}`
+}
+
 function errorsText(count: number): string {
 	return (text.value.errors ?? "").replace("{n}", String(count))
 }
@@ -200,16 +340,20 @@ function errorsText(count: number): string {
 	<div class="tabula-tabs tabula-theme" :data-tabula-theme="theme" :class="{ 'is-disabled': disabled }">
 		<div ref="list" class="tabula-tabs-list" role="tablist" :aria-label="text.sheets">
 			<div
-				v-for="tab in tabs"
+				v-for="(tab, index) in tabs"
 				:key="tab.id"
 				class="tabula-tabs-tab"
-				:class="{ 'is-active': tab.id === active }"
+				:class="[
+					{ 'is-active': tab.id === active, 'is-dragging': drag?.moved && drag.id === tab.id },
+					dropClass(index)
+				]"
 				role="tab"
 				:data-tab="tab.id"
 				:aria-selected="tab.id === active"
 				:aria-disabled="disabled || undefined"
 				:tabindex="tab.id === active ? 0 : -1"
-				@click="open(tab.id)"
+				@click="onTabClick(tab.id)"
+				@pointerdown="onPointerDown($event, tab.id)"
 				@dblclick="startRename(tab.id)"
 				@keydown="onTabKeydown($event, tab.id)"
 				@contextmenu="onContextMenu($event, tab.id)"
@@ -268,6 +412,14 @@ function errorsText(count: number): string {
 				<span class="tabula-tabs-key" v-text="`F2 · ${text.doubleClick}`" />
 			</button>
 			<button type="button" role="menuitem" @click="choose('duplicate')" v-text="text.duplicate" />
+			<button type="button" role="menuitem" :disabled="menuAt <= 0" @click="choose('left')">
+				<span v-text="text.moveLeft" />
+				<span class="tabula-tabs-key" v-text="moveKeys('←')" />
+			</button>
+			<button type="button" role="menuitem" :disabled="menuAt >= tabs.length - 1" @click="choose('right')">
+				<span v-text="text.moveRight" />
+				<span class="tabula-tabs-key" v-text="moveKeys('→')" />
+			</button>
 			<span class="tabula-tabs-line" role="separator" />
 			<button
 				type="button"
@@ -317,6 +469,19 @@ function errorsText(count: number): string {
 	cursor: pointer;
 	white-space: nowrap;
 	user-select: none;
+}
+
+/* A tab being dragged, and the line where it would land. */
+.tabula-tabs-tab.is-dragging {
+	opacity: 0.55;
+}
+
+.tabula-tabs-tab.is-drop-before {
+	box-shadow: inset 2px 0 0 var(--tabula-accent);
+}
+
+.tabula-tabs-tab.is-drop-after {
+	box-shadow: inset -2px 0 0 var(--tabula-accent);
 }
 
 .tabula-tabs-tab:hover {

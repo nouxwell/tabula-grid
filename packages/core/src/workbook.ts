@@ -264,6 +264,21 @@ export function removeSheet(workbook: Workbook, sheetId: string): Workbook {
 }
 
 /**
+ * The workbook with a sheet moved among the tabs, to place `to` counted among the others: 0 first,
+ * their number last. The open sheet stays open.
+ *
+ * @throws TabulaError `invalid_argument` for a sheet the workbook does not have
+ */
+export function moveSheet(workbook: Workbook, sheetId: string, to: number): Workbook {
+	const sheet = found(workbook, sheetId)
+	const sheets = workbook.sheets.filter(each => each.sheetId !== sheetId)
+
+	sheets.splice(Math.max(0, Math.min(Math.trunc(to), sheets.length)), 0, sheet)
+
+	return freeze({ ...workbook, sheets })
+}
+
+/**
  * The workbook with another sheet open.
  *
  * @throws TabulaError `invalid_argument` for a sheet the workbook does not have

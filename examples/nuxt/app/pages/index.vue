@@ -425,6 +425,7 @@
 				@rename="renameTab"
 				@duplicate="duplicateTab"
 				@remove="askRemoveTab"
+				@move="moveTab"
 			/>
 			<div class="hidden flex-none md:block">
 				<TabulaStatusBar :grid="grid" :theme="theme" :locale="locale" />
@@ -697,6 +698,7 @@
 import {
 	addSheet,
 	createDraft,
+	moveSheet,
 	openSheet,
 	removeSheet,
 	withSheet,
@@ -1024,6 +1026,11 @@ async function addTab(): Promise<void> {
 
 function renameTab(id: string, name: string): void {
 	keepWorkbook(withSheet(workbookNow(), id, { name }))
+}
+
+/** A tab to another place; the open sheet stays open, as it is. */
+function moveTab(id: string, to: number): void {
+	keepWorkbook(moveSheet(workbookNow(), id, to))
 }
 
 /**

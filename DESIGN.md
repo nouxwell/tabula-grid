@@ -119,7 +119,8 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
    Yuvarla ▸, filter by the value and sort, each with its keys on the right.
 6. **Sheet tabs** (`TabulaSheetTabs`, design R) on the left of the bottom bar: the open one white
    with the accent under it, each with its errors in red or a tick, + to add one; a double click
-   renames, a right click opens rename, duplicate and delete. Then the **status bar**
+   renames, a right click opens rename, duplicate, move left or right and delete; a tab is dragged
+   to another place, an accent line showing where it lands. Then the **status bar**
    (`TabulaStatusBar`): rows and issues, the selection, its sum and average.
 
 ### Phone (under 768px) — designs C and D
@@ -210,7 +211,7 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 69  | "Apply all"                                         | application | asked about        |
 | 70  | A tab's errors or tick on it                        | package     | done               |
 | 71  | A tab's menu: rename, duplicate, delete             | package     | done               |
-| 72  | Tabs reordered by dragging                          | package     | asked about        |
+| 72  | Tabs reordered by dragging                          | package     | done               |
 | 73  | Formulas reading another sheet                      | package     | asked about        |
 | —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
 | —   | Saved views (personal views)                        | both        | done (phase two)   |

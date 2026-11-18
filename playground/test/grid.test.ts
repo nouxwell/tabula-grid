@@ -1010,6 +1010,106 @@ describe("TabulaGrid", () => {
 				"&tabs=1"
 			)
 		})
+
+		it("moves a tab by dragging it, the open one staying open, and a short press is a click", async () => {
+			await withPage(
+				5,
+				async page => {
+					const middle = async (name: string): Promise<{ x: number; y: number }> => {
+						const box = (await tab(page, name).boundingBox())!
+
+						return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+					}
+					const right = async (name: string): Promise<number> => {
+						const box = (await tab(page, name).boundingBox())!
+
+						return box.x + box.width - 2
+					}
+
+					// Fiyat listesi past Mağaza's middle: it lands last, and stays the open one.
+					const from = await middle("Fiyat listesi")
+
+					await page.mouse.move(from.x, from.y)
+					await page.mouse.down()
+					await page.mouse.move(from.x + 20, from.y, { steps: 2 })
+					await page.mouse.move(await right("Mağaza"), from.y, { steps: 4 })
+					await expect.poll(() => tab(page, "Fiyat listesi").getAttribute("class")).toContain("is-dragging")
+					await expect.poll(() => tab(page, "Mağaza").getAttribute("class")).toContain("is-drop-after")
+					await page.mouse.up()
+
+					await expect.poll(() => names(page)).toEqual(["Mart", "Mağaza", "Fiyat listesi"])
+					await expect(open(page)).resolves.toBe("Fiyat listesi")
+					await expect(page.locator(".tabula-tabs-tab.is-dragging").count()).resolves.toBe(0)
+
+					// Mağaza before Mart's middle: first. Dropping it opens nothing.
+					const store = await middle("Mağaza")
+					const mart = await tab(page, "Mart").boundingBox()
+
+					await page.mouse.move(store.x, store.y)
+					await page.mouse.down()
+					await page.mouse.move(mart!.x + 4, store.y, { steps: 5 })
+					await expect.poll(() => tab(page, "Mart").getAttribute("class")).toContain("is-drop-before")
+					await page.mouse.up()
+
+					await expect.poll(() => names(page)).toEqual(["Mağaza", "Mart", "Fiyat listesi"])
+					await expect(open(page)).resolves.toBe("Fiyat listesi")
+
+					// Escape puts a drag back; a press that does not move opens the tab.
+					const back = await middle("Mart")
+
+					await page.mouse.move(back.x, back.y)
+					await page.mouse.down()
+					await page.mouse.move(back.x + 200, back.y, { steps: 4 })
+					await page.keyboard.press("Escape")
+					await page.mouse.up()
+					await expect(names(page)).resolves.toEqual(["Mağaza", "Mart", "Fiyat listesi"])
+
+					// So does a pointer the browser cancels, as a touch it takes for scrolling.
+					await page.mouse.move(back.x, back.y)
+					await page.mouse.down()
+					await page.mouse.move(back.x + 200, back.y, { steps: 4 })
+					await page.evaluate(() => window.dispatchEvent(new PointerEvent("pointercancel")))
+					await expect(page.locator(".tabula-tabs-tab.is-dragging").count()).resolves.toBe(0)
+					await page.mouse.up()
+					await expect(names(page)).resolves.toEqual(["Mağaza", "Mart", "Fiyat listesi"])
+
+					await tab(page, "Mart").click()
+					await expect(open(page)).resolves.toBe("Mart")
+				},
+				"&tabs=1"
+			)
+		})
+
+		it("moves a tab from its menu or with Ctrl+Shift and an arrow, nothing past either end", async () => {
+			await withPage(
+				5,
+				async page => {
+					const menuItem = (name: string): Locator =>
+						page.locator(".tabula-tabs-menu").getByRole("menuitem", { name })
+
+					await tab(page, "Fiyat listesi").click({ button: "right" })
+					await expect(menuItem("Sola taşı").isDisabled()).resolves.toBe(true)
+					await menuItem("Sağa taşı").click()
+					await expect.poll(() => names(page)).toEqual(["Mart", "Fiyat listesi", "Mağaza"])
+
+					await tab(page, "Mağaza").click({ button: "right" })
+					await expect(menuItem("Sağa taşı").isDisabled()).resolves.toBe(true)
+					await page.keyboard.press("Escape")
+
+					// The keys keep the tab focused, so it goes on moving.
+					await tab(page, "Mağaza").focus()
+					await page.keyboard.press("Control+Shift+ArrowLeft")
+					await page.keyboard.press("Control+Shift+ArrowLeft")
+					await page.keyboard.press("Control+Shift+ArrowLeft")
+					await expect.poll(() => names(page)).toEqual(["Mağaza", "Mart", "Fiyat listesi"])
+					await expect(page.evaluate(() => document.activeElement?.textContent?.trim())).resolves.toBe(
+						"Mağaza"
+					)
+					await expect(open(page)).resolves.toBe("Fiyat listesi")
+				},
+				"&tabs=1"
+			)
+		})
 	})
 
 	describe("where the user is", () => {

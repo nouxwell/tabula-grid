@@ -172,6 +172,15 @@ function duplicateTab(id: string): void {
 	}
 }
 
+function moveTab(id: string, to: number): void {
+	const moving = sheetTabs.value.find(tab => tab.id === id)
+	const others = sheetTabs.value.filter(tab => tab.id !== id)
+
+	if (moving) {
+		sheetTabs.value = [...others.slice(0, to), moving, ...others.slice(to)]
+	}
+}
+
 function removeTab(id: string): void {
 	sheetTabs.value = sheetTabs.value.filter(tab => tab.id !== id)
 
@@ -811,6 +820,7 @@ onMounted(() => {
 			@rename="renameTab"
 			@duplicate="duplicateTab"
 			@remove="removeTab"
+			@move="moveTab"
 		/>
 		<TabulaStatusBar class="playground-statusbar" :grid="grid" :theme="theme" :locale="language" />
 	</div>

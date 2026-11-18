@@ -11,10 +11,11 @@ The three packages are versioned together.
 
 - **Workbooks: several sheets of one module, as tabs.** `Workbook` in the core keeps the sheets in
   the order of their tabs, each with its name, template, draft and what the application keeps with
-  it, and which one is open (`createWorkbook`, `addSheet`, `withSheet`, `removeSheet`,
-  `openSheet`, `readWorkbook`, which reads a draft of one sheet as a workbook of it).
+  it, and which one is open (`createWorkbook`, `addSheet`, `withSheet`, `moveSheet`,
+  `removeSheet`, `openSheet`, `readWorkbook`, which reads a draft of one sheet as a workbook of it).
   `TabulaSheetTabs` in the Vue package draws them under the sheet, with each one's errors or a
-  tick, + to add one, a double click or F2 to rename, and a menu to rename, duplicate or delete.
+  tick, + to add one, a double click or F2 to rename, and a menu to rename, duplicate, move or
+  delete. A tab is dragged to another place, or moved with Ctrl+Shift and an arrow (item 72).
   The example keeps its sheets in a workbook (its old draft opens as the first tab), each tab with
   its own template; checks and runs are about the open sheet (canvas items 63, 65, 67, 68, 70 and
   71, design R).

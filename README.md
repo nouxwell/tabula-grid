@@ -768,6 +768,7 @@ let workbook = createWorkbook({ id, module: "product.price_update", sheet: { nam
 
 workbook = addSheet(workbook, { name: "Mart kampanyası", template: "march" }).workbook // opened
 workbook = withSheet(workbook, "sheet-1", { draft: createDraft({ … }), meta: { errors: 3 } })
+workbook = moveSheet(workbook, "sheet-2", 0) // first; the open one stays open
 workbook = removeSheet(workbook, "sheet-2") // never the last one
 workbook = readWorkbook(JSON.parse(stored)) // a draft of one sheet reads as a workbook of it
 ```
@@ -776,15 +777,25 @@ Each sheet's session takes the sheet's id as its `sheetId`, so its requests say 
 are about and an issue for another sheet is passed over. A check and a run are about one sheet.
 
 ```vue
-<TabulaSheetTabs v-model:active="open" :tabs="tabs" @add="add" @rename="rename" @duplicate="copy" @remove="remove" />
+<TabulaSheetTabs
+  v-model:active="open"
+  :tabs="tabs"
+  @add="add"
+  @rename="rename"
+  @duplicate="copy"
+  @remove="remove"
+  @move="move"
+/>
 <!-- tabs: [{ id: "sheet-1", name: "Fiyat listesi", errors: 3 }, { id: "sheet-2", name: "Mart", done: true }] -->
 ```
 
 `TabulaSheetTabs` draws them under the sheet, as a spreadsheet does: the open one marked, each with
 its errors counted or a tick once processed, and + to add one. A double click or F2 renames a tab
 in place, Escape leaving it as it was; a right click, or the menu key, opens its menu: rename,
-duplicate, delete, the last one never deleted. Arrows move between the tabs and Enter opens one.
-It only says what the user asked for; the host keeps the workbook and does it. The example keeps
+duplicate, move left or right, delete, the last one never deleted. A tab is dragged to another
+place, a line showing where it lands and Escape putting it back, or moved with Ctrl+Shift and an
+arrow; `move(id, to)` says where, counted among the others. Arrows move between the tabs and Enter
+opens one. It only says what the user asked for; the host keeps the workbook and does it. The example keeps
 the open sheet live and the others as drafts in the workbook: opening a tab saves the one left,
 with the counts its tab shows, and opens the other from its draft, with its template.
 

@@ -4,6 +4,7 @@ import {
 	createDraft,
 	createWorkbook,
 	ModuleSchema,
+	moveSheet,
 	openSheet,
 	readWorkbook,
 	removeSheet,
@@ -93,6 +94,22 @@ describe("workbooks", () => {
 
 		expect(workbook.active).toBe("sheet-1")
 		expect(codeOf(() => removeSheet(workbook, "sheet-1"))).toBe("invalid_argument")
+	})
+
+	it("moves a sheet among the tabs, the open one staying open", () => {
+		let workbook = createWorkbook({ id: "w1", module: "m", sheet: { name: "A" } })
+
+		workbook = addSheet(workbook, { name: "B" }).workbook
+		workbook = addSheet(workbook, { name: "C" }).workbook
+
+		const names = (each: Workbook): string[] => each.sheets.map(sheet => sheet.name)
+
+		expect(names(moveSheet(workbook, "sheet-3", 0))).toEqual(["C", "A", "B"])
+		expect(names(moveSheet(workbook, "sheet-1", 2))).toEqual(["B", "C", "A"])
+		// Past either end: there.
+		expect(names(moveSheet(workbook, "sheet-1", 9))).toEqual(["B", "C", "A"])
+		expect(moveSheet(workbook, "sheet-1", 2).active).toBe("sheet-3")
+		expect(codeOf(() => moveSheet(workbook, "sheet-9", 0))).toBe("invalid_argument")
 	})
 
 	it("reads a draft of one sheet, from before workbooks, as a workbook of that sheet", () => {

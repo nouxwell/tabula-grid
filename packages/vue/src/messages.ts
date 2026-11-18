@@ -290,7 +290,9 @@ export const TABS_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		name: "Sayfanın adı",
 		errors: "{n} hata",
 		done: "İşlendi",
-		doubleClick: "çift tık"
+		doubleClick: "çift tık",
+		moveLeft: "Sola taşı",
+		moveRight: "Sağa taşı"
 	},
 	en: {
 		sheets: "Sheets",
@@ -302,7 +304,9 @@ export const TABS_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		name: "Sheet name",
 		errors: "{n} errors",
 		done: "Processed",
-		doubleClick: "double click"
+		doubleClick: "double click",
+		moveLeft: "Move left",
+		moveRight: "Move right"
 	}
 }
 

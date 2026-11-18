@@ -203,6 +203,7 @@ export {
 	addSheet,
 	createWorkbook,
 	freeSheetId,
+	moveSheet,
 	openSheet,
 	readWorkbook,
 	removeSheet,
