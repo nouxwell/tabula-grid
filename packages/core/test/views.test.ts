@@ -71,9 +71,21 @@ describe("saved views", () => {
 		expect(viewNameProblem(views, "x".repeat(61))).toBe("too_long")
 		expect(viewNameProblem(views, "haftalık")).toBe("taken")
 		// A view keeps its own name when renamed to it.
-		expect(viewNameProblem(views, "Haftalık", "v1")).toBeNull()
-		expect(() => addView(views, { id: "v2", name: "HAFTALIK", ...PLAIN_VIEW })).toThrow(TabulaError)
+		expect(viewNameProblem(views, "Haftalık", { except: "v1" })).toBeNull()
 		expect(() => addView(views, { id: "v1", name: "Başka", ...PLAIN_VIEW })).toThrow(TabulaError)
+	})
+
+	it("compares names in the language given, whatever the machine's", () => {
+		const views = withWeekly()
+
+		// In Turkish, "HAFTALIK" is "Haftalık" in capitals; an English machine reads I as i.
+		expect(viewNameProblem(views, "HAFTALIK", { locale: "tr" })).toBe("taken")
+		expect(() => addView(views, { id: "v2", name: "HAFTALIK", ...PLAIN_VIEW }, { locale: "tr" })).toThrow(
+			TabulaError
+		)
+		expect(() =>
+			renameView(addView(views, { id: "v2", name: "Aylık", ...PLAIN_VIEW }), "v2", "HAFTALIK", { locale: "tr" })
+		).toThrow(TabulaError)
 	})
 
 	it("opens in the default view until that view is removed", () => {

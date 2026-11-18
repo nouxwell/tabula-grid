@@ -586,7 +586,9 @@ const changed = !sameView(schema, state, views.views[0]) // "· değişti" besid
 - **Telling a view changed.** `sameView` compares what the views show, not how they are written:
   the schema's own order written out is no order, and ticked values match in any order.
 - **Names.** `viewNameProblem` says `empty`, `too_long` (past 60) or `taken` (another view's,
-  in any case); `addView` and `renameView` refuse the same. `updateView`, `removeView` and
+  in any case); `addView` and `renameView` refuse the same. Give them the page's `locale`: in
+  Turkish "HAFTALIK" is "Haftalık" in capitals, in English it is not, and left out the machine's
+  own language decides. `updateView`, `removeView` and
   `setDefaultView` complete it, and `readViews` checks what comes back from storage, every
   problem at once (`invalid_views`).
 

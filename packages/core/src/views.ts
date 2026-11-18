@@ -112,11 +112,22 @@ export function sameView(schema: ModuleSchema, a: ViewState, b: ViewState): bool
 	)
 }
 
-/** What is wrong with a name for a view, or null when it will do. `exceptId` is the view being renamed. */
+/**
+ * How a view's name is checked. `except` is the view being renamed, which may keep its own name.
+ * `locale` is the language names are compared in, the page's: in Turkish "HAFTALIK" is "Haftalık"
+ * in capitals, in English it is not. Left out, the runtime's own, which differs from one machine to
+ * the next.
+ */
+export interface ViewNameOptions {
+	readonly except?: string | null
+	readonly locale?: string
+}
+
+/** What is wrong with a name for a view, or null when it will do. */
 export function viewNameProblem(
 	views: SavedViews,
 	name: string,
-	exceptId: string | null = null
+	options: ViewNameOptions = {}
 ): ViewNameProblem | null {
 	const trimmed = name.trim()
 
@@ -128,7 +139,10 @@ export function viewNameProblem(
 		return "too_long"
 	}
 
-	return views.views.some(view => view.id !== exceptId && NAMES.compare(view.name, trimmed) === 0) ? "taken" : null
+	const names = collator(options.locale)
+	const except = options.except ?? null
+
+	return views.views.some(view => view.id !== except && names.compare(view.name, trimmed) === 0) ? "taken" : null
 }
 
 /**
@@ -138,13 +152,14 @@ export function viewNameProblem(
  */
 export function addView(
 	views: SavedViews,
-	view: { readonly id: string; readonly name: string } & ViewState
+	view: { readonly id: string; readonly name: string } & ViewState,
+	options: Pick<ViewNameOptions, "locale"> = {}
 ): SavedViews {
 	if (view.id === "" || views.views.some(saved => saved.id === view.id)) {
 		throw new TabulaError("invalid_argument", `A view's id must be new and not empty: "${view.id}".`)
 	}
 
-	const name = checkedName(views, view.name, null)
+	const name = checkedName(views, view.name, { locale: options.locale })
 
 	return freezeViews({ ...views, views: [...views.views, { ...view, name }] })
 }
@@ -155,8 +170,13 @@ export function updateView(views: SavedViews, id: string, state: ViewState): Sav
 }
 
 /** @throws TabulaError `invalid_argument` for a name `viewNameProblem` refuses */
-export function renameView(views: SavedViews, id: string, name: string): SavedViews {
-	const checked = checkedName(views, name, id)
+export function renameView(
+	views: SavedViews,
+	id: string,
+	name: string,
+	options: Pick<ViewNameOptions, "locale"> = {}
+): SavedViews {
+	const checked = checkedName(views, name, { except: id, locale: options.locale })
 
 	return change(views, id, view => ({ ...view, name: checked }))
 }
@@ -245,14 +265,26 @@ export function readViews(input: unknown, module: string): SavedViews {
 
 // ---------------------------------------------------------------- inside
 
-/** Names compared as a person reads them: "Haftalık" and "haftalık" are one name. */
-const NAMES = new Intl.Collator(undefined, { sensitivity: "accent" })
+/** Names compared as a person reads them, by language: "Haftalık" and "haftalık" are one name. */
+const collators = new Map<string, Intl.Collator>()
+
+function collator(locale: string | undefined): Intl.Collator {
+	const key = locale ?? ""
+	let found = collators.get(key)
+
+	if (!found) {
+		found = new Intl.Collator(locale, { sensitivity: "accent" })
+		collators.set(key, found)
+	}
+
+	return found
+}
 
 type Plain = Record<string, unknown>
 type Problem = (path: string, message: string) => void
 
-function checkedName(views: SavedViews, name: string, exceptId: string | null): string {
-	const problem = viewNameProblem(views, name, exceptId)
+function checkedName(views: SavedViews, name: string, options: ViewNameOptions): string {
+	const problem = viewNameProblem(views, name, options)
 
 	if (problem !== null) {
 		throw new TabulaError("invalid_argument", `"${name}" cannot be a view's name: ${problem}.`)

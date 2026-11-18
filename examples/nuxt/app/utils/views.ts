@@ -48,7 +48,7 @@ function stored(module: string): SavedViews {
  * Saved views for one sheet. Nothing is read before `open`, which runs in the browser once the sheet
  * is made; the server draws the page without them.
  */
-export function useSavedViews(models: ViewModels) {
+export function useSavedViews(models: ViewModels, locale: Ref<string>) {
 	const views = shallowRef<SavedViews | null>(null)
 	const schema = shallowRef<ModuleSchema | null>(null)
 	/** The view chosen last; null for the sheet as its schema lays it out. */
@@ -125,7 +125,7 @@ export function useSavedViews(models: ViewModels) {
 
 		const id = crypto.randomUUID()
 
-		keep(addView(views.value, { id, name, ...state.value }))
+		keep(addView(views.value, { id, name, ...state.value }, { locale: locale.value }))
 		currentId.value = id
 	}
 
@@ -138,7 +138,7 @@ export function useSavedViews(models: ViewModels) {
 
 	function rename(name: string): void {
 		if (views.value && currentId.value) {
-			keep(renameView(views.value, currentId.value, name))
+			keep(renameView(views.value, currentId.value, name, { locale: locale.value }))
 		}
 	}
 

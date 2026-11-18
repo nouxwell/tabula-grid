@@ -421,7 +421,7 @@ const columns = ref<ColumnLayout>({})
 const widths = ref<Readonly<Record<string, number>>>({})
 const filters = ref<ColumnFilters>({})
 const sort = ref<ColumnSort | null>(null)
-const savedViews = useSavedViews({ columns, widths, filters, sort })
+const savedViews = useSavedViews({ columns, widths, filters, sort }, locale)
 const { views, currentId: viewId, current: currentView, modified: viewModified } = savedViews
 const columnsOpen = ref(false)
 const onlyIssueRows = ref(false)
@@ -625,7 +625,12 @@ const NAME_TEXT: Readonly<Record<ViewNameProblem, string>> = {
 }
 
 const nameProblem = computed(() =>
-	views.value ? viewNameProblem(views.value, viewName.value, naming.value === "rename" ? viewId.value : null) : null
+	views.value
+		? viewNameProblem(views.value, viewName.value, {
+				except: naming.value === "rename" ? viewId.value : null,
+				locale: locale.value
+			})
+		: null
 )
 const nameProblemText = computed(() =>
 	nameProblem.value && (nameTried.value || nameProblem.value === "taken") ? NAME_TEXT[nameProblem.value] : null
