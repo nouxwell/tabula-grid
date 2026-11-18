@@ -411,8 +411,24 @@
 			</component>
 		</main>
 
-		<div class="hidden flex-none border-t border-divider md:block">
-			<TabulaStatusBar :grid="grid" :theme="theme" :locale="locale" />
+		<!-- The workbook's sheets, as a spreadsheet's tabs, and on a wide screen the status beside them. -->
+		<div class="flex flex-none items-stretch border-t border-divider bg-surface">
+			<TabulaSheetTabs
+				v-if="workbook"
+				v-model:active="openTab"
+				class="min-w-0 flex-1 px-2"
+				:tabs="sheetTabs"
+				:disabled="tabsBusy"
+				:theme="theme"
+				:locale="locale"
+				@add="addTab"
+				@rename="renameTab"
+				@duplicate="duplicateTab"
+				@remove="askRemoveTab"
+			/>
+			<div class="hidden flex-none md:block">
+				<TabulaStatusBar :grid="grid" :theme="theme" :locale="locale" />
+			</div>
 		</div>
 
 		<div class="flex flex-none gap-2 border-t border-divider bg-surface px-4 py-3 md:hidden">
@@ -646,6 +662,21 @@
 			</template>
 		</AppModal>
 
+		<AppModal v-model:show="removeTabOpen" title="Sayfayı sil" width="440px">
+			<AppModalScrollWrapper>
+				<p class="m-0">
+					“{{ removingTab?.name }}” sayfası satırlarıyla birlikte silinsin mi? Bu geri alınamaz; öteki
+					sayfalar olduğu gibi kalır.
+				</p>
+			</AppModalScrollWrapper>
+			<template #footer>
+				<div class="flex justify-end gap-2">
+					<AppButton @click="removeTabOpen = false">Vazgeç</AppButton>
+					<AppButton type="error" @click="removeTab">Sil</AppButton>
+				</div>
+			</template>
+		</AppModal>
+
 		<AppModal v-model:show="removeOpen" title="Görünümü sil" width="440px">
 			<AppModalScrollWrapper>
 				<p class="m-0">
@@ -664,6 +695,12 @@
 
 <script setup lang="ts">
 import {
+	addSheet,
+	createDraft,
+	openSheet,
+	removeSheet,
+	withSheet,
+	type Workbook,
 	arrangeColumns,
 	suggestRenames,
 	VALUE_SETTINGS,
@@ -686,14 +723,21 @@ import {
 	type RowInit,
 	type ViewNameProblem
 } from "@nouxwell/tabula-core"
-import { columnName, type GridMenuItem, type GridPosition, type TabulaGrid as Grid } from "@nouxwell/tabula-vue"
+import {
+	columnName,
+	type GridMenuItem,
+	type GridPosition,
+	type SheetTab,
+	type TabulaGrid as Grid
+} from "@nouxwell/tabula-vue"
 import { useMessage, type DropdownOption } from "naive-ui"
 import { refDebounced } from "@vueuse/core"
 import { h } from "vue"
 import AppCard from "~/components/atoms/AppCard.vue"
 import AppIcon from "~/components/atoms/AppIcon.vue"
 import { localeMenu, type Locale } from "~/utils/locales"
-import { discardDraft, type ImportResult, type Sheet } from "~/utils/sheet"
+import type { ImportResult, Sheet } from "~/utils/sheet"
+import { loadWorkbook, newId, storeWorkbook } from "~/utils/workbook"
 import { FIT_TOOLTIP_STYLE } from "~/utils/tooltip"
 
 // The schema comes with the page: the server draws the title and the shell from it. The rows only
@@ -801,15 +845,35 @@ function makeSheet(
 		pendingPosition = grid.value?.position() ?? null
 	}
 
+	const tab = currentTab.value
+
+	if (!tab) {
+		return
+	}
+
+	const sheetId = tab.sheetId
 	const template = preview ? preview.template : (templates.value?.find(item => item.id === templateId.value) ?? null)
 	const made = createSheet(
 		schemaInput,
 		carried ?? rowList,
 		locale,
 		{ columns, widths },
-		// The server's rows: what the user's changes are told against, whichever rows the sheet opens with.
-		{ template, carried: carried !== undefined, baseline: rowList, ...(draft ? { draft } : {}) }
+		{
+			sheetId,
+			kept: tab.draft,
+			save: async kept => keepWorkbook(withSheet(workbookNow(), sheetId, { draft: kept })),
+			template,
+			carried: carried !== undefined,
+			// The server's rows: what the user's changes are told against, whichever rows the sheet opens with.
+			baseline: rowList,
+			...(draft ? { mapping: draft } : {})
+		}
 	)
+
+	// The tab remembers the template it works with, for the next time it is opened.
+	if (!preview && tab.template !== templateId.value) {
+		keepWorkbook(withSheet(workbookNow(), sheetId, { template: templateId.value }))
+	}
 
 	sheetKey.value++
 	sheet.value = made
@@ -827,6 +891,206 @@ function makeSheet(
 		reviewing.value = { draft: made.review.draft, schema: made.schema }
 		draftRename.value = suggestRenames(made.review.draft, made.schema)
 		reviewOpen.value = true
+	}
+}
+
+// ---------------------------------------------------------------- the workbook's sheets
+
+/** Every sheet's tab, template and draft; the open one is the sheet on screen. */
+const workbook = shallowRef<Workbook | null>(null)
+const currentTab = computed(() => workbook.value?.sheets.find(each => each.sheetId === workbook.value?.active) ?? null)
+/** A tab is being opened: the template it puts in the address is not a change of the sheet's. */
+let switchingTabs = false
+
+function workbookNow(): Workbook {
+	if (!workbook.value) {
+		throw new Error("The workbook is not open yet.")
+	}
+
+	return workbook.value
+}
+
+function keepWorkbook(next: Workbook): void {
+	workbook.value = next
+	storeWorkbook(next)
+}
+
+/** The open sheet went through to the backend, with nothing left to send. */
+const runDone = computed(
+	() =>
+		version.value >= 0 &&
+		sheet.value?.session.state.run?.status === "succeeded" &&
+		sheet.value.session.unfinishedRows().length === 0
+)
+
+/** The tabs: the open one counted as it stands, the others as they were when they were left. */
+const sheetTabs = computed<SheetTab[]>(() =>
+	(workbook.value?.sheets ?? []).map(each =>
+		each.sheetId === workbook.value?.active
+			? { id: each.sheetId, name: each.name, errors: errors.value, done: runDone.value }
+			: {
+					id: each.sheetId,
+					name: each.name,
+					errors: Number(each.meta.errors ?? 0),
+					done: each.meta.done === true
+				}
+	)
+)
+
+/** Tabs wait while the sheet is with the backend, or while a window asks about it. */
+const tabsBusy = computed(
+	() =>
+		!sheet.value ||
+		phase.value === "checking" ||
+		phase.value === "processing" ||
+		phase.value === "unknown" ||
+		preparing.value ||
+		reviewOpen.value
+)
+
+const openTab = computed({
+	get: () => workbook.value?.active ?? "",
+	set: id => void switchTab(id)
+})
+
+/** Puts a template in the address, as the open tab's, without making the sheet again for it. */
+async function showTemplate(template: string | null): Promise<void> {
+	switchingTabs = true
+
+	try {
+		await navigateTo({ query: { ...route.query, template: template ?? undefined } }, { replace: true })
+	} finally {
+		switchingTabs = false
+	}
+}
+
+/** Saves the open sheet into the workbook, with the counts its tab shows while closed, and lets it go. */
+async function leaveTab(): Promise<void> {
+	const current = sheet.value
+	const tab = currentTab.value
+
+	if (!current || !tab) {
+		return
+	}
+
+	await current.saver.save()
+	keepWorkbook(withSheet(workbookNow(), tab.sheetId, { meta: { errors: errors.value, done: runDone.value } }))
+	current.dispose()
+	sheet.value = null
+}
+
+/** Opens a sheet of the workbook: its draft, with the template it works with. */
+async function enterTab(): Promise<void> {
+	if (!input.value || !rows.value) {
+		return
+	}
+
+	await showTemplate(currentTab.value?.template ?? null)
+	makeSheet(input.value, rows.value)
+}
+
+async function switchTab(id: string): Promise<void> {
+	if (tabsBusy.value || id === workbook.value?.active) {
+		return
+	}
+
+	await leaveTab()
+	keepWorkbook(openSheet(workbookNow(), id))
+	await enterTab()
+}
+
+/** A name no tab has: "Sayfa 2", "Sayfa 3"… */
+function freeName(base: string): string {
+	const taken = new Set((workbook.value?.sheets ?? []).map(each => each.name))
+	let number = (workbook.value?.sheets.length ?? 0) + 1
+
+	while (taken.has(`${base} ${number}`)) {
+		number++
+	}
+
+	return `${base} ${number}`
+}
+
+/** A new sheet after the open one, from the server's rows, with no template. */
+async function addTab(): Promise<void> {
+	if (tabsBusy.value) {
+		return
+	}
+
+	await leaveTab()
+	keepWorkbook(addSheet(workbookNow(), { name: freeName("Sayfa") }, workbookNow().active).workbook)
+	await enterTab()
+}
+
+function renameTab(id: string, name: string): void {
+	keepWorkbook(withSheet(workbookNow(), id, { name }))
+}
+
+/**
+ * A copy of a sheet, after it, opened: its rows, columns and template, as a new batch. What the
+ * backend did with the rows stays with the original: the copy's rows are all to be sent.
+ */
+async function duplicateTab(id: string): Promise<void> {
+	const source = workbookNow().sheets.find(each => each.sheetId === id)
+
+	if (tabsBusy.value || !source) {
+		return
+	}
+
+	const live = id === workbookNow().active ? sheet.value : null
+	const copied = live
+		? createDraft({
+				id: newId(),
+				schema: live.schema,
+				store: live.store,
+				view: { columnWidths: widths.value, columns: columns.value }
+			})
+		: source.draft
+			? { ...source.draft, id: newId(), session: { results: [], pending: null } }
+			: null
+
+	await leaveTab()
+	keepWorkbook(
+		addSheet(workbookNow(), { name: `${source.name} (kopya)`, template: source.template, draft: copied }, id)
+			.workbook
+	)
+	await enterTab()
+}
+
+const removeTabOpen = ref(false)
+const removingTab = shallowRef<{ readonly id: string; readonly name: string } | null>(null)
+
+function askRemoveTab(id: string): void {
+	const tab = workbookNow().sheets.find(each => each.sheetId === id)
+
+	if (tab && !tabsBusy.value) {
+		removingTab.value = { id, name: tab.name }
+		removeTabOpen.value = true
+	}
+}
+
+/** Takes the sheet out of the workbook; the open one goes to its neighbour. */
+async function removeTab(): Promise<void> {
+	const going = removingTab.value
+
+	removeTabOpen.value = false
+
+	if (!going) {
+		return
+	}
+
+	const open = going.id === workbookNow().active
+
+	if (open) {
+		sheet.value?.dispose()
+		sheet.value = null
+	}
+
+	keepWorkbook(removeSheet(workbookNow(), going.id))
+	message.info(`“${going.name}” sayfası silindi.`)
+
+	if (open) {
+		await enterTab()
 	}
 }
 
@@ -857,29 +1121,45 @@ function dropReviewed(): void {
 		return
 	}
 
-	discardDraft()
+	keepWorkbook(withSheet(workbookNow(), workbookNow().active, { draft: null }))
 	reviewOpen.value = false
 	sheet.value?.dispose()
 	makeSheet(input.value, rows.value)
 	message.info("Taslak silindi; tablo sunucudaki satırlarla açık.")
 }
 
-// Made once the rows are in the browser.
+// Made once the rows are in the browser: the workbook opened, the open tab with the template it
+// works with, unless the address names another.
 watch(
 	[input, rows],
-	([schemaInput, rowList]) => {
-		if (!sheet.value && schemaInput && rowList) {
+	async ([schemaInput, rowList]) => {
+		if (sheet.value || !schemaInput || !rowList) {
+			return
+		}
+
+		if (!workbook.value) {
+			workbook.value = loadWorkbook(schemaInput.module)
+		}
+
+		const kept = currentTab.value?.template ?? null
+
+		if (templateId.value === null && kept !== null) {
+			await showTemplate(kept)
+		}
+
+		if (!sheet.value) {
 			makeSheet(schemaInput, rowList)
 		}
 	},
 	{ immediate: true }
 )
 
-// Another template: the same rows, under the schema as that template narrows it.
+// Another template: the same rows, under the schema as that template narrows it. Not when a tab is
+// being opened, which puts its own template in the address and makes its own sheet.
 watch(templateId, () => {
 	const current = sheet.value
 
-	if (!current || !input.value || !rows.value) {
+	if (!current || !input.value || !rows.value || switchingTabs) {
 		return
 	}
 

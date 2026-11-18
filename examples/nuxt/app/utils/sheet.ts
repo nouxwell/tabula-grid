@@ -12,7 +12,6 @@ import {
 	ModuleSchema,
 	openDraft,
 	parseCsv,
-	readDraft,
 	readTemplate,
 	RowStore,
 	rowsChanged,
@@ -51,49 +50,17 @@ const lookupAdapters: LookupAdapters = {
 }
 
 /**
- * The example keeps one draft in the browser's storage. An application keeps drafts on its server,
- * by their ids, through the same kind of `save`.
- */
-const DRAFT_KEY = "tabula-grid.example-nuxt.draft"
-
-function storedDraft(): unknown {
-	try {
-		const text = localStorage.getItem(DRAFT_KEY)
-
-		return text === null ? null : (JSON.parse(text) as unknown)
-	} catch {
-		return null
-	}
-}
-
-async function storeDraft(draft: Draft): Promise<void> {
-	localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
-}
-
-/** Lets the kept draft go, when the user would rather start from the server's rows. */
-export function discardDraft(): void {
-	localStorage.removeItem(DRAFT_KEY)
-}
-
-/**
- * The kept draft, opened against the schema as it is now, or come back for review when the schema
- * moved on; with `rename`, opened anyway, its fields mapped as the user chose. Null when there is
- * none or it cannot be read.
+ * The sheet's kept draft, opened against the schema as it is now, or come back for review when the
+ * schema moved on; with `rename`, opened anyway, its fields mapped as the user chose. Null when there
+ * is none or it cannot be opened.
  */
 function openKept(
 	schema: ModuleSchema,
+	draft: Draft | null | undefined,
 	rename?: Readonly<Record<string, string>>
 ): { readonly draft: Draft; readonly opening: ReturnType<typeof openDraft> } | null {
-	const kept = storedDraft()
-
 	try {
-		if (kept === null) {
-			return null
-		}
-
-		const draft = readDraft(kept)
-
-		return { draft, opening: openDraft(draft, schema, rename ? { accept: true, rename } : {}) }
+		return draft ? { draft, opening: openDraft(draft, schema, rename ? { accept: true, rename } : {}) } : null
 	} catch {
 		return null
 	}
@@ -109,10 +76,10 @@ export interface ImportResult extends Pick<TableImport, "columns" | "missing" | 
 }
 
 /**
- * The sheet's working parts, made in the browser only, once the page is there. The server draws the
+ * One sheet's working parts, made in the browser only, once the page is there. The server draws the
  * page around the grid; the grid itself is drawn in the browser, and none of these would outlive the
- * trip there. A draft kept from an earlier visit is opened in place of the server's rows when it
- * still fits the schema. `dispose()` lets them go.
+ * trip there. The sheet's draft, kept in the workbook from an earlier visit or an earlier tab, is
+ * opened in place of the server's rows when it still fits the schema. `dispose()` lets them go.
  *
  * With a template, the sheet works with the module schema as the template narrows it. A template
  * that does not apply is left out, and `templateError` says why. `carried` rows, the sheet's own
@@ -131,11 +98,18 @@ export function createSheet(
 	locale: Ref<ValueLocale>,
 	layout: { readonly columns: Ref<ColumnLayout>; readonly widths: Ref<Readonly<Record<string, number>>> },
 	options: {
+		/** The workbook's id for the sheet, in its requests and issues. */
+		readonly sheetId: string
+		/** The sheet as last saved, opened in place of the server's rows when it still fits. */
+		readonly kept: Draft | null
+		/** Keeps the sheet's draft in the workbook. */
+		readonly save: (draft: Draft) => Promise<void>
 		readonly template?: unknown
 		readonly carried?: boolean
 		readonly baseline?: readonly RowInit[]
-		readonly draft?: { readonly rename: Readonly<Record<string, string>> }
-	} = {}
+		/** The kept draft, opened with its fields mapped as the user chose. */
+		readonly mapping?: { readonly rename: Readonly<Record<string, string>> }
+	}
 ) {
 	const { columns, widths } = layout
 	const moduleSchema = ModuleSchema.from(input)
@@ -153,7 +127,7 @@ export function createSheet(
 		}
 	}
 
-	const kept = options.carried ? null : openKept(schema, options.draft?.rename)
+	const kept = options.carried ? null : openKept(schema, options.kept, options.mapping?.rename)
 	const opening = kept?.opening ?? null
 	const opened = opening?.status === "opened" ? opening : null
 	const review: { readonly draft: Draft; readonly changes: DraftChanges } | null =
@@ -168,6 +142,7 @@ export function createSheet(
 		validator,
 		history,
 		adapters,
+		sheetId: options.sheetId,
 		...(opened ? { restore: opened.session } : {})
 	})
 	const lookups = new LookupResolver({ schema, store, adapters: lookupAdapters })
@@ -183,8 +158,10 @@ export function createSheet(
 		schema,
 		store,
 		session,
+		// The same draft, saved again under its id.
+		...(options.kept ? { id: options.kept.id } : {}),
 		// The kept draft waits for the user's word: nothing is written over it meanwhile.
-		save: review ? async () => {} : storeDraft,
+		save: review ? async () => {} : options.save,
 		view: () => ({ columnWidths: widths.value, columns: columns.value })
 	})
 

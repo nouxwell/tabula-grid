@@ -933,6 +933,85 @@ describe("TabulaGrid", () => {
 		})
 	})
 
+	describe("sheet tabs", () => {
+		const tab = (page: Page, name: string): Locator => page.locator(".tabula-tabs-tab", { hasText: name }).first()
+		const names = (page: Page): Promise<string[]> => page.locator(".tabula-tabs-name").allInnerTexts()
+		const open = (page: Page): Promise<string> =>
+			page.locator(".tabula-tabs-tab[aria-selected='true'] .tabula-tabs-name").innerText()
+
+		it("shows each sheet with its errors or a tick, and opens one with a click or the keys", async () => {
+			await withPage(
+				5,
+				async page => {
+					await expect
+						.poll(() => page.locator(".tabula-tabs-tab").allInnerTexts())
+						.toEqual(["Fiyat listesi\n2", "Mart\n✓", "Mağaza"])
+
+					await tab(page, "Mart").click()
+					await expect(open(page)).resolves.toBe("Mart")
+
+					// Arrows move between the tabs; Enter opens the one reached.
+					await tab(page, "Mart").press("ArrowRight")
+					await page.keyboard.press("Enter")
+					await expect(open(page)).resolves.toBe("Mağaza")
+				},
+				"&tabs=1"
+			)
+		})
+
+		it("renames a tab in place with a double click or F2, and Escape leaves it as it was", async () => {
+			await withPage(
+				5,
+				async page => {
+					await tab(page, "Mart").dblclick()
+					await page.locator(".tabula-tabs-rename").fill("Mart kampanyası")
+					await page.keyboard.press("Enter")
+
+					await expect.poll(() => names(page)).toEqual(["Fiyat listesi", "Mart kampanyası", "Mağaza"])
+
+					await tab(page, "Mağaza").click()
+					await page.keyboard.press("F2")
+					await page.locator(".tabula-tabs-rename").fill("Başka")
+					await page.keyboard.press("Escape")
+
+					await expect(names(page)).resolves.toEqual(["Fiyat listesi", "Mart kampanyası", "Mağaza"])
+				},
+				"&tabs=1"
+			)
+		})
+
+		it("adds, duplicates and deletes from its menu, and never deletes the last one", async () => {
+			await withPage(
+				5,
+				async page => {
+					const menuItem = (name: string): Locator =>
+						page.locator(".tabula-tabs-menu").getByRole("menuitem", { name })
+
+					await page.locator(".tabula-tabs-add").click()
+					await expect.poll(() => names(page)).toEqual(["Fiyat listesi", "Mart", "Mağaza", "Sayfa 4"])
+					await expect(open(page)).resolves.toBe("Sayfa 4")
+
+					await tab(page, "Mart").click({ button: "right" })
+					await menuItem("Çoğalt").click()
+					await expect
+						.poll(() => names(page))
+						.toEqual(["Fiyat listesi", "Mart", "Mart (kopya)", "Mağaza", "Sayfa 4"])
+
+					for (const name of ["Mart (kopya)", "Mağaza", "Sayfa 4", "Mart"]) {
+						await tab(page, name).click({ button: "right" })
+						await menuItem("Sayfayı sil").click()
+					}
+
+					await expect.poll(() => names(page)).toEqual(["Fiyat listesi"])
+
+					await tab(page, "Fiyat listesi").click({ button: "right" })
+					await expect(menuItem("Sayfayı sil").isDisabled()).resolves.toBe(true)
+				},
+				"&tabs=1"
+			)
+		})
+	})
+
 	describe("where the user is", () => {
 		it("gives back the active cell and the scroll, and puts the user there again", async () => {
 			await withPage(300, async page => {

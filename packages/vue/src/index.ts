@@ -4,6 +4,7 @@ export { default as TabulaFormulaBar } from "./TabulaFormulaBar.vue"
 export { default as TabulaStatusBar } from "./TabulaStatusBar.vue"
 export { default as TabulaPreview } from "./TabulaPreview.vue"
 export { default as TabulaDraftMapping } from "./TabulaDraftMapping.vue"
+export { default as TabulaSheetTabs } from "./TabulaSheetTabs.vue"
 export { columnName, parseAddress } from "./address.js"
 export {
 	BAR_TEXT,
@@ -14,7 +15,8 @@ export {
 	GRID_TEXT,
 	issueText,
 	PANEL_TEXT,
-	PREVIEW_TEXT
+	PREVIEW_TEXT,
+	TABS_TEXT
 } from "./messages.js"
 export type { FunctionHelp, GridLocale } from "./messages.js"
-export type { ActiveCell, GridMenuItem, GridPosition, GridTheme, SelectedCells } from "./types.js"
+export type { ActiveCell, GridMenuItem, GridPosition, GridTheme, SelectedCells, SheetTab } from "./types.js"

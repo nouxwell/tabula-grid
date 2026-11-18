@@ -27,7 +27,8 @@ const module: NuxtModule<ModuleOptions, ModuleOptions, false> = defineNuxtModule
 			"TabulaFormulaBar",
 			"TabulaStatusBar",
 			"TabulaPreview",
-			"TabulaDraftMapping"
+			"TabulaDraftMapping",
+			"TabulaSheetTabs"
 		]) {
 			addComponent({
 				name: `${options.prefix}${component}`,

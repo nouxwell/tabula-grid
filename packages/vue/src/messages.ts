@@ -278,6 +278,34 @@ export const DRAFT_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, str
 	}
 }
 
+/** The words of the sheet tabs. */
+export const TABS_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, string>>>> = {
+	tr: {
+		sheets: "Sayfalar",
+		add: "Sayfa ekle",
+		menu: "Sayfa seçenekleri",
+		rename: "Yeniden adlandır",
+		duplicate: "Çoğalt",
+		remove: "Sayfayı sil",
+		name: "Sayfanın adı",
+		errors: "{n} hata",
+		done: "İşlendi",
+		doubleClick: "çift tık"
+	},
+	en: {
+		sheets: "Sheets",
+		add: "Add a sheet",
+		menu: "Sheet options",
+		rename: "Rename",
+		duplicate: "Duplicate",
+		remove: "Delete sheet",
+		name: "Sheet name",
+		errors: "{n} errors",
+		done: "Processed",
+		doubleClick: "double click"
+	}
+}
+
 /** The words of the formula bar and the status bar. */
 export const BAR_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, string>>>> = {
 	tr: {

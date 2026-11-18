@@ -38,6 +38,8 @@ const validator = new SheetValidator(schema, store, VALUE_SETTINGS.tr)
   it, and writes a value typed there, as a spreadsheet's formula bar. A formula shows by the fields'
   names, each in the colour its column takes in the sheet.
 - **`TabulaStatusBar`** counts the rows and issues and sums and averages the numbers selected.
+- **`TabulaSheetTabs`** draws a workbook's sheets as tabs under the sheet, with their errors
+  counted, and renames, duplicates, deletes and adds them.
 - **`TabulaDraftMapping`** maps the fields of a draft saved under an older schema before it opens:
   where each field the schema lost goes, its first values, and what would be lost or unreadable.
 - **`TabulaPreview`** shows what a run would do before it is sent: new records, updates from the

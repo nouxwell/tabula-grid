@@ -209,8 +209,8 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
 - **Themes.** `light`, `dark` or `auto`, in colours an application changes (see below).
 
 With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>`, `<TabulaIssues>`,
-`<TabulaFormulaBar>`, `<TabulaStatusBar>`, `<TabulaPreview>` and `<TabulaDraftMapping>` are
-available everywhere, drawn in the browser only.
+`<TabulaFormulaBar>`, `<TabulaStatusBar>`, `<TabulaPreview>`, `<TabulaDraftMapping>` and
+`<TabulaSheetTabs>` are available everywhere, drawn in the browser only.
 
 ### The formula bar and the status bar
 
@@ -754,6 +754,39 @@ one; the fields whose type changed, with how many values the new type cannot rea
 fields; and the ones unchanged in a line. The host puts it in a window with the buttons to open
 the draft or let it go, and keeps the draft untouched until then: the example saves nothing while
 the window is open, and saves the draft under the new schema once it opens.
+
+## Workbooks and sheet tabs
+
+Several sheets of one module can be kept together, as a spreadsheet keeps its tabs: each with its
+own rows, template, issues and results. A `Workbook` holds them in the order their tabs stand,
+each with its name, its template's id, its draft, and what the application keeps with it, such as
+the counts its tab shows while it is closed; and which one is open. It is plain JSON, kept where
+drafts are.
+
+```ts
+let workbook = createWorkbook({ id, module: "product.price_update", sheet: { name: "Fiyat listesi" } })
+
+workbook = addSheet(workbook, { name: "Mart kampanyası", template: "march" }).workbook // opened
+workbook = withSheet(workbook, "sheet-1", { draft: createDraft({ … }), meta: { errors: 3 } })
+workbook = removeSheet(workbook, "sheet-2") // never the last one
+workbook = readWorkbook(JSON.parse(stored)) // a draft of one sheet reads as a workbook of it
+```
+
+Each sheet's session takes the sheet's id as its `sheetId`, so its requests say which sheet they
+are about and an issue for another sheet is passed over. A check and a run are about one sheet.
+
+```vue
+<TabulaSheetTabs v-model:active="open" :tabs="tabs" @add="add" @rename="rename" @duplicate="copy" @remove="remove" />
+<!-- tabs: [{ id: "sheet-1", name: "Fiyat listesi", errors: 3 }, { id: "sheet-2", name: "Mart", done: true }] -->
+```
+
+`TabulaSheetTabs` draws them under the sheet, as a spreadsheet does: the open one marked, each with
+its errors counted or a tick once processed, and + to add one. A double click or F2 renames a tab
+in place, Escape leaving it as it was; a right click, or the menu key, opens its menu: rename,
+duplicate, delete, the last one never deleted. Arrows move between the tabs and Enter opens one.
+It only says what the user asked for; the host keeps the workbook and does it. The example keeps
+the open sheet live and the others as drafts in the workbook: opening a tab saves the one left,
+with the counts its tab shows, and opens the other from its draft, with its template.
 
 ## Saved views
 

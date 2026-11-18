@@ -117,7 +117,10 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
    with the cell's address, "D8", and the product). A right click opens the grid's menu: cut,
    copy, paste, clear, fill, add and take out rows, the page's Yüzde uygula, Tutar ekle and
    Yuvarla ▸, filter by the value and sort, each with its keys on the right.
-6. **Status bar** (`TabulaStatusBar`): rows and issues, the selection, its sum and average.
+6. **Sheet tabs** (`TabulaSheetTabs`, design R) on the left of the bottom bar: the open one white
+   with the accent under it, each with its errors in red or a tick, + to add one; a double click
+   renames, a right click opens rename, duplicate and delete. Then the **status bar**
+   (`TabulaStatusBar`): rows and issues, the selection, its sum and average.
 
 ### Phone (under 768px) — designs C and D
 
@@ -198,6 +201,17 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 61  | References to one cell (`$D$8`)                     | package     | not chosen         |
 | 62  | References to a column's total                      | package     | not chosen         |
 | —   | A right-click menu, with the host's own items       | both        | done (phase two)   |
+| 63  | Sheet tabs under the sheet, as in Excel (R)         | both        | done               |
+| 64  | Sheet tabs at the top, as a browser's (S)           | application | not chosen         |
+| 65  | Each tab a sheet of the same module                 | both        | done               |
+| 66  | A tab of another module                             | both        | asked about        |
+| 67  | Every tab in one draft (a workbook)                 | package     | done               |
+| 68  | Checks and runs about the open sheet                | application | done               |
+| 69  | "Apply all"                                         | application | asked about        |
+| 70  | A tab's errors or tick on it                        | package     | done               |
+| 71  | A tab's menu: rename, duplicate, delete             | package     | done               |
+| 72  | Tabs reordered by dragging                          | package     | asked about        |
+| 73  | Formulas reading another sheet                      | package     | asked about        |
 | —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
 | —   | Saved views (personal views)                        | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)      | both        | done (phase two)   |

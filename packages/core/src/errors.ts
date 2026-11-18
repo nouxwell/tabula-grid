@@ -9,6 +9,7 @@ export type TabulaErrorCode =
 	| "conflict"
 	| "invalid_response"
 	| "invalid_draft"
+	| "invalid_workbook"
 	| "invalid_views"
 	| "invalid_template"
 	| "invalid_formula"

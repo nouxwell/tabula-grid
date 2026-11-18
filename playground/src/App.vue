@@ -39,9 +39,11 @@ import {
 	TabulaDraftMapping,
 	TabulaIssues,
 	TabulaPreview,
+	TabulaSheetTabs,
 	TabulaStatusBar,
 	type GridMenuItem,
-	type GridTheme
+	type GridTheme,
+	type SheetTab
 } from "@nouxwell/tabula-vue"
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
 import { FakeBackend } from "./backend"
@@ -137,6 +139,46 @@ const menuItems: readonly GridMenuItem[] = [
 
 // `?letters=1`: the columns' letters over their headers.
 const columnLetters = params.get("letters") === "1"
+
+// `?tabs=1`: the sheet tabs under the sheet, over a list kept here, for their tests.
+const showTabs = params.get("tabs") === "1"
+const sheetTabs = ref<SheetTab[]>([
+	{ id: "a", name: "Fiyat listesi", errors: 2 },
+	{ id: "b", name: "Mart", done: true },
+	{ id: "c", name: "Mağaza" }
+])
+const openTab = ref("a")
+
+function addTab(): void {
+	const id = `t${sheetTabs.value.length + 1}`
+
+	sheetTabs.value = [...sheetTabs.value, { id, name: `Sayfa ${sheetTabs.value.length + 1}` }]
+	openTab.value = id
+}
+
+function renameTab(id: string, name: string): void {
+	sheetTabs.value = sheetTabs.value.map(tab => (tab.id === id ? { ...tab, name } : tab))
+}
+
+function duplicateTab(id: string): void {
+	const at = sheetTabs.value.findIndex(tab => tab.id === id)
+	const source = sheetTabs.value[at]
+
+	if (source) {
+		const copy = { id: `${id}-copy`, name: `${source.name} (kopya)` }
+
+		sheetTabs.value = [...sheetTabs.value.slice(0, at + 1), copy, ...sheetTabs.value.slice(at + 1)]
+		openTab.value = copy.id
+	}
+}
+
+function removeTab(id: string): void {
+	sheetTabs.value = sheetTabs.value.filter(tab => tab.id !== id)
+
+	if (openTab.value === id) {
+		openTab.value = sheetTabs.value[0]?.id ?? ""
+	}
+}
 const onlyIssueRows = ref(false)
 const shownRows = shallowRef(view.size)
 
@@ -758,6 +800,18 @@ onMounted(() => {
 				@refresh-rows="view.refresh()"
 			/>
 		</main>
+		<TabulaSheetTabs
+			v-if="showTabs"
+			v-model:active="openTab"
+			class="playground-tabs"
+			:tabs="sheetTabs"
+			:theme="theme"
+			:locale="language"
+			@add="addTab"
+			@rename="renameTab"
+			@duplicate="duplicateTab"
+			@remove="removeTab"
+		/>
 		<TabulaStatusBar class="playground-statusbar" :grid="grid" :theme="theme" :locale="language" />
 	</div>
 </template>

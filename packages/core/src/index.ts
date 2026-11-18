@@ -199,6 +199,19 @@ export type {
 	OpenDraftOptions
 } from "./draft.js"
 
+export {
+	addSheet,
+	createWorkbook,
+	freeSheetId,
+	openSheet,
+	readWorkbook,
+	removeSheet,
+	withSheet,
+	WORKBOOK_FORMAT,
+	WORKBOOK_VERSION
+} from "./workbook.js"
+export type { NewSheet, SheetMeta, Workbook, WorkbookSheet } from "./workbook.js"
+
 export { DraftSaver } from "./saver.js"
 export type { DraftSaverOptions, SaverState, SaverStatus } from "./saver.js"
 

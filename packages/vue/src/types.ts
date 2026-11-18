@@ -37,6 +37,16 @@ export interface GridPosition {
 	readonly left: number
 }
 
+/** A sheet's tab (`TabulaSheetTabs`): what it is called, and what its badge says. */
+export interface SheetTab {
+	readonly id: string
+	readonly name: string
+	/** Errors standing in the sheet, counted on its tab. */
+	readonly errors?: number
+	/** The sheet went through to the backend: a tick on its tab. */
+	readonly done?: boolean
+}
+
 /** An item the host adds to the menu a right click opens on a cell or a row's number. */
 export interface GridMenuItem {
 	/** What `menu` is emitted with when it is chosen. */
