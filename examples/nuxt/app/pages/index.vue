@@ -172,7 +172,7 @@
 							<span>
 								<AppButton
 									:size="controlSize"
-									:disabled="!sheet?.template"
+									:disabled="!drawerTemplate"
 									class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
 									@click="rulesOpen = true"
 								>
@@ -182,7 +182,7 @@
 								</AppButton>
 							</span>
 						</template>
-						Kurallar bir şablona yazılır; önce bir şablon seçin.
+						Şablon seçili değil: yazdığınız kurallar ve formüller kaydedilince yeni bir şablon olur.
 					</AppTooltip>
 					<AppDropdown :options="viewOptions" @select="chooseView">
 						<AppButton
@@ -501,11 +501,12 @@
 		</AppModal>
 
 		<RulesDrawer
-			v-if="sheet && sheet.template && input && templateInput"
+			v-if="sheet && input && drawerTemplate"
 			v-model:show="rulesOpen"
 			:sheet="sheet"
 			:module-input="input"
-			:template="templateInput"
+			:template="drawerTemplate"
+			:creating="templateId === null"
 			:locale="locale"
 			:settings="valueSettings"
 			:save="saveTemplate"
@@ -513,6 +514,34 @@
 			@show-rows="showRuleRows"
 			@preview="previewTemplate"
 		/>
+
+		<AppModal v-model:show="templateNameOpen" title="Yeni şablon" width="440px">
+			<AppModalScrollWrapper>
+				<form class="flex flex-col gap-2" @submit.prevent="submitTemplateName">
+					<label for="template-name" class="text-sm text-muted">
+						Kurallar ve hesaplanan sütunlar bu adla bir şablon olur; şablon menüsünden seçen herkes onlarla
+						çalışır.
+					</label>
+					<AppInput
+						v-model:value="templateName"
+						:input-props="{ id: 'template-name' }"
+						:maxlength="60"
+						:status="templateNameProblem ? 'error' : undefined"
+						placeholder="Örn. Mart kampanyası"
+						autofocus
+					/>
+					<p v-if="templateNameProblem" class="m-0 text-sm text-error" role="alert">
+						{{ templateNameProblem }}
+					</p>
+				</form>
+			</AppModalScrollWrapper>
+			<template #footer>
+				<div class="flex justify-end gap-2">
+					<AppButton @click="templateNameOpen = false">Vazgeç</AppButton>
+					<AppButton type="primary" @click="submitTemplateName">Kaydet</AppButton>
+				</div>
+			</template>
+		</AppModal>
 
 		<AppModal
 			v-model:show="nameOpen"
@@ -638,6 +667,8 @@ import {
 	arrangeColumns,
 	suggestRenames,
 	VALUE_SETTINGS,
+	TEMPLATE_FORMAT,
+	TEMPLATE_VERSION,
 	VIEW_NAME_LIMIT,
 	viewNameProblem,
 	withColumn,
@@ -972,13 +1003,39 @@ const rulesOpen = ref(false)
 const templateInput = computed(() => templates.value?.find(item => item.id === templateId.value) ?? null)
 
 /**
+ * The template the rules drawer edits: the one chosen, or, with none chosen, a new one with nothing in
+ * it yet, named when it is saved. None while a chosen template could not be applied.
+ */
+const drawerTemplate = computed(() => {
+	if (templateId.value !== null) {
+		return sheet.value?.template ? templateInput.value : null
+	}
+
+	return input.value
+		? {
+				format: TEMPLATE_FORMAT,
+				version: TEMPLATE_VERSION,
+				module: input.value.module,
+				id: "new",
+				name: "Yeni şablon",
+				checks: [],
+				columns: []
+			}
+		: null
+})
+
+/**
  * Saves the template the rules drawer changed. Kept, the sheet is made again with it and the same
  * rows; refused, the server's reasons are said. Resolves to whether it was kept.
  */
 async function saveTemplate(template: unknown): Promise<boolean> {
 	const id = templateId.value
 
-	if (!id || !sheet.value || !input.value || !rows.value) {
+	if (!id) {
+		return createTemplate(template)
+	}
+
+	if (!sheet.value || !input.value || !rows.value) {
 		return false
 	}
 
@@ -1002,6 +1059,87 @@ async function saveTemplate(template: unknown): Promise<boolean> {
 
 	return true
 }
+
+/**
+ * Makes a new template of what was written with no template chosen: asks its name, has the server
+ * keep it, and opens the sheet with it, the same rows, as choosing it from the menu does.
+ */
+async function createTemplate(template: unknown): Promise<boolean> {
+	const name = await askTemplateName()
+
+	if (name === null) {
+		return false
+	}
+
+	let made: { readonly id: string }
+
+	try {
+		made = await $fetch<{ id: string }>("/api/modules/price-update/templates", {
+			method: "POST",
+			body: { ...(template as object), name }
+		})
+	} catch (error) {
+		const problems = (error as { data?: { data?: { problems?: string[] } } }).data?.data?.problems
+
+		message.error(problems?.[0] ? `Şablon oluşturulamadı: ${problems[0]}` : "Şablon oluşturulamadı.")
+
+		return false
+	}
+
+	await refreshTemplates()
+	await navigateTo({ query: { ...route.query, template: made.id } }, { replace: true })
+	message.success(`«${name}» şablonu oluşturuldu; kuralları ve sütunları onunla açanlar görür.`)
+
+	return true
+}
+
+const templateNameOpen = ref(false)
+const templateName = ref("")
+const templateNameProblem = ref<string | null>(null)
+let answerName: ((name: string | null) => void) | null = null
+
+/** Opens the name window; resolves to the name given, or null when the window is closed without one. */
+function askTemplateName(): Promise<string | null> {
+	templateName.value = ""
+	templateNameProblem.value = null
+	templateNameOpen.value = true
+
+	return new Promise(resolve => {
+		answerName = resolve
+	})
+}
+
+function submitTemplateName(): void {
+	const name = (templateName.value ?? "").trim()
+
+	if (name === "") {
+		templateNameProblem.value = "Şablona bir ad verin."
+
+		return
+	}
+
+	if ((templates.value ?? []).some(item => item.name.toLocaleLowerCase("tr") === name.toLocaleLowerCase("tr"))) {
+		templateNameProblem.value = `“${name}” adında bir şablon zaten var.`
+
+		return
+	}
+
+	const answer = answerName
+
+	answerName = null
+	templateNameOpen.value = false
+	answer?.(name)
+}
+
+// Closed without a name: nothing is saved.
+watch(templateNameOpen, open => {
+	if (!open && answerName) {
+		const answer = answerName
+
+		answerName = null
+		answer(null)
+	}
+})
 
 /**
  * Shows the sheet with a template the rules drawer has changed and not saved, such as a column just

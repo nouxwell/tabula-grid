@@ -30,7 +30,9 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
   note for a price that starts before 1 December. The toolbar's **Kurallar** opens the rules
   drawer ([app/components/RulesDrawer.vue](app/components/RulesDrawer.vue)): the rules with the
   rows each catches now, a form to write one, and "Şablonu kaydet", which the server checks
-  against the module schema before it keeps the template, in memory until it stops. Its second
+  against the module schema before it keeps the template, in memory until it stops. With no
+  template chosen, the drawer writes a new one: "Şablon olarak kaydet…" asks its name, and the
+  server makes it from what was written. Its second
   tab, Hesaplanan sütunlar, writes the template's own columns: a formula field that completes
   fields and functions ([app/components/FormulaInput.vue](app/components/FormulaInput.vue)) and
   the values it gives on the first rows as it is typed.

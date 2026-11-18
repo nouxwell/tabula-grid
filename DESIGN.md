@@ -92,7 +92,8 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
    **Değişiklikleri uygula** (primary). While an error stands it is held back, its tooltip and the
    foot of the issues saying "Uygulamadan önce N hatayı düzeltin."
 3. **Toolbar**: undo and redo (icon buttons with tooltips), İçe aktar ▾, Dışa aktar ▾, Sütunlar,
-   the template ▾, **Kurallar** (only with a template; its tooltip says why otherwise), the view ▾,
+   the template ▾, **Kurallar** (with no template chosen, what is written there is saved as a new template, named
+   in a small window), the view ▾,
    then the bulk edits on what is selected: Yüzde uygula and Tutar ekle (each a small window with
    the amount), Yuvarla ▾ (to 0,05, whole, whole up or down, or tens), and Satırları sil (Ctrl+−).
    Under the toolbar, "Tüm satırlar" and "Değişenler" with their counts, and the search on the

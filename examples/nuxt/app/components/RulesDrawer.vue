@@ -1,7 +1,18 @@
 <template>
-	<!-- No mask: the sheet stays in view and in reach while the rules are written beside it. -->
-	<AppDrawer v-model:show="show" :width-responsive="560" :show-mask="false" :trap-focus="false" :block-scroll="false">
-		<AppDrawerContent :title="`Kurallar · ${template.name}`">
+	<!--
+		No mask: the sheet stays in view and in reach while the rules are written beside it. Nor does a
+		click outside close it, as Naive UI does a drawer with no mask: a click in the sheet, or in the
+		window that names a new template, is work beside the drawer, not leaving it.
+	-->
+	<AppDrawer
+		v-model:show="show"
+		:width-responsive="560"
+		:show-mask="false"
+		:mask-closable="false"
+		:trap-focus="false"
+		:block-scroll="false"
+	>
+		<AppDrawerContent :title="creating ? 'Kurallar · yeni şablon' : `Kurallar · ${template.name}`">
 			<div class="flex flex-col gap-2.5">
 				<div class="flex gap-2" role="group" aria-label="Kurallar">
 					<AppButton
@@ -199,7 +210,7 @@
 							:disabled="!changed || busy || templateProblem !== null"
 							@click="saveTemplate"
 						>
-							Şablonu kaydet
+							{{ creating ? "Şablon olarak kaydet…" : "Şablonu kaydet" }}
 						</AppButton>
 					</div>
 				</div>
@@ -263,6 +274,8 @@ const props = defineProps<{
 	save: (template: unknown) => Promise<boolean>
 	/** Each column's letter as the columns stand on screen, by field key: what an address in a formula names. */
 	letters: Readonly<Record<string, string>>
+	/** No template was chosen: what is written here becomes a new template, named as it is saved. */
+	creating?: boolean
 }>()
 
 const emit = defineEmits<{

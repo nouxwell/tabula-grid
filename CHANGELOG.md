@@ -9,6 +9,12 @@ The three packages are versioned together.
 
 ### Added
 
+- **A template from scratch, in the example.** With no template chosen, Kurallar opens all the same;
+  "Şablon olarak kaydet…" asks a name, the server makes the template (`POST
+/api/modules/price-update/templates`, its id from its name) and the sheet opens with it. So a
+  formula can be saved without a template chosen first. The rules drawer no longer closes on a
+  click outside it, in the sheet or in that window, as Naive UI closes a drawer with no mask.
+
 - **The example, closer to the CRM.** The sheet, the issues and the rules drawer's items sit in
   `AppCard`s, as every part of a CRM page does; the counts over the sheet count to their new value
   (`AppNumberAnimation` now counts from the value it showed last), and the search waits for the
