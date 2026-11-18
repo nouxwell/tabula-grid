@@ -26,7 +26,8 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
 - **Templates.** The module schema is `controlled`, and the server sends one template,
   "Aralık zam listesi" ([server/utils/priceUpdate.ts](server/utils/priceUpdate.ts)). The toolbar's
   template menu puts it in the address; the sheet is made again with the same rows, under the
-  schema as the template narrows it.
+  schema as the template narrows it. Its row checks warn about a price cut and require an internal
+  note for a price that starts before 1 December.
 - **Saved views.** The toolbar's view menu keeps the sheet as the user arranged it under a name,
   in the browser's storage ([app/utils/views.ts](app/utils/views.ts)); the page opens in the view
   chosen for it. An application keeps the same JSON on its server for each user.

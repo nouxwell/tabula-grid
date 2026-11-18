@@ -1,3 +1,4 @@
+import type { CheckInput } from "./checks.js"
 import { compareDecimal, normalizeDecimal } from "./decimal.js"
 import { SchemaError, TabulaError } from "./errors.js"
 import type { RowInit } from "./rows.js"
@@ -17,8 +18,9 @@ import { readViewState, type ViewState } from "./views.js"
  * the developer wrote and under each user's own views. "Aralık zam listesi" on the price update.
  *
  * It may change a column's header, require a field the schema leaves optional, keep a column from
- * being typed into, narrow a field's limits, give new rows a value, add columns of its own, and say
- * how the sheet opens. It may never loosen what the schema asks: a field the schema requires stays
+ * being typed into, narrow a field's limits, give new rows a value, add columns of its own, add row
+ * checks (a field required when another holds a value, two fields compared), and say how the sheet
+ * opens. A check only adds to what is refused, so a template may add any; it cannot take one away. It may never loosen what the schema asks: a field the schema requires stays
  * required, a limit can only get narrower, and a column the schema keeps read-only stays so. Its own
  * columns are never sent for processing: they are a helper the user works with, kept in the draft,
  * or worked out from the row by a formula.
@@ -56,6 +58,8 @@ export interface GridTemplate {
 	readonly fields: Readonly<Record<string, TemplateFieldChange>>
 	/** Columns of the template's own, after the schema's: written as a schema's fields are, never sent. */
 	readonly columns: readonly FieldInput[]
+	/** Row checks added after the schema's own, written as a schema's; see `RowCheck`. */
+	readonly checks: readonly CheckInput[]
 	/** How the sheet opens: the columns, widths, filters and sort, under each user's own views. */
 	readonly view: ViewState | null
 }
@@ -141,6 +145,20 @@ export function readTemplate(input: unknown, module: string): GridTemplate {
 		})
 	}
 
+	const checks: CheckInput[] = []
+
+	if (root.checks !== undefined && !Array.isArray(root.checks)) {
+		problem("checks", "must be a list of row checks.")
+	} else {
+		;((root.checks as unknown[] | undefined) ?? []).forEach((check, index) => {
+			if (plain(check)) {
+				checks.push(check as unknown as CheckInput)
+			} else {
+				problem(`checks[${index}]`, "must be an object, written as a schema's check.")
+			}
+		})
+	}
+
 	const view = root.view === undefined || root.view === null ? null : readViewState(root.view, "view", problem)
 
 	if (problems.length > 0) {
@@ -155,6 +173,7 @@ export function readTemplate(input: unknown, module: string): GridTemplate {
 		name,
 		fields: Object.freeze(fields),
 		columns: Object.freeze(columns),
+		checks: Object.freeze(checks),
 		view
 	})
 }
@@ -279,7 +298,12 @@ function merge(
 		return { problems, applied: null }
 	}
 
-	const merged: ModuleSchemaInput = { ...json, fields: [...fields, ...columns] }
+	const ownChecks = json.checks ?? []
+	const merged: ModuleSchemaInput = {
+		...json,
+		fields: [...fields, ...columns],
+		...(ownChecks.length + template.checks.length > 0 ? { checks: [...ownChecks, ...template.checks] } : {})
+	}
 
 	try {
 		return { problems, applied: ModuleSchema.from(merged) }
@@ -288,18 +312,23 @@ function merge(
 			throw error
 		}
 
-		// The schema's own reading found it: its paths name the merged fields, so they are put back
-		// as the template's, a field by its key and a column by its place.
+		// The schema's own reading found it: its paths name the merged fields and checks, so they are
+		// put back as the template's, a field by its key, a column and a check by its place.
 		for (const item of error.problems) {
-			const match = /^fields\[(\d+)\](.*)$/.exec(item.path)
-			const index = match ? Number(match[1]) : -1
-			const rest = match?.[2] ?? ""
-			const path =
-				index < 0
-					? item.path
-					: index < json.fields.length
-						? `fields.${json.fields[index]?.key ?? index}${rest}`
-						: `columns[${index - json.fields.length}]${rest}`
+			const field = /^fields\[(\d+)\](.*)$/.exec(item.path)
+			const check = /^checks\[(\d+)\](.*)$/.exec(item.path)
+			let path = item.path
+
+			if (field) {
+				const index = Number(field[1])
+
+				path =
+					index < json.fields.length
+						? `fields.${json.fields[index]?.key ?? index}${field[2] ?? ""}`
+						: `columns[${index - json.fields.length}]${field[2] ?? ""}`
+			} else if (check && Number(check[1]) >= ownChecks.length) {
+				path = `checks[${Number(check[1]) - ownChecks.length}]${check[2] ?? ""}`
+			}
 
 			problem(path, item.message)
 		}

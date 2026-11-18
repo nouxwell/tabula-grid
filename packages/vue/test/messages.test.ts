@@ -18,6 +18,52 @@ function issuesFor(values: Record<string, unknown>): Issue[] {
 }
 
 describe("issueText", () => {
+	it("words a row check from its comparison and conditions, or says its own words", () => {
+		const compare = {
+			source: "local",
+			code: "check_compare",
+			message: "Yeni fiyat must be at least Mevcut fiyat.",
+			params: {
+				op: ">=",
+				operand: "Mevcut fiyat",
+				when: "1",
+				when0Field: "Para birimi",
+				when0Op: "=",
+				when0Value: "TRY"
+			}
+		}
+		const filled = {
+			source: "local",
+			code: "check_filled",
+			message: "Not is required when Aktif = No.",
+			params: {
+				op: "filled",
+				when: "2",
+				when0Field: "Aktif",
+				when0Op: "=",
+				when0Value: "Hayır",
+				when1Field: "Not",
+				when1Op: "empty"
+			}
+		}
+		const own = { ...filled, params: { ...filled.params, "message.tr": "Satıştan kalkan ürüne not yazın." } }
+
+		expect(issueText(compare as unknown as Issue, "tr", VALUE_SETTINGS.tr)).toBe(
+			"Mevcut fiyat değerinden küçük olamaz (Para birimi = TRY olduğunda)."
+		)
+		expect(issueText(compare as unknown as Issue, "en", VALUE_SETTINGS.en)).toBe(
+			"Cannot be less than Mevcut fiyat when Para birimi = TRY."
+		)
+		expect(issueText(filled as unknown as Issue, "tr", VALUE_SETTINGS.tr)).toBe(
+			"Bu alan zorunlu (Aktif = Hayır ve Not boş olduğunda)."
+		)
+		expect(issueText(own as unknown as Issue, "tr", VALUE_SETTINGS.tr)).toBe("Satıştan kalkan ürüne not yazın.")
+		// No English words of its own: the grid's.
+		expect(issueText(own as unknown as Issue, "en", VALUE_SETTINGS.en)).toBe(
+			"This field is required when Aktif = Hayır and Not is empty."
+		)
+	})
+
 	it("words an issue in Turkish, with limits written the sheet's way", () => {
 		const [low] = issuesFor({ price: "0.1" })
 		const [missing] = issuesFor({})

@@ -17,6 +17,15 @@ The three packages are versioned together.
   column beside goes. Ctrl+D and Ctrl+R copy the selection's first row down or first column across.
   A fill is one step to undo, writes only into the rows shown and passes over columns that cannot
   be edited. Not drawn on a touch screen.
+- **Row checks**: rules about a row rather than one cell, in a schema's or a template's `checks`.
+  A check asserts a condition on one field (filled, empty, or compared with a value or another field)
+  when its conditions hold: "Not is required when Aktif is no", "Yeni fiyat cannot be below Mevcut
+  fiyat". Its issue lands on that field's cell as an error or a warning, worded by the grid in
+  Turkish or English from the check, or in the check's own words. `SheetValidator` checks again only
+  the checks that read the field a change touched. New issue codes `check_filled`, `check_empty` and
+  `check_compare`; the types `RowCheck`, `RowCondition`, `CheckInput`, `ConditionInput`,
+  `CheckSeverity`, `Comparison` and `ConditionOp`, and `breaksCheck` and `checkFields`. The
+  example's template adds a warning on price cuts and a note required for an early start.
 - **Templates**: the sheet as an authorized user prepares it for a task, on the module schema
   and under each user's views. A template changes headers, requires fields, closes columns, narrows
   limits, gives new rows a value, adds columns of its own (a helper, or a formula, never sent) and

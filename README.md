@@ -313,6 +313,41 @@ const grid = ref<InstanceType<typeof TabulaGrid>>()
 These are the browser's checks, for the user's sake. Passing them promises nothing: the backend
 checks everything again before it writes.
 
+### Row checks
+
+Some rules are about a row rather than one cell: "Not is required when Aktif is no", "Yeni fiyat
+cannot be below Mevcut fiyat". A schema, or a template, writes them as `checks`:
+
+```json
+"checks": [
+  {
+    "id": "note-when-inactive",
+    "assert": { "field": "note", "op": "filled" },
+    "when": [{ "field": "active", "op": "=", "value": false }]
+  },
+  {
+    "id": "not-below-current",
+    "assert": { "field": "newPrice", "op": ">=", "other": "currentPrice" },
+    "severity": "warning",
+    "message": { "tr": "Yeni fiyat mevcut fiyatın altında.", "en": "The new price is below the current one." }
+  }
+]
+```
+
+- **What a check says** is a condition on one field (`assert`): `filled`, `empty`, or compared
+  with `=`, `!=`, `<`, `<=`, `>` or `>=` to a `value` or to an `other` field of the row. **When
+  it applies** is a list of conditions (`when`), every one holding; none, and it always applies.
+  Order (`<` and the rest) is for numbers and dates; numbers compare as decimals, a lookup by its id.
+- **Its issue lands on the asserted field's cell**, an `error` (the default) that keeps the row
+  from being processed, or a `warning` that only points it out. A comparison with nothing on one
+  side says nothing: whether a field is filled is a check of its own.
+- **Its words.** The grid words it from the check, in the sheet's language and writing: "Mevcut
+  fiyat değerinden küçük olamaz (Para birimi = TRY olduğunda)." A check's own `message`, by
+  language, is said instead.
+- **Checked as the user types.** A change checks again only the checks that read the field it
+  changed, on that row. The schema refuses a check it cannot apply, each problem where it is: an
+  unknown field, an order on text, a value that is not the field's, two checks with one id.
+
 ### Only the rows with issues
 
 A `RowView` decides which rows are on screen. Give it to the grid, and bind the panel's switch:
@@ -610,6 +645,7 @@ narrows what the schema allows, never loosens it:
 | narrow a limit: a `min` above the schema's, `unique`    | let through what the schema's limits refuse    |
 | give new rows a value (`default`)                       | give a lookup, a formula or a unique field one |
 | add columns of its own, a helper or a formula           | have them sent for processing                  |
+| add row checks (`checks`), each only refusing more      | take one of the schema's checks away           |
 | say how the sheet opens: columns, widths, filters, sort | override a user's own default view             |
 
 Only a module whose schema says `"customization": "controlled"` takes one; a `fixed` module

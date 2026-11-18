@@ -65,7 +65,8 @@ export const PRICE_UPDATE: ModuleSchemaInput = {
 /**
  * The templates an authorized user prepared for the module, as the backend keeps and sends them. One
  * here: December's price rise, with its header, its stricter minimum, its date and currency for new
- * rows, the price with tax worked out, and a note column of its own that is never sent.
+ * rows, the price with tax worked out, a note column of its own that is never sent, and two row
+ * checks: a warning on a price cut, and the note required for a price that starts early.
  */
 export const PRICE_TEMPLATES = [
 	{
@@ -83,6 +84,24 @@ export const PRICE_TEMPLATES = [
 		columns: [
 			{ key: "withTax", type: "money", label: "KDV dahil", decimals: 2, formula: "ROUND([newPrice] * 1.2, 2)" },
 			{ key: "internalNote", type: "string", label: "İç not", rules: [{ rule: "maxLength", value: 80 }] }
+		],
+		checks: [
+			// A price cut is allowed, only pointed out.
+			{
+				id: "not-below-current",
+				assert: { field: "newPrice", op: ">=", other: "currentPrice" },
+				severity: "warning"
+			},
+			// A price that starts before the rise needs the reason written down.
+			{
+				id: "early-start-note",
+				assert: { field: "internalNote", op: "filled" },
+				when: [{ field: "validFrom", op: "<", value: "2026-12-01" }],
+				message: {
+					tr: "1 Aralık'tan önce başlayan fiyata iç not yazın.",
+					en: "Write an internal note for a price that starts before 1 December."
+				}
+			}
 		],
 		view: { columns: { hidden: ["sku"], pinned: ["productId"] }, columnWidths: {}, filters: {}, sort: null }
 	}

@@ -1,3 +1,4 @@
+import { checkToJson, readChecks, type CheckInput, type RowCheck } from "./checks.js"
 import { compareDecimal, normalizeDecimal } from "./decimal.js"
 import { SchemaError, TabulaError, type SchemaProblem } from "./errors.js"
 import { formulaFields, parseFormula } from "./formula/parse.js"
@@ -184,9 +185,11 @@ export interface ModuleSchemaInput {
 	title?: string
 	customization?: Customization
 	fields: FieldInput[]
+	/** Rules about a row rather than one cell; see `RowCheck`. */
+	checks?: CheckInput[]
 }
 
-const MODULE_PROPERTIES = ["module", "schemaVersion", "title", "customization", "fields"]
+const MODULE_PROPERTIES = ["module", "schemaVersion", "title", "customization", "fields", "checks"]
 const COMMON_PROPERTIES = [
 	"key",
 	"type",
@@ -239,6 +242,7 @@ interface ModuleData {
 	readonly title: string | null
 	readonly customization: Customization
 	readonly fields: readonly FieldSchema[]
+	readonly checks: readonly RowCheck[]
 }
 
 export class ModuleSchema {
@@ -250,6 +254,8 @@ export class ModuleSchema {
 	readonly customization: Customization
 	/** In the order the backend declared them. */
 	readonly fields: readonly FieldSchema[]
+	/** Rules about a row rather than one cell: a field required when another holds a value, two compared. */
+	readonly checks: readonly RowCheck[]
 	readonly #byKey: ReadonlyMap<string, FieldSchema>
 
 	private constructor(data: ModuleData) {
@@ -258,6 +264,7 @@ export class ModuleSchema {
 		this.title = data.title
 		this.customization = data.customization
 		this.fields = Object.freeze([...data.fields])
+		this.checks = Object.freeze([...data.checks])
 		this.#byKey = new Map(data.fields.map(field => [field.key, field]))
 		Object.freeze(this)
 	}
@@ -316,6 +323,10 @@ export class ModuleSchema {
 
 		if (this.title !== null) {
 			json.title = this.title
+		}
+
+		if (this.checks.length > 0) {
+			json.checks = this.checks.map(checkToJson)
 		}
 
 		return json
@@ -421,12 +432,14 @@ function readModule(input: unknown, problems: Problems): ModuleData | null {
 	const title = readText(input, "title", "", problems, false)
 	const customization = readCustomization(input, problems)
 	const fields = readFields(input.fields, problems)
+	const checks =
+		fields === null ? [] : readChecks(input.checks, fields, (path, message) => problems.add(path, message))
 
 	if (module === null || schemaVersion === null || fields === null) {
 		return null
 	}
 
-	return { module, schemaVersion, title, customization, fields }
+	return { module, schemaVersion, title, customization, fields, checks }
 }
 
 function readSchemaVersion(input: Json, problems: Problems): number | null {

@@ -1,3 +1,4 @@
+import { breaksCheck, checkFields, type ConditionOp, type RowCheck, type RowCondition } from "./checks.js"
 import { compareDecimal } from "./decimal.js"
 import { isFormulaError } from "./formula/error.js"
 import { Listeners } from "./listeners.js"
@@ -5,6 +6,7 @@ import type { RowId, RowStore, StoreChange } from "./rows.js"
 import type { FieldRule, FieldSchema, ModuleSchema } from "./schema.js"
 import type { CellValue } from "./value.js"
 import { decimalText } from "./values/number.js"
+import { formatCell } from "./values/format.js"
 import { canonicalValue, isLookupValue, valueProblem, type ValueProblemCode } from "./values/read.js"
 import { VALUE_SETTINGS, type ValueSettings } from "./values/settings.js"
 
@@ -26,6 +28,9 @@ export type LocalIssueCode =
 	| "max_length"
 	| "not_unique"
 	| "formula_error"
+	| "check_filled"
+	| "check_empty"
+	| "check_compare"
 
 export type IssueSeverity = "error" | "warning"
 
@@ -105,6 +110,9 @@ const MAX_TARGETS = 10
  * It listens to the row store and, after each change, checks only the cells the change touched.
  * A field with a `unique` rule is the one exception that looks across rows: changing one value can
  * clear or raise the issue on every other row holding it, and only those rows are touched.
+ *
+ * The schema's row checks are checked for the row a change touched, and only those that read the
+ * field it changed. Their issues land on the cell each check is about, as errors or as warnings.
  */
 export class SheetValidator implements IssueSet {
 	readonly #schema: ModuleSchema
@@ -116,6 +124,10 @@ export class SheetValidator implements IssueSet {
 	readonly #keys = new Map<string, Map<RowId, string>>()
 	/** Groups of rows holding one value, in sheet order: sorted once per change, when first asked. */
 	readonly #sorted = new Map<string, readonly RowId[]>()
+	/** The row checks that read each field: what to check again when it changes. */
+	readonly #checksOf = new Map<string, RowCheck[]>()
+	/** Each row's broken checks, by check id. */
+	readonly #broken = new Map<RowId, Map<string, Issue>>()
 	readonly #listeners = new Listeners<SheetValidator>()
 	readonly #unsubscribe: () => void
 	#version = 0
@@ -132,6 +144,12 @@ export class SheetValidator implements IssueSet {
 			}
 		}
 
+		for (const check of schema.checks) {
+			for (const key of checkFields(check)) {
+				this.#checksOf.set(key, [...(this.#checksOf.get(key) ?? []), check])
+			}
+		}
+
 		this.#checkAll()
 		this.#unsubscribe = store.subscribe(change => this.#apply(change))
 	}
@@ -144,12 +162,18 @@ export class SheetValidator implements IssueSet {
 	/** The issues on one cell, in a fixed order: the cell's own first, then any across rows. */
 	issuesAt(rowId: RowId, field: string): readonly Issue[] {
 		const own = this.#cells.get(rowId)?.get(field) ?? []
+		const broken = this.#broken.get(rowId)
+		const checks = broken ? [...broken.values()].filter(issue => issue.field === field) : []
 		const shared = this.#uniqueIssue(rowId, field)
 
-		return shared ? [...own, shared] : own
+		if (checks.length === 0 && !shared) {
+			return own
+		}
+
+		return shared ? [...own, ...checks, shared] : [...own, ...checks]
 	}
 
-	/** None: the schema's rules are all about single cells. */
+	/** None: every local issue, a row check's too, lands on a cell. */
 	rowIssues(): readonly Issue[] {
 		return []
 	}
@@ -192,12 +216,22 @@ export class SheetValidator implements IssueSet {
 			}
 		}
 
+		for (const broken of this.#broken.values()) {
+			for (const issue of broken.values()) {
+				if (issue.severity === "error") {
+					errors++
+				} else {
+					warnings++
+				}
+			}
+		}
+
 		return { errors, warnings, stale: 0, rows: this.affectedRows().size }
 	}
 
 	/** The rows with at least one issue. */
 	affectedRows(): Set<RowId> {
-		const rows = new Set(this.#cells.keys())
+		const rows = new Set([...this.#cells.keys(), ...this.#broken.keys()])
 
 		for (const groups of this.#groups.values()) {
 			for (const group of groups.values()) {
@@ -213,8 +247,8 @@ export class SheetValidator implements IssueSet {
 	}
 
 	hasIssues(rowId: RowId): boolean {
-		// Every local issue is an error.
-		return this.hasErrors(rowId)
+		// A row check may be a warning; every other local issue is an error.
+		return this.#broken.has(rowId) || this.hasErrors(rowId)
 	}
 
 	/** Whether any error stands on the row: such a row is not sent to be processed. */
@@ -226,6 +260,12 @@ export class SheetValidator implements IssueSet {
 				if (issues.some(issue => issue.severity === "error")) {
 					return true
 				}
+			}
+		}
+
+		for (const issue of this.#broken.get(rowId)?.values() ?? []) {
+			if (issue.severity === "error") {
+				return true
 			}
 		}
 
@@ -270,6 +310,7 @@ export class SheetValidator implements IssueSet {
 
 	#checkAll(): void {
 		this.#cells.clear()
+		this.#broken.clear()
 
 		for (const groups of this.#groups.values()) {
 			groups.clear()
@@ -290,6 +331,7 @@ export class SheetValidator implements IssueSet {
 				case "set":
 					if (this.#store.has(operation.rowId) && this.#schema.has(operation.field)) {
 						this.#checkCell(operation.rowId, this.#schema.field(operation.field))
+						this.#checkChecks(operation.rowId, this.#checksOf.get(operation.field) ?? [])
 					}
 					break
 				case "insert":
@@ -319,6 +361,35 @@ export class SheetValidator implements IssueSet {
 	#checkRow(rowId: RowId): void {
 		for (const field of this.#schema.fields) {
 			this.#checkCell(rowId, field)
+		}
+
+		this.#checkChecks(rowId, this.#schema.checks)
+	}
+
+	#checkChecks(rowId: RowId, checks: readonly RowCheck[]): void {
+		if (checks.length === 0) {
+			return
+		}
+
+		const get = (key: string): CellValue => this.#store.get(rowId, key)
+		const field = (key: string): FieldSchema => this.#schema.field(key)
+		let broken = this.#broken.get(rowId)
+
+		for (const check of checks) {
+			if (breaksCheck(check, field, get, this.#settings)) {
+				if (!broken) {
+					broken = new Map()
+					this.#broken.set(rowId, broken)
+				}
+
+				broken.set(check.id, checkIssue(rowId, check, this.#schema, this.#settings))
+			} else {
+				broken?.delete(check.id)
+			}
+		}
+
+		if (broken?.size === 0) {
+			this.#broken.delete(rowId)
 		}
 	}
 
@@ -356,6 +427,7 @@ export class SheetValidator implements IssueSet {
 
 	#forget(rowId: RowId): void {
 		this.#cells.delete(rowId)
+		this.#broken.delete(rowId)
 
 		for (const field of this.#groups.keys()) {
 			this.#regroup(rowId, field, null)
@@ -554,6 +626,100 @@ function cellIssue(
 		stale: false,
 		message,
 		params: Object.freeze({ field: field.key, type: field.type, ...params })
+	})
+}
+
+const SYMBOLS: Readonly<Record<ConditionOp, string>> = {
+	"=": "=",
+	"!=": "≠",
+	"<": "<",
+	"<=": "≤",
+	">": ">",
+	">=": "≥",
+	filled: "filled",
+	empty: "empty"
+}
+
+const ENGLISH_COMPARISONS: Readonly<Record<string, string>> = {
+	"=": "equal to",
+	"!=": "different from",
+	"<": "less than",
+	"<=": "at most",
+	">": "greater than",
+	">=": "at least"
+}
+
+/**
+ * A broken row check as an issue on the cell it is about. Its params carry what an interface words
+ * it from, in the sheet's own writing: the other field by its label, a value as the sheet writes
+ * it, each condition of `when` as `when0Field`, `when0Op` and `when0Value`, and a check's own
+ * words as `message.tr`, `message.en`.
+ */
+function checkIssue(rowId: RowId, check: RowCheck, schema: ModuleSchema, settings: ValueSettings): Issue {
+	const field = schema.field(check.assert.field)
+	const label = (key: string): string => schema.field(key).label
+	const operand = (condition: RowCondition): string =>
+		condition.other !== null
+			? label(condition.other)
+			: condition.value === null
+				? ""
+				: formatCell(schema.field(condition.field), condition.value, settings)
+	const op = check.assert.op
+	const code: LocalIssueCode = op === "filled" ? "check_filled" : op === "empty" ? "check_empty" : "check_compare"
+	const params: Record<string, string> = {
+		field: field.key,
+		type: field.type,
+		check: check.id,
+		op,
+		when: String(check.when.length)
+	}
+
+	if (code === "check_compare") {
+		params.operand = operand(check.assert)
+	}
+
+	check.when.forEach((condition, index) => {
+		params[`when${index}Field`] = label(condition.field)
+		params[`when${index}Op`] = condition.op
+		params[`when${index}Value`] = operand(condition)
+	})
+
+	for (const [language, text] of Object.entries(check.message ?? {})) {
+		params[`message.${language}`] = text
+	}
+
+	const when =
+		check.when.length === 0
+			? ""
+			: ` when ${check.when
+					.map(condition =>
+						condition.op === "filled" || condition.op === "empty"
+							? `${label(condition.field)} is ${condition.op}`
+							: `${label(condition.field)} ${SYMBOLS[condition.op]} ${operand(condition)}`
+					)
+					.join(" and ")}`
+	const english =
+		code === "check_filled"
+			? `${field.label} is required${when}.`
+			: code === "check_empty"
+				? `${field.label} must be left empty${when}.`
+				: `${field.label} must be ${ENGLISH_COMPARISONS[op] ?? op} ${params.operand}${when}.`
+
+	return Object.freeze({
+		id: `local|check|${check.id}|${rowId}`,
+		scope: "cell",
+		source: "local",
+		rowId,
+		field: field.key,
+		targets: Object.freeze(
+			check.assert.other === null ? [] : [Object.freeze({ rowId, field: check.assert.other })]
+		),
+		code,
+		severity: check.severity,
+		blocking: check.severity === "error",
+		stale: false,
+		message: check.message?.en ?? english,
+		params: Object.freeze(params)
 	})
 }
 

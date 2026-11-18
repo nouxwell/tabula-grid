@@ -25,7 +25,10 @@ const ISSUES: Readonly<Record<GridLocale, Readonly<Record<string, Wording>>>> = 
 		min_length: p => `En az ${p.min} karakter olmalı; ${p.length} karakter.`,
 		max_length: p => `En fazla ${p.max} karakter olabilir; ${p.length} karakter.`,
 		not_unique: p => `Bu değer kolonda ${p.count} kez geçiyor; bir kez geçmeli.`,
-		formula_error: p => `Formül hesaplanamadı: ${p.error}${because(p.error, "tr")}`
+		formula_error: p => `Formül hesaplanamadı: ${p.error}${because(p.error, "tr")}`,
+		check_filled: p => `Bu alan zorunlu${when(p, "tr")}.`,
+		check_empty: p => `Bu alan boş bırakılmalı${when(p, "tr")}.`,
+		check_compare: p => `${COMPARED.tr[p.op ?? ""]?.(p.operand ?? "") ?? ""}${when(p, "tr")}.`
 	},
 	en: {
 		required: () => "This field is required.",
@@ -40,8 +43,60 @@ const ISSUES: Readonly<Record<GridLocale, Readonly<Record<string, Wording>>>> = 
 		min_length: p => `Must be at least ${p.min} characters; it is ${p.length}.`,
 		max_length: p => `Must be at most ${p.max} characters; it is ${p.length}.`,
 		not_unique: p => `This value appears ${p.count} times in the column; it may appear once.`,
-		formula_error: p => `The formula could not be worked out: ${p.error}${because(p.error, "en")}`
+		formula_error: p => `The formula could not be worked out: ${p.error}${because(p.error, "en")}`,
+		check_filled: p => `This field is required${when(p, "en")}.`,
+		check_empty: p => `This field must be left empty${when(p, "en")}.`,
+		check_compare: p => `${COMPARED.en[p.op ?? ""]?.(p.operand ?? "") ?? ""}${when(p, "en")}.`
 	}
+}
+
+/** A row check's comparison, said of the cell it is on: "Mevcut fiyat değerinden küçük olamaz". */
+const COMPARED: Readonly<Record<GridLocale, Readonly<Record<string, (operand: string) => string>>>> = {
+	tr: {
+		"=": x => `${x} ile aynı olmalı`,
+		"!=": x => `${x} ile aynı olamaz`,
+		"<": x => `${x} değerinden küçük olmalı`,
+		"<=": x => `${x} değerinden büyük olamaz`,
+		">": x => `${x} değerinden büyük olmalı`,
+		">=": x => `${x} değerinden küçük olamaz`
+	},
+	en: {
+		"=": x => `Must equal ${x}`,
+		"!=": x => `Cannot equal ${x}`,
+		"<": x => `Must be less than ${x}`,
+		"<=": x => `Cannot be greater than ${x}`,
+		">": x => `Must be greater than ${x}`,
+		">=": x => `Cannot be less than ${x}`
+	}
+}
+
+const SYMBOLS: Readonly<Record<string, string>> = { "=": "=", "!=": "≠", "<": "<", "<=": "≤", ">": ">", ">=": "≥" }
+
+/**
+ * When a row check applies, after what it says: " (Aktif = Hayır olduğunda)", " when Aktif = No".
+ * Nothing for a check that always applies.
+ */
+function when(p: Params, locale: GridLocale): string {
+	const count = Number(p.when ?? "0")
+	const parts: string[] = []
+
+	for (let index = 0; index < count; index++) {
+		const field = p[`when${index}Field`] ?? ""
+		const op = p[`when${index}Op`] ?? ""
+		const value = p[`when${index}Value`] ?? ""
+
+		if (op === "filled" || op === "empty") {
+			parts.push(`${field} ${locale === "tr" ? (op === "filled" ? "dolu" : "boş") : `is ${op}`}`)
+		} else {
+			parts.push(`${field} ${SYMBOLS[op] ?? op} ${value}`)
+		}
+	}
+
+	if (parts.length === 0) {
+		return ""
+	}
+
+	return locale === "tr" ? ` (${parts.join(" ve ")} olduğunda)` : ` when ${parts.join(" and ")}`
 }
 
 /** The words of the issue panel. */
@@ -199,7 +254,18 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
  * backend's code is worded by the backend: the table only holds this package's own.
  */
 export function issueText(issue: Issue, locale: GridLocale, settings: ValueSettings): string {
-	const wording = issue.source === "local" ? ISSUES[locale][issue.code] : undefined
+	if (issue.source !== "local") {
+		return issue.message
+	}
+
+	// A row check written with words of its own says them, in the sheet's language when it has it.
+	const own = issue.params[`message.${locale}`]
+
+	if (own) {
+		return own
+	}
+
+	const wording = ISSUES[locale][issue.code]
 
 	return wording ? wording(issue.params, settings) : issue.message
 }
