@@ -343,6 +343,52 @@ export const BAR_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, strin
 }
 
 /** The grid's own words: what a row's result is, and what a changed issue waits for. */
+/** The words of `TabulaFind`. `{current}`, `{total}` and `{n}` are put in. */
+export const FIND_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, string>>>> = {
+	tr: {
+		title: "Bul ve değiştir",
+		find: "Bul",
+		replace: "Değiştir",
+		where: "Nerede",
+		selection: "Seçimde",
+		column: "Sütunda",
+		sheet: "Tabloda",
+		matchCase: "Büyük ve küçük harf ayrı",
+		whole: "Hücrenin tamamı eşleşsin",
+		wholeShort: "Tam hücre",
+		count: "{current} / {total} hücre",
+		none: "Bulunamadı",
+		previous: "Önceki",
+		next: "Sonraki",
+		replaceOne: "Değiştir",
+		replaceAll: "Tümünü değiştir",
+		close: "Kapat",
+		replaced: "{n} hücre değişti",
+		skipped: "{n} hücre değiştirilemedi"
+	},
+	en: {
+		title: "Find and replace",
+		find: "Find",
+		replace: "Replace",
+		where: "Where",
+		selection: "In the selection",
+		column: "In the column",
+		sheet: "In the sheet",
+		matchCase: "Match case",
+		whole: "Match the whole cell",
+		wholeShort: "Whole cell",
+		count: "{current} of {total} cells",
+		none: "Not found",
+		previous: "Previous",
+		next: "Next",
+		replaceOne: "Replace",
+		replaceAll: "Replace all",
+		close: "Close",
+		replaced: "{n} cells replaced",
+		skipped: "{n} cells could not be changed"
+	}
+}
+
 export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, string>>>> = {
 	tr: {
 		succeeded: "İşlendi",
@@ -390,7 +436,12 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		insertBelow: "Alta satır ekle",
 		removeRows: "Satırları sil",
 		filterValue: "Bu değere göre süz",
-		pasteRefused: "Tarayıcı panoyu okumaya izin vermedi; Ctrl+V ile yapıştırın."
+		pasteRefused: "Tarayıcı panoyu okumaya izin vermedi; Ctrl+V ile yapıştırın.",
+		totals: "Alttaki satırda ne gösterilsin",
+		totalSum: "Toplam",
+		totalAverage: "Ortalama",
+		totalMin: "En az",
+		totalMax: "En çok"
 	},
 	en: {
 		cellMenu: "Cell menu",
@@ -405,6 +456,11 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		removeRows: "Delete rows",
 		filterValue: "Filter by this value",
 		pasteRefused: "The browser did not let the clipboard be read; paste with Ctrl+V.",
+		totals: "What the row at the bottom shows",
+		totalSum: "Sum",
+		totalAverage: "Average",
+		totalMin: "Smallest",
+		totalMax: "Largest",
 		succeeded: "Processed",
 		failed: "Failed",
 		skipped: "Not processed",

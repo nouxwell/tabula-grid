@@ -7,6 +7,28 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+### Added
+
+- **How cells look** (canvas items 89–95, 100 and 103–106, designs Z, AA, AB and AC). Never what
+  they hold: nothing of it is sent to the backend.
+  - A column's alignment and shown decimals: `ColumnLayout.formats`, `withColumnFormat`, kept with
+    the draft, in saved views and in a template's view. `formatCell` takes `{ decimals }`.
+  - Colours, bold and italic the user puts on cells: `CellMarks`, kept with the draft (`Draft.marks`,
+    the `DraftSaver`'s `marks`), undone with Ctrl+Z in their turn (`UndoHistory.record` takes a step
+    kept beside the store), and `rowsMarked` to filter by them. The grid takes `marks`, Ctrl+B and
+    Ctrl+I, and `markSelection`, `toggleSelection`, `clearSelectionMarks`, `selectedCells`,
+    `selectedFields`.
+  - Colour rules in a schema or a template (`styles`): a check's conditions, a fill, a text colour,
+    bold, on a cell or the whole row; `rowStyles`, `rowsStyled`.
+  - The grid's `fit` (columns sharing the room on their right), `totals` (sum, average, smallest or
+    largest under each number column; `summarizeCells` gives `min` and `max` too) and `zoom`.
+  - Find and replace: `findCells` and `replaceCells` in the core, `TabulaFind` in the Vue package,
+    the grid's `found`, `@find` on Ctrl+H, `showCell`, `shownFields` and `canEdit`.
+- **The example** has a format group in its toolbar (bold, italic, text and fill colour, alignment,
+  decimals, clear), a "Renkli" row filter, a Renkler tab in the rules drawer, find and replace from
+  Toplu düzenle or Ctrl+H, the totals row, density and zoom by the status, and a shortcuts window
+  (F1). The December template colours a foreign currency blue and a price under 100 orange.
+
 ## [0.3.1] — 2026-11-19
 
 A patch: the issues panel can be closed from its head, and the example's toolbar and sheet are in

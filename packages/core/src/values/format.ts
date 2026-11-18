@@ -6,11 +6,22 @@ import { decimalText, editNumber, formatNumber, symbolFor } from "./number.js"
 import { datePatternOf, describeValue, isFieldValue, isLookupValue } from "./read.js"
 import type { ValueSettings } from "./settings.js"
 
+/** How one column is drawn over its field's own way: a column's format. */
+export interface CellFormatOptions {
+	/** Digits after the point a number shows, in place of its field's. The value is not rounded. */
+	readonly decimals?: number
+}
+
 /**
  * What a cell shows: its value written the sheet's way, "1.571,41 ₺", "31.12.2026", "Evet". A cell
  * still holding text that could not be read shows that text as it was typed.
  */
-export function formatCell(field: FieldSchema, value: CellValue, settings: ValueSettings): string {
+export function formatCell(
+	field: FieldSchema,
+	value: CellValue,
+	settings: ValueSettings,
+	options: CellFormatOptions = {}
+): string {
 	if (value === null) {
 		return ""
 	}
@@ -29,9 +40,13 @@ export function formatCell(field: FieldSchema, value: CellValue, settings: Value
 		case "decimal":
 		case "quantity":
 		case "percent":
-			return formatNumber(decimalText(value) ?? "0", digitsFor(field, settings), settings)
+			return formatNumber(decimalText(value) ?? "0", options.decimals ?? digitsFor(field, settings), settings)
 		case "money": {
-			const number = formatNumber(decimalText(value) ?? "0", digitsFor(field, settings), settings)
+			const number = formatNumber(
+				decimalText(value) ?? "0",
+				options.decimals ?? digitsFor(field, settings),
+				settings
+			)
 			const symbol = symbolFor(field.currency, settings)
 
 			if (symbol === null || symbol === "") {

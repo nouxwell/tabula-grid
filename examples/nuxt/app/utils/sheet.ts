@@ -33,7 +33,10 @@ import {
 	type ModuleSchemaInput,
 	type RowInit,
 	type SheetAdapters,
-	type TableImport
+	type TableImport,
+	CellMarks,
+	rowsMarked,
+	type MarksData
 } from "@nouxwell/tabula-core"
 
 /** How the sheet reaches the example's server: here $fetch, in an application its own API client. */
@@ -109,6 +112,8 @@ export function createSheet(
 		readonly baseline?: readonly RowInit[]
 		/** The kept draft, opened with its fields mapped as the user chose. */
 		readonly mapping?: { readonly rename: Readonly<Record<string, string>> }
+		/** Marks carried with the rows, from a sheet made again over them. */
+		readonly marks?: MarksData
 	}
 ) {
 	const { columns, widths } = layout
@@ -136,6 +141,8 @@ export function createSheet(
 	const formulas = new FormulaEngine({ schema, store })
 	const validator = new SheetValidator(schema, store, VALUE_SETTINGS[locale.value])
 	const history = new UndoHistory(store)
+	// What the user put on cells by hand: kept with the draft, taken back with Ctrl+Z in its turn.
+	const marks = new CellMarks({ marks: opened?.marks ?? options.marks ?? {}, history })
 	const session = new SheetSession({
 		schema,
 		store,
@@ -158,6 +165,7 @@ export function createSheet(
 		schema,
 		store,
 		session,
+		marks,
 		// The same draft, saved again under its id.
 		...(options.kept ? { id: options.kept.id } : {}),
 		// The kept draft waits for the user's word: nothing is written over it meanwhile.
@@ -178,6 +186,7 @@ export function createSheet(
 	const bump = () => version.value++
 	const stops = [
 		history.subscribe(bump),
+		marks.subscribe(bump),
 		session.subscribe(bump),
 		session.results.subscribe(bump),
 		view.subscribe(bump),
@@ -191,6 +200,15 @@ export function createSheet(
 			view.filter(rowsWithIssues(session.issues), "issues")
 		} else {
 			view.clear("issues")
+		}
+	}
+
+	/** Only the rows with a cell the user coloured, as they are now. */
+	function onlyMarked(only: boolean): void {
+		if (only) {
+			view.filter(rowsMarked(marks), "marked")
+		} else {
+			view.clear("marked")
 		}
 	}
 
@@ -271,6 +289,7 @@ export function createSheet(
 		view,
 		saver,
 		changes,
+		marks,
 		/** A kept draft saved under another schema, waiting for the user to map its fields or let it go. */
 		review,
 		/** Whether a kept draft was opened, with the columns the user had. */
@@ -281,6 +300,7 @@ export function createSheet(
 		version,
 		onlyIssueRows,
 		onlyChanged,
+		onlyMarked,
 		search,
 		importCsv,
 		exportCsv,

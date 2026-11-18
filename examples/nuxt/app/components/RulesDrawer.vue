@@ -33,6 +33,15 @@
 					>
 						Hesaplanan sütunlar · {{ columns.length }}
 					</AppButton>
+					<AppButton
+						:type="tab === 'styles' ? 'primary' : 'default'"
+						:secondary="tab === 'styles'"
+						:aria-pressed="tab === 'styles'"
+						:disabled="busy"
+						@click="tab = 'styles'"
+					>
+						Renkler · {{ styles.length }}
+					</AppButton>
 				</div>
 
 				<!-- Row checks -->
@@ -117,7 +126,7 @@
 				</template>
 
 				<!-- The template's own columns -->
-				<template v-else>
+				<template v-else-if="tab === 'columns'">
 					<p class="m-0 text-sm text-muted">
 						Şablonun kendi sütunları: bir formülle hesaplanır ya da elle doldurulur. Hiçbiri sunucuya
 						gönderilmez.
@@ -189,6 +198,81 @@
 						<AppButton icon="plus" @click="addColumn">Sütun ekle</AppButton>
 					</span>
 				</template>
+
+				<!-- Colour rules -->
+				<template v-else>
+					<p class="m-0 text-sm text-muted">
+						Koşula uyan hücreler bu şablonu açan herkeste aynı renkte görünür; değer değişince renk de
+						değişir. Yalnız görünüş: sunucuya giden değer aynı kalır.
+					</p>
+
+					<template v-for="(item, index) in styleItems" :key="item.id">
+						<StyleForm
+							v-if="styleEditing && styleEditing.index === index"
+							v-model:draft="styleEditing.draft"
+							:schema="sheet.schema"
+							:preview="stylePreview"
+							:showing="showing"
+							@save="keepStyle"
+							@cancel="stopStyleEditing"
+							@toggle-rows="toggleStyleRows"
+						/>
+						<AppCard v-else content-class="flex items-center gap-2.5 px-3! py-2.5!">
+							<span
+								class="flex h-7 w-14 flex-none items-center justify-center rounded-app border border-divider text-sm"
+								:style="item.chip"
+								aria-hidden="true"
+							>
+								Aa
+							</span>
+							<span class="flex min-w-0 flex-1 flex-col">
+								<strong class="text-sm">{{ item.when }}</strong>
+								<span class="text-xs text-muted">{{ item.look }}</span>
+							</span>
+							<AppTag size="small" type="success">{{ item.count }} satır</AppTag>
+							<AppTooltip>
+								<template #trigger>
+									<AppButton
+										icon="edit"
+										aria-label="Renk kuralını düzenle"
+										:disabled="busy"
+										@click="editStyle(index)"
+									/>
+								</template>
+								Renk kuralını düzenle
+							</AppTooltip>
+							<AppTooltip>
+								<template #trigger>
+									<AppButton
+										icon="trash"
+										aria-label="Renk kuralını sil"
+										:disabled="busy"
+										@click="removeStyle(index)"
+									/>
+								</template>
+								Renk kuralını sil
+							</AppTooltip>
+						</AppCard>
+					</template>
+
+					<p v-if="styleItems.length === 0 && !styleEditing" class="m-0 text-sm text-muted">
+						Bu şablonda henüz renk kuralı yok.
+					</p>
+
+					<StyleForm
+						v-if="styleEditing && styleEditing.index === null"
+						v-model:draft="styleEditing.draft"
+						:schema="sheet.schema"
+						:preview="stylePreview"
+						:showing="showing"
+						@save="keepStyle"
+						@cancel="stopStyleEditing"
+						@toggle-rows="toggleStyleRows"
+					/>
+					<span v-if="!busy">
+						<AppButton icon="plus" @click="addStyle">Renk kuralı ekle</AppButton>
+					</span>
+				</template>
 			</div>
 
 			<template #footer>
@@ -221,8 +305,9 @@
 
 <script setup lang="ts">
 /**
- * The rules drawer, in two tabs: the template's row checks as sentences with how many rows each
- * catches now, and the template's own columns with their formulas, each with an editor. A rule or a
+ * The rules drawer, in three tabs: the template's row checks as sentences with how many rows each
+ * catches now, the template's own columns with their formulas, and its colour rules with how many
+ * rows each colours, each with an editor. A rule or a
  * formula is written against the sheet as it stands, so its preview follows every keystroke; a
  * column kept shows in the sheet at once, not yet saved. Nothing reaches the template until "Şablonu
  * kaydet", which the page hands to the server; "Vazgeç" and closing put the sheet back as saved.
@@ -236,8 +321,10 @@ import {
 	ModuleSchema,
 	readTemplate,
 	rowsBreaking,
+	rowsStyled,
 	templateProblems,
 	type CheckInput,
+	type StyleRuleInput,
 	type FieldInput,
 	type ModuleSchemaInput,
 	type RowId,
@@ -254,6 +341,7 @@ import {
 	type ColumnDraft
 } from "~/utils/columns"
 import { checkOf, draftOf, newDraft, type RuleDraft } from "~/utils/rules"
+import { describeStyle, MARK_SWATCHES, newStyleDraft, styleDraftOf, styleOf, type StyleDraft } from "~/utils/styles"
 import type { Sheet } from "~/utils/sheet"
 
 const show = defineModel<boolean>("show", { required: true })
@@ -267,6 +355,7 @@ const props = defineProps<{
 		readonly name: string
 		readonly checks?: readonly CheckInput[]
 		readonly columns?: readonly FieldInput[]
+		readonly styles?: readonly StyleRuleInput[]
 	}
 	locale: GridLocale
 	settings: ValueSettings
@@ -288,18 +377,20 @@ const emit = defineEmits<{
 const PREVIEW_ROWS = 5
 
 const moduleSchema = computed(() => ModuleSchema.from(props.moduleInput))
-const tab = ref<"checks" | "columns">("checks")
+const tab = ref<"checks" | "columns" | "styles">("checks")
 /** The template's checks and columns as they are being changed here, before the template is saved. */
 const checks = ref<CheckInput[]>([])
 const columns = ref<FieldInput[]>([])
+const styles = ref<StyleRuleInput[]>([])
 const editing = ref<{ index: number | null; draft: RuleDraft } | null>(null)
 const columnEditing = ref<{ index: number | null; draft: ColumnDraft } | null>(null)
+const styleEditing = ref<{ index: number | null; draft: StyleDraft } | null>(null)
 const showing = ref(false)
 /** Whether the sheet shows columns kept here and not yet saved. */
 const previewing = ref(false)
 
 /** A rule or a column is open: the rest waits until it is kept or let go. */
-const busy = computed(() => editing.value !== null || columnEditing.value !== null)
+const busy = computed(() => editing.value !== null || columnEditing.value !== null || styleEditing.value !== null)
 
 function copy<T>(value: T): T {
 	return JSON.parse(JSON.stringify(value)) as T
@@ -308,8 +399,10 @@ function copy<T>(value: T): T {
 function reset(): void {
 	checks.value = copy(toRaw(props.template.checks ?? [])) as CheckInput[]
 	columns.value = copy(toRaw(props.template.columns ?? [])) as FieldInput[]
+	styles.value = copy(toRaw(props.template.styles ?? [])) as StyleRuleInput[]
 	editing.value = null
 	columnEditing.value = null
+	styleEditing.value = null
 	hideRows()
 	stopPreview()
 }
@@ -326,21 +419,31 @@ watch([show, () => props.template], ([open]) => {
 const changed = computed(
 	() =>
 		JSON.stringify(checks.value) !== JSON.stringify(props.template.checks ?? []) ||
-		JSON.stringify(columns.value) !== JSON.stringify(props.template.columns ?? [])
+		JSON.stringify(columns.value) !== JSON.stringify(props.template.columns ?? []) ||
+		JSON.stringify(styles.value) !== JSON.stringify(props.template.styles ?? [])
 )
 
 /** The template as it stands here, to show or to save. */
-function working(withChecks = checks.value, withColumns = columns.value) {
+function working(withChecks = checks.value, withColumns = columns.value, withStyles = styles.value) {
 	// Copied through JSON, which reads every entry: a rule pushed onto a list is then a change Vue
 	// sees, where reading the raw list would leave a result as it was.
-	return { ...toRaw(props.template), checks: copy(withChecks), columns: copy(withColumns) }
+	return {
+		...toRaw(props.template),
+		checks: copy(withChecks),
+		columns: copy(withColumns),
+		styles: copy(withStyles)
+	}
 }
 
 /** The schema with the template applied as it would be with these checks and columns; null with its problems. */
-function appliedWith(withChecks: readonly CheckInput[], withColumns: readonly FieldInput[]) {
+function appliedWith(
+	withChecks: readonly CheckInput[],
+	withColumns: readonly FieldInput[],
+	withStyles: readonly StyleRuleInput[] = styles.value
+) {
 	try {
 		const template = readTemplate(
-			working(withChecks as CheckInput[], withColumns as FieldInput[]),
+			working(withChecks as CheckInput[], withColumns as FieldInput[], withStyles as StyleRuleInput[]),
 			moduleSchema.value.module
 		)
 		const problems = templateProblems(moduleSchema.value, template)
@@ -488,6 +591,131 @@ function hideRows(): void {
 		showing.value = false
 		emit("showRows", null)
 	}
+}
+
+// ---------------------------------------------------------------- colour rules
+
+/** Read through the sheet's version, so the counts follow what is typed into the sheet. */
+function coloured(schema: ModuleSchema, id: string): RowId[] {
+	void props.sheet.version.value
+
+	const rule = schema.styles.find(item => item.id === id)
+
+	return rule ? rowsStyled(schema, props.sheet.store, rule, props.settings) : []
+}
+
+/** A swatch showing what a rule puts on: its fill, its text colour, bold. */
+function chipOf(fill: string | null, color: string | null, bold: boolean): Record<string, string> {
+	const hex = (name: string | null) => MARK_SWATCHES.find(swatch => swatch.value === name)?.hex ?? null
+	const fillHex = hex(fill)
+	const colorHex = hex(color)
+
+	return {
+		...(fillHex ? { background: `color-mix(in srgb, ${fillHex} 24%, white)` } : {}),
+		...(colorHex ? { color: `color-mix(in srgb, ${colorHex} 58%, black)` } : {}),
+		...(bold ? { fontWeight: "700" } : {})
+	}
+}
+
+const styleItems = computed(() =>
+	styles.value.map(input => {
+		const schema = applied.value.schema
+		const rule = schema?.styles.find(item => item.id === input.id)
+		const words = rule && schema ? describeStyle(rule, schema, props.settings) : { when: input.id, look: "" }
+
+		return {
+			id: input.id,
+			...words,
+			chip: chipOf(input.fill ?? null, input.color ?? null, input.bold ?? false),
+			count: rule && schema ? coloured(schema, rule.id).length : 0
+		}
+	})
+)
+
+/** The rule being written as it would stand on the sheet: how many rows it colours, or why it is not a rule yet. */
+const draftStyle = computed(() => {
+	const current = styleEditing.value
+
+	if (!current) {
+		return null
+	}
+
+	const made = styleOf(current.draft, props.sheet.schema, props.settings)
+
+	if ("problem" in made) {
+		return { problem: made.problem, style: null, rows: [] as RowId[] }
+	}
+
+	const list = [...styles.value]
+	const position = current.index ?? list.length
+
+	list[position] = made.style
+
+	const { schema, problems } = appliedWith(checks.value, columns.value, list)
+	const own = problems.find(problem => problem.path.startsWith(`styles[${position}]`)) ?? problems[0]
+
+	return schema
+		? { problem: null, style: made.style, rows: coloured(schema, made.style.id) }
+		: { problem: own?.message ?? "Bu kural uygulanamıyor.", style: null, rows: [] as RowId[] }
+})
+
+const stylePreview = computed(() =>
+	draftStyle.value ? { problem: draftStyle.value.problem, count: draftStyle.value.rows.length } : null
+)
+
+watch(
+	() => draftStyle.value?.rows.join(",") ?? "",
+	() => {
+		if (showing.value && styleEditing.value) {
+			emit("showRows", draftStyle.value?.rows ?? [])
+		}
+	}
+)
+
+function addStyle(): void {
+	styleEditing.value = { index: null, draft: newStyleDraft(props.sheet.schema) }
+}
+
+function editStyle(index: number): void {
+	const schema = applied.value.schema
+	const rule = schema?.styles.find(item => item.id === styles.value[index]?.id)
+
+	if (rule && schema) {
+		styleEditing.value = { index, draft: styleDraftOf(rule, schema, props.settings) }
+	}
+}
+
+function removeStyle(index: number): void {
+	styles.value.splice(index, 1)
+	showPreview()
+}
+
+/** Keeps the rule, and shows the sheet coloured by it: not saved until the template is. */
+function keepStyle(): void {
+	const made = draftStyle.value
+
+	if (!styleEditing.value || !made?.style) {
+		return
+	}
+
+	if (styleEditing.value.index === null) {
+		styles.value.push(made.style)
+	} else {
+		styles.value[styleEditing.value.index] = made.style
+	}
+
+	stopStyleEditing()
+	showPreview()
+}
+
+function stopStyleEditing(): void {
+	styleEditing.value = null
+	hideRows()
+}
+
+function toggleStyleRows(): void {
+	showing.value = !showing.value
+	emit("showRows", showing.value ? (draftStyle.value?.rows ?? []) : null)
 }
 
 // ---------------------------------------------------------------- columns

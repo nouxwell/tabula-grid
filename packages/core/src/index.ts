@@ -48,7 +48,7 @@ export type {
 } from "./rows.js"
 
 export { REDO_ORIGIN, UNDO_ORIGIN, UndoHistory } from "./history.js"
-export type { UndoHistoryOptions } from "./history.js"
+export type { HistoryStep, UndoHistoryOptions } from "./history.js"
 
 export { LOOKUP_ORIGIN, LookupResolver } from "./lookup.js"
 export type {
@@ -105,7 +105,7 @@ export { adjustValue, isAdjustable } from "./adjust.js"
 export type { Adjustment } from "./adjust.js"
 export { rowsChanged, SheetChanges } from "./changes.js"
 export type { ChangeSummary, SheetChangesOptions } from "./changes.js"
-export { breaksCheck, checkFields, COMPARISONS, CONDITION_OPS, rowsBreaking } from "./checks.js"
+export { breaksCheck, checkFields, COMPARISONS, CONDITION_OPS, conditionHolds, rowsBreaking } from "./checks.js"
 export type {
 	CheckInput,
 	CheckSeverity,
@@ -129,6 +129,7 @@ export {
 	emptyViews,
 	PLAIN_VIEW,
 	readViews,
+	readViewState,
 	removeView,
 	renameView,
 	sameView,
@@ -242,14 +243,28 @@ export type { ValueSettings } from "./values/settings.js"
 export { isFieldValue, readInput, valueProblem } from "./values/read.js"
 export type { ReadResult, ValueProblem, ValueProblemCode } from "./values/read.js"
 export { digitsFor, editText, formatCell } from "./values/format.js"
+export type { CellFormatOptions } from "./values/format.js"
+export { CellMarks, MARK_COLORS, readMarks, rowsMarked } from "./marks.js"
+export type { CellMark, CellMarkChange, CellMarksOptions, MarkColor, MarkedCell, MarksData } from "./marks.js"
+export { readStyleRules, rowStyles, rowsStyled, styleApplies, styleRuleToJson } from "./styles.js"
+export type { CellStyle, StyleRule, StyleRuleInput } from "./styles.js"
+export { findCells, REPLACE_ORIGIN, replaceCells } from "./find.js"
+export type { FindOptions, FoundCell, ReplaceOptions, ReplaceResult } from "./find.js"
 
 export {
 	arrangeColumns,
 	autoColumnWidth,
 	clampColumnWidth,
 	DEFAULT_COLUMN_SIZING,
+	COLUMN_ALIGNS,
+	freezeColumnLayout,
 	headerDisplayText,
+	mapColumnLayout,
+	MAX_SHOWN_DECIMALS,
+	readColumnLayout,
 	resolveColumnSizing,
-	withColumn
+	sameColumnFormats,
+	withColumn,
+	withColumnFormat
 } from "./columns.js"
-export type { ArrangedColumns, ColumnLayout, ColumnSizing } from "./columns.js"
+export type { ArrangedColumns, ColumnAlign, ColumnFormat, ColumnLayout, ColumnSizing } from "./columns.js"

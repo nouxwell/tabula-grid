@@ -174,6 +174,19 @@ export function rowsBreaking(schema: ModuleSchema, store: RowStore, check: RowCh
 	return store.rowIds().filter(rowId => breaksCheck(check, field, key => store.get(rowId, key), settings))
 }
 
+/**
+ * Whether a condition holds for a row: what a colour rule asks. A comparison with nothing on one side
+ * does not hold, nor does one with a value that cannot be read as its field's.
+ */
+export function conditionHolds(
+	condition: RowCondition,
+	field: (key: string) => FieldSchema,
+	get: (key: string) => CellValue,
+	settings: ValueSettings
+): boolean {
+	return holds(condition, field, get, settings) === true
+}
+
 // ---------------------------------------------------------------- inside
 
 /** True or false, or null when a comparison has nothing to compare on one side. */
@@ -320,7 +333,8 @@ function readCheck(raw: unknown, path: string, fields: ReadonlyMap<string, Field
 	})
 }
 
-function readCondition(
+/** Reads one condition against the fields, as a check's and a colour rule's are written. */
+export function readCondition(
 	raw: unknown,
 	path: string,
 	fields: ReadonlyMap<string, FieldSchema>,
@@ -435,7 +449,8 @@ function readMessage(raw: unknown, path: string, add: Add): Readonly<Record<stri
 	return Object.freeze({ ...(raw as Record<string, string>) })
 }
 
-function conditionToJson(condition: RowCondition): ConditionInput {
+/** A condition written out again as JSON. */
+export function conditionToJson(condition: RowCondition): ConditionInput {
 	const json: ConditionInput = { field: condition.field, op: condition.op }
 
 	if (condition.other !== null) {

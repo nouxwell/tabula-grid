@@ -1,4 +1,5 @@
 import { checkToJson, readChecks, type CheckInput, type RowCheck } from "./checks.js"
+import { readStyleRules, styleRuleToJson, type StyleRule, type StyleRuleInput } from "./styles.js"
 import { compareDecimal, normalizeDecimal } from "./decimal.js"
 import { SchemaError, TabulaError, type SchemaProblem } from "./errors.js"
 import { formulaFields, parseFormula } from "./formula/parse.js"
@@ -187,9 +188,11 @@ export interface ModuleSchemaInput {
 	fields: FieldInput[]
 	/** Rules about a row rather than one cell; see `RowCheck`. */
 	checks?: CheckInput[]
+	/** Cells coloured by what the row holds; see `StyleRule`. */
+	styles?: StyleRuleInput[]
 }
 
-const MODULE_PROPERTIES = ["module", "schemaVersion", "title", "customization", "fields", "checks"]
+const MODULE_PROPERTIES = ["module", "schemaVersion", "title", "customization", "fields", "checks", "styles"]
 const COMMON_PROPERTIES = [
 	"key",
 	"type",
@@ -243,6 +246,7 @@ interface ModuleData {
 	readonly customization: Customization
 	readonly fields: readonly FieldSchema[]
 	readonly checks: readonly RowCheck[]
+	readonly styles: readonly StyleRule[]
 }
 
 export class ModuleSchema {
@@ -256,6 +260,8 @@ export class ModuleSchema {
 	readonly fields: readonly FieldSchema[]
 	/** Rules about a row rather than one cell: a field required when another holds a value, two compared. */
 	readonly checks: readonly RowCheck[]
+	/** Cells coloured by what the row holds, in order: a later rule is drawn over an earlier one. */
+	readonly styles: readonly StyleRule[]
 	readonly #byKey: ReadonlyMap<string, FieldSchema>
 
 	private constructor(data: ModuleData) {
@@ -265,6 +271,7 @@ export class ModuleSchema {
 		this.customization = data.customization
 		this.fields = Object.freeze([...data.fields])
 		this.checks = Object.freeze([...data.checks])
+		this.styles = Object.freeze([...data.styles])
 		this.#byKey = new Map(data.fields.map(field => [field.key, field]))
 		Object.freeze(this)
 	}
@@ -327,6 +334,10 @@ export class ModuleSchema {
 
 		if (this.checks.length > 0) {
 			json.checks = this.checks.map(checkToJson)
+		}
+
+		if (this.styles.length > 0) {
+			json.styles = this.styles.map(styleRuleToJson)
 		}
 
 		return json
@@ -435,11 +446,14 @@ function readModule(input: unknown, problems: Problems): ModuleData | null {
 	const checks =
 		fields === null ? [] : readChecks(input.checks, fields, (path, message) => problems.add(path, message))
 
+	const styles =
+		fields === null ? [] : readStyleRules(input.styles, fields, (path, message) => problems.add(path, message))
+
 	if (module === null || schemaVersion === null || fields === null) {
 		return null
 	}
 
-	return { module, schemaVersion, title, customization, fields, checks }
+	return { module, schemaVersion, title, customization, fields, checks, styles }
 }
 
 function readSchemaVersion(input: Json, problems: Problems): number | null {

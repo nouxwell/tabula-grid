@@ -22,7 +22,14 @@ describe("summarizeCells", () => {
 				{ field: price, value: "2812.8" },
 				{ field: price, value: "283.98" }
 			])
-		).toEqual({ filled: 3, numbers: 3, sum: "3819.8", average: "1273.2666666667" })
+		).toEqual({
+			filled: 3,
+			numbers: 3,
+			sum: "3819.8",
+			average: "1273.2666666667",
+			min: "283.98",
+			max: "2812.8"
+		})
 		expect(summarizeCells([0.1, 0.2].map(value => ({ field: price, value })))).toMatchObject({ sum: "0.3" })
 	})
 
@@ -35,7 +42,7 @@ describe("summarizeCells", () => {
 				{ field: note, value: "123" },
 				{ field: price, value: { formulaError: "#DIV/0!" } }
 			])
-		).toEqual({ filled: 4, numbers: 1, sum: "4", average: "4" })
+		).toEqual({ filled: 4, numbers: 1, sum: "4", average: "4", min: "4", max: "4" })
 	})
 
 	it("has no sum when no cell holds a number", () => {
@@ -43,8 +50,10 @@ describe("summarizeCells", () => {
 			filled: 1,
 			numbers: 0,
 			sum: null,
-			average: null
+			average: null,
+			min: null,
+			max: null
 		})
-		expect(summarizeCells([])).toEqual({ filled: 0, numbers: 0, sum: null, average: null })
+		expect(summarizeCells([])).toEqual({ filled: 0, numbers: 0, sum: null, average: null, min: null, max: null })
 	})
 })

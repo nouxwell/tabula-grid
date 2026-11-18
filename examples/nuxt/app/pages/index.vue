@@ -17,6 +17,18 @@
 				<span class="font-semibold text-text">Toplu işlemler</span>
 			</nav>
 			<div class="ml-auto flex items-center gap-2">
+				<span class="hidden md:inline-flex">
+					<AppTooltip>
+						<template #trigger>
+							<AppButton
+								icon="keyboard"
+								aria-label="Klavye kısayolları (F1)"
+								@click="shortcutsOpen = true"
+							/>
+						</template>
+						Klavye kısayolları (F1)
+					</AppTooltip>
+				</span>
 				<AppTooltip>
 					<template #trigger>
 						<AppButton
@@ -102,7 +114,7 @@
 				sideways; on a narrower screen what does not fit goes under ⋯, and a phone has its tools in
 				a sheet from the bottom.
 			-->
-			<AppCard class="flex-none" content-class="p-0!">
+			<AppCard class="min-w-0 flex-none" content-class="p-0!">
 				<div role="toolbar" aria-label="Tablo araçları" class="flex min-h-12 items-center gap-2 px-3 py-1.5">
 					<AppTooltip>
 						<template #trigger>
@@ -238,9 +250,13 @@
 							<button
 								type="button"
 								class="flex items-center gap-1.5 px-2.5 py-1"
-								:class="onlyChanged ? 'text-muted' : 'bg-primary/10 font-semibold text-primary-text'"
-								:aria-pressed="!onlyChanged"
-								@click="onlyChanged = false"
+								:class="
+									onlyChanged || onlyMarked
+										? 'text-muted'
+										: 'bg-primary/10 font-semibold text-primary-text'
+								"
+								:aria-pressed="!onlyChanged && !onlyMarked"
+								@click="showAll"
 							>
 								Tüm satırlar
 								<span
@@ -266,6 +282,22 @@
 									<AppNumberAnimation :to="changeSummary.rows" locale="tr-TR" />
 								</span>
 							</button>
+							<button
+								v-if="markedRows > 0 || onlyMarked"
+								type="button"
+								class="flex items-center gap-1.5 border-l border-divider px-2.5 py-1"
+								:class="onlyMarked ? 'bg-primary/10 font-semibold text-primary-text' : 'text-muted'"
+								:aria-pressed="onlyMarked"
+								title="Elle renklendirilmiş hücresi olan satırlar"
+								@click="showMarked"
+							>
+								Renkli
+								<span
+									class="rounded-full bg-surface-alt px-1.5 text-xs font-normal text-text tabular-nums"
+								>
+									<AppNumberAnimation :to="markedRows" locale="tr-TR" />
+								</span>
+							</button>
 						</span>
 						<Transition name="fade">
 							<span v-if="changeSummary.missing > 0" class="whitespace-nowrap text-muted">
@@ -275,13 +307,144 @@
 							</span>
 						</Transition>
 					</div>
+					<!--
+						How the cells look: bold, italic, colours, alignment, decimals. Whole on a wide screen,
+						under one Biçim menu on a narrower one; a phone has them in its tools.
+					-->
+					<span class="mx-1 hidden h-5 w-px flex-none bg-divider md:block" aria-hidden="true" />
+					<div class="hidden flex-none items-center gap-2 xl:flex" role="group" aria-label="Biçim">
+						<span class="inline-flex">
+							<AppTooltip>
+								<template #trigger>
+									<AppButton
+										:disabled="!sheet"
+										aria-label="Kalın (Ctrl+B)"
+										class="rounded-r-none!"
+										@click="toggleMark('bold')"
+									>
+										<strong>K</strong>
+									</AppButton>
+								</template>
+								Kalın (Ctrl+B)
+							</AppTooltip>
+							<AppTooltip>
+								<template #trigger>
+									<AppButton
+										:disabled="!sheet"
+										aria-label="İtalik (Ctrl+I)"
+										class="-ml-px rounded-l-none!"
+										@click="toggleMark('italic')"
+									>
+										<em class="font-serif">T</em>
+									</AppButton>
+								</template>
+								İtalik (Ctrl+I)
+							</AppTooltip>
+						</span>
+						<span class="inline-flex">
+							<AppDropdown :options="colorMenu('color')" @select="chooseColorKey">
+								<AppButton :disabled="!sheet" aria-label="Yazı rengi" class="rounded-r-none!">
+									<span class="flex flex-col items-center leading-none">
+										<strong>A</strong>
+										<span
+											class="mt-0.5 h-[3px] w-4 rounded-sm"
+											:style="{ background: hexOf(lastColor) }"
+										/>
+									</span>
+									<AppIcon name="chevronDown" :size="12" class="ml-0.5" />
+								</AppButton>
+							</AppDropdown>
+							<AppDropdown :options="colorMenu('fill')" @select="chooseColorKey">
+								<AppButton :disabled="!sheet" aria-label="Hücre rengi" class="-ml-px rounded-l-none!">
+									<span class="flex flex-col items-center leading-none">
+										<AppIcon name="bucket" :size="16" />
+										<span
+											class="mt-0.5 h-[3px] w-4 rounded-sm"
+											:style="{ background: hexOf(lastFill) }"
+										/>
+									</span>
+									<AppIcon name="chevronDown" :size="12" class="ml-0.5" />
+								</AppButton>
+							</AppDropdown>
+						</span>
+						<span class="inline-flex">
+							<AppTooltip v-for="(item, index) in ALIGNS" :key="item.value">
+								<template #trigger>
+									<AppButton
+										:disabled="!sheet"
+										:aria-label="item.label"
+										:aria-pressed="activeAlign === item.value"
+										:type="activeAlign === item.value ? 'primary' : 'default'"
+										:secondary="activeAlign === item.value"
+										:class="[
+											index > 0 ? '-ml-px' : '',
+											index === 0
+												? 'rounded-r-none!'
+												: index === 2
+													? 'rounded-l-none!'
+													: 'rounded-none!'
+										]"
+										@click="alignColumns(item.value)"
+									>
+										<template #icon><AppIcon :name="item.icon" /></template>
+									</AppButton>
+								</template>
+								{{ item.label }}
+							</AppTooltip>
+						</span>
+						<span class="inline-flex">
+							<AppTooltip>
+								<template #trigger>
+									<AppButton
+										:disabled="!sheet"
+										aria-label="Ondalığı azalt"
+										class="rounded-r-none!"
+										@click="stepDecimals(-1)"
+									>
+										<span class="text-xs font-semibold">←,0</span>
+									</AppButton>
+								</template>
+								Ondalığı azalt
+							</AppTooltip>
+							<AppTooltip>
+								<template #trigger>
+									<AppButton
+										:disabled="!sheet"
+										aria-label="Ondalığı artır"
+										class="-ml-px rounded-l-none!"
+										@click="stepDecimals(1)"
+									>
+										<span class="text-xs font-semibold">,00→</span>
+									</AppButton>
+								</template>
+								Ondalığı artır
+							</AppTooltip>
+						</span>
+						<AppTooltip>
+							<template #trigger>
+								<AppButton :disabled="!sheet" aria-label="Biçimi temizle" @click="clearFormat">
+									<template #icon><AppIcon name="eraser" /></template>
+								</AppButton>
+							</template>
+							Biçimi temizle
+						</AppTooltip>
+					</div>
+					<span class="hidden md:inline-flex xl:hidden">
+						<AppDropdown :options="formatOptions" @select="chooseFormat">
+							<AppButton :disabled="!sheet" aria-label="Biçim">
+								<template #icon><AppIcon name="format" /></template>
+								<span class="hidden lg:inline">Biçim</span>
+								<AppIcon name="chevronDown" :size="14" class="ml-1" />
+							</AppButton>
+						</AppDropdown>
+					</span>
 					<div class="flex w-full min-w-0 items-center gap-2 md:ml-auto md:w-auto">
 						<span class="hidden md:inline-flex">
 							<AppTooltip :disabled="!narrowToolbar">
 								<template #trigger>
 									<AppButton :disabled="!sheet" aria-label="Sütunlar" @click="columnsOpen = true">
 										<template #icon><AppIcon name="columns" /></template>
-										<span class="hidden lg:inline">Sütunlar</span>
+										<span class="hidden 2xl:inline">Sütunlar</span>
 									</AppButton>
 								</template>
 								Sütunlar
@@ -291,8 +454,8 @@
 							<AppDropdown :options="viewOptions" @select="chooseView">
 								<AppButton :disabled="!sheet" :aria-label="`Görünüm: ${viewLabel}`">
 									<template #icon><AppIcon name="views" /></template>
-									<span class="hidden max-w-48 truncate lg:inline">{{ viewLabel }}</span>
-									<span v-if="viewModified" class="ml-1.5 hidden text-muted xl:inline">
+									<span class="hidden max-w-48 truncate 2xl:inline">{{ viewLabel }}</span>
+									<span v-if="viewModified" class="ml-1.5 hidden text-muted 2xl:inline">
 										· değişti
 									</span>
 									<AppIcon name="chevronDown" :size="14" class="ml-1" />
@@ -327,6 +490,20 @@
 						:theme="theme"
 						:locale="locale"
 					/>
+					<TabulaFind
+						v-if="sheet"
+						v-model:open="findOpen"
+						v-model:found="found"
+						class="flex-none border-b border-divider px-3 py-2"
+						:grid="grid"
+						:store="sheet.store"
+						:schema="sheet.schema"
+						:view="sheet.view"
+						:value-settings="valueSettings"
+						:theme="theme"
+						:locale="locale"
+						@replaced="onReplaced"
+					/>
 					<Transition name="fade" mode="out-in">
 						<TabulaGrid
 							v-if="sheet"
@@ -350,8 +527,14 @@
 							:theme="theme"
 							:locale="locale"
 							:value-settings="valueSettings"
-							:row-height="narrow ? 40 : 30"
+							:row-height="narrow ? 40 : DENSITY_HEIGHTS[density]"
+							:marks="sheet.marks"
+							:found="found ?? undefined"
+							fit
+							totals
+							:zoom="zoom"
 							@menu="onMenu"
+							@find="findOpen = true"
 						/>
 						<!-- Only the part that waits spins; the rest of the page is there and works. -->
 						<div
@@ -386,6 +569,63 @@
 						/>
 						<div class="hidden flex-none md:block">
 							<TabulaStatusBar :grid="grid" :theme="theme" :locale="locale" />
+						</div>
+						<!-- How close the rows sit and how large the sheet is drawn: the user's own, kept in the browser. -->
+						<div class="hidden flex-none items-center gap-3 border-l border-divider px-3 lg:flex">
+							<span
+								class="inline-flex overflow-hidden rounded-app border border-divider text-xs"
+								role="group"
+								aria-label="Satır sıklığı"
+							>
+								<button
+									v-for="(item, index) in DENSITIES"
+									:key="item.value"
+									type="button"
+									class="px-2 py-0.5"
+									:class="[
+										index > 0 ? 'border-l border-divider' : '',
+										density === item.value
+											? 'bg-primary/10 font-semibold text-primary-text'
+											: 'text-muted'
+									]"
+									:aria-pressed="density === item.value"
+									@click="density = item.value"
+								>
+									{{ item.label }}
+								</button>
+							</span>
+							<span
+								class="inline-flex items-center gap-1 text-xs"
+								role="group"
+								aria-label="Yakınlaştırma"
+							>
+								<button
+									type="button"
+									class="flex size-6 items-center justify-center rounded-app border border-divider disabled:opacity-40"
+									aria-label="Uzaklaştır"
+									:disabled="zoom <= ZOOMS[0]!"
+									@click="stepZoom(-1)"
+								>
+									−
+								</button>
+								<button
+									type="button"
+									class="w-11 text-center tabular-nums"
+									title="Yüzde yüze döndür"
+									@click="zoom = 1"
+								>
+									%{{ Math.round(zoom * 100) }}
+								</button>
+								<button
+									type="button"
+									class="flex size-6 items-center justify-center rounded-app border border-divider disabled:opacity-40"
+									aria-label="Yakınlaştır"
+									:disabled="zoom >= ZOOMS[ZOOMS.length - 1]!"
+									@click="stepZoom(1)"
+								>
+									+
+								</button>
+							</span>
 						</div>
 					</div>
 				</AppCard>
@@ -530,6 +770,32 @@
 				</nav>
 			</AppDrawerContent>
 		</AppDrawer>
+
+		<AppModal v-model:show="shortcutsOpen" title="Klavye kısayolları" width="720px">
+			<AppModalScrollWrapper>
+				<div class="grid gap-x-8 gap-y-4 md:grid-cols-2">
+					<section v-for="group in SHORTCUTS" :key="group.title" class="flex flex-col gap-1.5">
+						<h3 class="m-0 text-sm font-semibold">{{ group.title }}</h3>
+						<dl class="m-0 flex flex-col gap-1">
+							<div
+								v-for="item in group.items"
+								:key="item.keys"
+								class="flex items-baseline justify-between gap-4 text-sm"
+							>
+								<dt class="text-muted">{{ item.what }}</dt>
+								<dd class="m-0 flex-none">
+									<kbd
+										class="rounded-app border border-divider bg-surface-alt px-1.5 py-0.5 font-mono text-xs"
+									>
+										{{ item.keys }}
+									</kbd>
+								</dd>
+							</div>
+						</dl>
+					</section>
+				</div>
+			</AppModalScrollWrapper>
+		</AppModal>
 
 		<AppModal v-model:show="importOpen" title="İçe aktarma" width="560px">
 			<AppModalScrollWrapper>
@@ -765,6 +1031,12 @@ import {
 	VIEW_NAME_LIMIT,
 	viewNameProblem,
 	withColumn,
+	withColumnFormat,
+	digitsFor,
+	MAX_SHOWN_DECIMALS,
+	type ColumnAlign,
+	type FoundCell,
+	type MarkColor,
 	type ColumnFilters,
 	type ColumnLayout,
 	type CheckInput,
@@ -795,6 +1067,7 @@ import { localeMenu, type Locale } from "~/utils/locales"
 import type { ImportResult, Sheet } from "~/utils/sheet"
 import { loadWorkbook, newId, storeWorkbook } from "~/utils/workbook"
 import { FIT_TOOLTIP_STYLE } from "~/utils/tooltip"
+import { MARK_SWATCHES } from "~/utils/styles"
 
 // The schema comes with the page: the server draws the title and the shell from it. The rows only
 // the grid needs, and the grid is drawn in the browser, so the browser fetches them: in the page's
@@ -843,8 +1116,8 @@ const { views, currentId: viewId, current: currentView, modified: viewModified }
 const columnsOpen = ref(false)
 const onlyIssueRows = ref(false)
 const issuesOpen = ref(false)
-/** Below a wide screen the second row's buttons show their icons only, and say their names in a tooltip. */
-const narrowToolbar = useMediaQuery("(max-width: 1023px)")
+/** Below the widest screens the second row's buttons show their icons only, and say their names in a tooltip. */
+const narrowToolbar = useMediaQuery("(max-width: 1535px)")
 /** A phone's tools sheet. */
 const toolsOpen = ref(false)
 const csvInput = ref<HTMLInputElement | null>(null)
@@ -924,6 +1197,8 @@ function makeSheet(
 			save: async kept => keepWorkbook(withSheet(workbookNow(), sheetId, { draft: kept })),
 			template,
 			carried: carried !== undefined,
+			// The colours the user put on carried rows go with them.
+			...(carried && sheet.value ? { marks: sheet.value.marks.toJSON() } : {}),
 			// The server's rows: what the user's changes are told against, whichever rows the sheet opens with.
 			baseline: rowList,
 			...(draft ? { mapping: draft } : {})
@@ -1837,8 +2112,312 @@ const changeSummary = computed(() =>
 	version.value >= 0 && sheet.value ? sheet.value.changes.summary() : { rows: 0, cells: 0, added: 0, missing: 0 }
 )
 const onlyChanged = ref(false)
+/** Only the rows with a cell the user coloured by hand. */
+const onlyMarked = ref(false)
+/** How many rows have a cell the user coloured. */
+const markedRows = computed(() => (version.value >= 0 && sheet.value ? sheet.value.marks.rows().length : 0))
 
-watch(onlyChanged, only => sheet.value?.onlyChanged(only))
+watch(onlyChanged, only => {
+	sheet.value?.onlyChanged(only)
+
+	if (only) {
+		onlyMarked.value = false
+	}
+})
+watch(onlyMarked, only => {
+	sheet.value?.onlyMarked(only)
+
+	if (only) {
+		onlyChanged.value = false
+	}
+})
+
+function showAll(): void {
+	onlyChanged.value = false
+	onlyMarked.value = false
+}
+
+/** "Renkli" again: the filter taken anew, to the sheet as it is now. */
+function showMarked(): void {
+	if (onlyMarked.value) {
+		sheet.value?.onlyMarked(true)
+	} else {
+		onlyMarked.value = true
+	}
+}
+
+// ---------------------------------------------------------------- how cells look
+
+const ALIGNS: readonly { readonly value: ColumnAlign; readonly label: string; readonly icon: IconName }[] = [
+	{ value: "left", label: "Sola yasla", icon: "alignLeft" },
+	{ value: "center", label: "Ortala", icon: "alignCenter" },
+	{ value: "right", label: "Sağa yasla", icon: "alignRight" }
+]
+
+/** The colours last chosen, drawn under the A and the bucket, as a spreadsheet's buttons do. */
+const lastColor = ref<MarkColor>("red")
+const lastFill = ref<MarkColor>("yellow")
+
+function hexOf(color: MarkColor | null): string {
+	return MARK_SWATCHES.find(swatch => swatch.value === color)?.hex ?? "transparent"
+}
+
+/** The colours to pick, as a menu: `fill:yellow`, `color:none`. */
+function colorMenu(kind: "fill" | "color"): DropdownOption[] {
+	return [
+		...MARK_SWATCHES.map(swatch => ({
+			label: swatch.label,
+			key: `${kind}:${swatch.value}`,
+			icon: () =>
+				h("span", {
+					class: "inline-block size-3.5 rounded-sm border border-divider",
+					style: {
+						background: kind === "fill" ? `color-mix(in srgb, ${swatch.hex} 24%, white)` : swatch.hex
+					}
+				})
+		})),
+		{ type: "divider", key: `${kind}-line` },
+		{ label: "Rengi kaldır", key: `${kind}:none`, icon: menuIcon("close") }
+	]
+}
+
+/** The format menu of a narrower screen: everything the format group has. */
+const formatOptions: DropdownOption[] = [
+	{ label: "Kalın (Ctrl+B)", key: "bold" },
+	{ label: "İtalik (Ctrl+I)", key: "italic" },
+	{ label: "Yazı rengi", key: "color", children: colorMenu("color") },
+	{ label: "Hücre rengi", key: "fill", icon: menuIcon("bucket"), children: colorMenu("fill") },
+	{ type: "divider", key: "format-line" },
+	{ label: "Sola yasla", key: "align:left", icon: menuIcon("alignLeft") },
+	{ label: "Ortala", key: "align:center", icon: menuIcon("alignCenter") },
+	{ label: "Sağa yasla", key: "align:right", icon: menuIcon("alignRight") },
+	{ type: "divider", key: "decimals-line" },
+	{ label: "Ondalığı azalt", key: "decimals:-1" },
+	{ label: "Ondalığı artır", key: "decimals:1" },
+	{ type: "divider", key: "clear-line" },
+	{ label: "Biçimi temizle", key: "clear", icon: menuIcon("eraser") }
+]
+
+function chooseFormat(key: string | number): void {
+	const chosen = String(key)
+
+	if (chosen === "bold" || chosen === "italic") {
+		toggleMark(chosen)
+	} else if (chosen.startsWith("align:")) {
+		alignColumns(chosen.slice("align:".length) as ColumnAlign)
+	} else if (chosen.startsWith("decimals:")) {
+		stepDecimals(chosen.endsWith("-1") ? -1 : 1)
+	} else if (chosen === "clear") {
+		clearFormat()
+	} else {
+		chooseColorKey(chosen)
+	}
+}
+
+function nothingSelected(): void {
+	message.warning("Önce hücreleri seçin.")
+}
+
+function toggleMark(style: "bold" | "italic"): void {
+	if (!grid.value?.toggleSelection(style)) {
+		nothingSelected()
+	}
+
+	grid.value?.focus()
+}
+
+/** `fill:yellow` or `color:none`, from a colour menu. */
+function chooseColorKey(key: string | number): void {
+	const [kind, value] = String(key).split(":") as ["fill" | "color", string]
+	const color = value === "none" ? null : (value as MarkColor)
+
+	if (!grid.value?.markSelection({ [kind]: color })) {
+		nothingSelected()
+	} else if (color) {
+		if (kind === "fill") {
+			lastFill.value = color
+		} else {
+			lastColor.value = color
+		}
+	}
+
+	grid.value?.focus()
+}
+
+/** Where the active cell's column puts its values, when the user chose. */
+const activeAlign = computed(() => {
+	const key = grid.value?.cell?.field.key
+
+	return key ? (columns.value.formats?.[key]?.align ?? null) : null
+})
+
+/** The columns the selection spans, aligned; the alignment they had taken off when it is pressed again. */
+function alignColumns(align: ColumnAlign): void {
+	const keys = grid.value?.selectedFields() ?? []
+
+	if (keys.length === 0) {
+		nothingSelected()
+
+		return
+	}
+
+	const again = keys.every(key => columns.value.formats?.[key]?.align === align)
+
+	columns.value = keys.reduce(
+		(layout, key) => withColumnFormat(layout, key, { align: again ? undefined : align }),
+		columns.value
+	)
+	grid.value?.focus()
+}
+
+/** One digit more or fewer after the point, in the number columns the selection spans. */
+function stepDecimals(by: 1 | -1): void {
+	const current = sheet.value
+
+	if (!current) {
+		return
+	}
+
+	const keys = (grid.value?.selectedFields() ?? []).filter(key =>
+		["integer", "decimal", "money", "quantity", "percent"].includes(current.schema.field(key).type)
+	)
+
+	if (keys.length === 0) {
+		message.warning("Ondalık yalnız sayı sütunlarında değişir; bir sayı sütununda hücre seçin.")
+
+		return
+	}
+
+	columns.value = keys.reduce((layout, key) => {
+		const shown = layout.formats?.[key]?.decimals ?? digitsFor(current.schema.field(key), valueSettings.value)
+		const next = Math.min(MAX_SHOWN_DECIMALS, Math.max(0, shown + by))
+
+		return withColumnFormat(layout, key, { decimals: next })
+	}, columns.value)
+	grid.value?.focus()
+}
+
+function clearFormat(): void {
+	if (!grid.value?.clearSelectionMarks()) {
+		nothingSelected()
+	}
+
+	grid.value?.focus()
+}
+
+// ---------------------------------------------------------------- find, density, zoom, shortcuts
+
+const findOpen = ref(false)
+const found = ref<{ readonly cells: readonly FoundCell[]; readonly current: FoundCell | null } | null>(null)
+
+function onReplaced(count: number, skipped: number): void {
+	if (count > 0) {
+		message.success(`${count} hücre değişti. Ctrl+Z geri alır.`)
+	}
+
+	if (skipped > 0) {
+		message.warning(`${skipped} hücre değiştirilemedi: sütunu ya da satırı yazılamıyor.`)
+	}
+}
+
+const DENSITIES = [
+	{ value: "compact", label: "Sık" },
+	{ value: "normal", label: "Normal" },
+	{ value: "comfortable", label: "Rahat" }
+] as const
+const DENSITY_HEIGHTS = { compact: 26, normal: 30, comfortable: 36 } as const
+const ZOOMS = [0.8, 0.9, 1, 1.1, 1.25, 1.5] as const
+const VIEW_KEY = "tabula-grid.example-nuxt.view"
+
+const density = ref<(typeof DENSITIES)[number]["value"]>("normal")
+const zoom = ref(1)
+
+function stepZoom(by: 1 | -1): void {
+	const at = ZOOMS.findIndex(step => step >= zoom.value - 0.001)
+	const next = ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, (at < 0 ? 2 : at) + by))]
+
+	zoom.value = next ?? 1
+}
+
+// Read once the page is in the browser, so the server's page and the first one drawn agree.
+onMounted(() => {
+	try {
+		const kept = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "null") as { density?: string; zoom?: number } | null
+
+		if (kept && DENSITIES.some(item => item.value === kept.density)) {
+			density.value = kept.density as typeof density.value
+		}
+
+		if (kept && ZOOMS.includes(kept.zoom as (typeof ZOOMS)[number])) {
+			zoom.value = kept.zoom as number
+		}
+	} catch {
+		// A browser that keeps nothing draws the sheet as it comes.
+	}
+})
+
+watch([density, zoom], () => {
+	try {
+		localStorage.setItem(VIEW_KEY, JSON.stringify({ density: density.value, zoom: zoom.value }))
+	} catch {
+		// Kept for this visit only.
+	}
+})
+
+const shortcutsOpen = ref(false)
+
+useEventListener("keydown", (event: KeyboardEvent) => {
+	if (event.key === "F1") {
+		event.preventDefault()
+		shortcutsOpen.value = true
+	}
+})
+
+const SHORTCUTS: readonly { readonly title: string; readonly items: readonly { keys: string; what: string }[] }[] = [
+	{
+		title: "Gezinme",
+		items: [
+			{ keys: "Oklar", what: "Hücreden hücreye" },
+			{ keys: "Ctrl+Ok", what: "Dolu bloğun sonuna" },
+			{ keys: "Tab · Shift+Tab", what: "Sağa · sola" },
+			{ keys: "Home · End", what: "Satırın başına · sonuna" },
+			{ keys: "Ctrl+Home · Ctrl+End", what: "Tablonun başına · sonuna" },
+			{ keys: "PageUp · PageDown", what: "Bir sayfa yukarı · aşağı" }
+		]
+	},
+	{
+		title: "Düzenleme",
+		items: [
+			{ keys: "F2 ya da yazmak", what: "Hücreyi düzenle" },
+			{ keys: "Enter", what: "Yaz ve aşağı geç" },
+			{ keys: "Esc", what: "Vazgeç" },
+			{ keys: "Delete", what: "Seçimi temizle" },
+			{ keys: "Ctrl+D · Ctrl+R", what: "Aşağı · sağa doldur" },
+			{ keys: "Alt+↓", what: "Seçenek listesini aç" },
+			{ keys: "Ctrl+Z · Ctrl+Y", what: "Geri al · yinele" }
+		]
+	},
+	{
+		title: "Seçim ve pano",
+		items: [
+			{ keys: "Shift+Ok", what: "Seçimi genişlet" },
+			{ keys: "Ctrl+A", what: "Hepsini seç" },
+			{ keys: "Shift+Space · Ctrl+Space", what: "Satırı · sütunu seç" },
+			{ keys: "Ctrl+C · Ctrl+X · Ctrl+V", what: "Kopyala · kes · yapıştır" },
+			{ keys: "Shift+F10", what: "Hücre menüsü" }
+		]
+	},
+	{
+		title: "Satırlar, biçim ve bulma",
+		items: [
+			{ keys: "Ctrl++ · Ctrl+−", what: "Satır ekle · satırları sil" },
+			{ keys: "Ctrl+B · Ctrl+I", what: "Kalın · italik" },
+			{ keys: "Ctrl+H", what: "Bul ve değiştir" },
+			{ keys: "Ctrl+Shift+Ok", what: "Sayfa sekmesini sola · sağa taşı" },
+			{ keys: "F1", what: "Bu pencere" }
+		]
+	}
+]
 
 /** "Değişenler" again: the filter taken anew, to the sheet as it is now. */
 function showChanged(): void {
@@ -1939,6 +2518,15 @@ const bulkOptions: DropdownOption[] = [
 			{ label: "Yuvarla", key: "round", icon: menuIcon("round"), children: roundOptions }
 		]
 	},
+	{
+		label: () =>
+			h("span", { class: "flex w-full items-center justify-between gap-6" }, [
+				"Bul ve değiştir…",
+				h("span", { class: "text-xs text-muted" }, "Ctrl+H")
+			]),
+		key: "find",
+		icon: menuIcon("search")
+	},
 	{ type: "divider", key: "bulk-line" },
 	{
 		label: () =>
@@ -1956,6 +2544,8 @@ function chooseBulk(key: string | number): void {
 
 	if (chosen === "percent" || chosen === "add") {
 		openAdjust(chosen)
+	} else if (chosen === "find") {
+		findOpen.value = true
 	} else if (chosen === "remove") {
 		removeRows()
 	} else {
@@ -1993,6 +2583,16 @@ const toolGroups = computed<{ readonly title: string; readonly items: readonly T
 		]
 	},
 	{
+		title: "Biçim",
+		items: [
+			{ key: "bold", label: "Kalın", icon: "format" },
+			{ key: "italic", label: "İtalik", icon: "format" },
+			{ key: "fill", label: "Hücre rengi", icon: "bucket", menu: colorMenu("fill") },
+			{ key: "color", label: "Yazı rengi", icon: "format", menu: colorMenu("color") },
+			{ key: "clear", label: "Biçimi temizle", icon: "eraser" }
+		]
+	},
+	{
 		title: "Sayfa",
 		items: [
 			{ key: "columns", label: "Sütunlar", icon: "columns" },
@@ -2010,7 +2610,8 @@ const toolGroups = computed<{ readonly title: string; readonly items: readonly T
 				value: templateLabel.value,
 				menu: templateOptions.value
 			},
-			{ key: "rules", label: "Kurallar", icon: "rules", disabled: !drawerTemplate.value }
+			{ key: "rules", label: "Kurallar", icon: "rules", disabled: !drawerTemplate.value },
+			{ key: "find", label: "Bul ve değiştir", icon: "search" }
 		]
 	}
 ])
@@ -2037,6 +2638,14 @@ function chooseTool(key: string, choice?: string | number): void {
 		chooseTemplate(choice)
 	} else if (key === "rules") {
 		rulesOpen.value = true
+	} else if (key === "bold" || key === "italic") {
+		toggleMark(key)
+	} else if ((key === "fill" || key === "color") && choice !== undefined) {
+		chooseColorKey(choice)
+	} else if (key === "clear") {
+		clearFormat()
+	} else if (key === "find") {
+		findOpen.value = true
 	}
 }
 

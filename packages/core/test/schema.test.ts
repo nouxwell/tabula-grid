@@ -159,7 +159,7 @@ describe("ModuleSchema", () => {
 			"fields[5].requird: is not a field property; a string field takes key, type, label, required, editable, submit, rules, example, formula, default"
 		])
 		expect(problemsOf({ ...priceUpdate, version: 3 })).toEqual([
-			"version: is not a module schema property; expected one of module, schemaVersion, title, customization, fields, checks"
+			"version: is not a module schema property; expected one of module, schemaVersion, title, customization, fields, checks, styles"
 		])
 	})
 

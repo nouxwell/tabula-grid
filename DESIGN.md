@@ -238,6 +238,27 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 86  | The issues panel comes and goes with the issues (Y) | application | done               |
 | 87  | The issues switch with their count                  | both        | done               |
 | 88  | The panel opening only after a check                | application | not chosen         |
+| 89  | Alignment: left, centre, right                      | package     | done               |
+| 90  | Fill and text colour on cells (Z)                   | package     | done               |
+| 91  | Bold and italic                                     | package     | done               |
+| 92  | Clear the format                                    | package     | done               |
+| 93  | Colour rules (AA)                                   | package     | done               |
+| 94  | Decimals shown                                      | package     | done               |
+| 95  | Zoom and row density (AB)                           | package     | done               |
+| 96  | Font size and family per cell                       | package     | not chosen         |
+| 97  | Wrapped text                                        | package     | not chosen         |
+| 98  | Format painter                                      | package     | not chosen         |
+| 99  | Borders and merged cells                            | package     | not chosen         |
+| 100 | Columns stretched to the sheet (AB)                 | package     | done               |
+| 101 | Grey K, L, M… columns                               | package     | not chosen         |
+| 102 | A row for a new product at the bottom (AB)          | package     | not chosen         |
+| 103 | A totals row (AB)                                   | package     | done               |
+| 104 | Find and replace, Ctrl+H (AC)                       | package     | done               |
+| 105 | A column fitted to its contents                     | package     | done (before)      |
+| 106 | A shortcuts window                                  | application | done               |
+| 107 | Notes on cells                                      | package     | not chosen         |
+| 108 | Grouping and subtotals                              | package     | not chosen         |
+| 109 | Excel (.xlsx) import and export                     | CRM         | with the CRM       |
 | —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
 | —   | Saved views (personal views)                        | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)      | both        | done (phase two)   |

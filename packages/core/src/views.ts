@@ -1,4 +1,11 @@
-import { arrangeColumns, type ColumnLayout } from "./columns.js"
+import {
+	arrangeColumns,
+	freezeColumnLayout,
+	readColumnLayout,
+	sameColumnFormats,
+	type ColumnFormat,
+	type ColumnLayout
+} from "./columns.js"
 import { TabulaError } from "./errors.js"
 import { hasRange, type ColumnCondition, type ColumnFilters, type ColumnSort } from "./filters.js"
 import type { ModuleSchema } from "./schema.js"
@@ -71,6 +78,10 @@ export function viewFor(state: ViewState, schema: ModuleSchema): ViewState {
 	const order = keys(columns.order)
 	const hidden = keys(columns.hidden)
 	const pinned = keys(columns.pinned)
+	const formats = Object.fromEntries(Object.entries(columns.formats ?? {}).filter(([key]) => known(key))) as Record<
+		string,
+		ColumnFormat
+	>
 	const filters: Record<string, ColumnCondition> = {}
 
 	for (const [key, condition] of Object.entries(state.filters)) {
@@ -80,7 +91,12 @@ export function viewFor(state: ViewState, schema: ModuleSchema): ViewState {
 	}
 
 	return freezeState({
-		columns: { ...(order ? { order } : {}), ...(hidden ? { hidden } : {}), ...(pinned ? { pinned } : {}) },
+		columns: {
+			...(order ? { order } : {}),
+			...(hidden ? { hidden } : {}),
+			...(pinned ? { pinned } : {}),
+			...(Object.keys(formats).length > 0 ? { formats } : {})
+		},
 		columnWidths: Object.fromEntries(Object.entries(state.columnWidths).filter(([key]) => known(key))),
 		filters,
 		sort: state.sort && known(state.sort.key) ? state.sort : null
@@ -104,6 +120,7 @@ export function sameView(schema: ModuleSchema, a: ViewState, b: ViewState): bool
 
 	return (
 		arranged(left) === arranged(right) &&
+		sameColumnFormats(left.columns, right.columns) &&
 		sameRecord(left.columnWidths, right.columnWidths, (x, y) => x === y) &&
 		sameRecord(left.filters, right.filters, sameCondition) &&
 		(left.sort === null || right.sort === null
@@ -393,35 +410,7 @@ function readView(input: unknown, path: string, problem: Problem): SavedView | n
 }
 
 function readLayout(input: unknown, path: string, problem: Problem): ColumnLayout {
-	if (input === undefined || input === null) {
-		return {}
-	}
-
-	const layout = plain(input)
-
-	if (!layout) {
-		problem(path, "must be an object.")
-
-		return {}
-	}
-
-	const result: { order?: readonly string[]; hidden?: readonly string[]; pinned?: readonly string[] } = {}
-
-	for (const name of ["order", "hidden", "pinned"] as const) {
-		const value = layout[name]
-
-		if (value === undefined) {
-			continue
-		}
-
-		if (!Array.isArray(value) || value.some(item => typeof item !== "string")) {
-			problem(`${path}.${name}`, "must be a list of field keys.")
-		} else {
-			result[name] = value as string[]
-		}
-	}
-
-	return result
+	return readColumnLayout(input, path, problem) ?? {}
 }
 
 function readWidths(input: unknown, path: string, problem: Problem): Record<string, number> {
@@ -513,11 +502,7 @@ function freezeState(state: ViewState): ViewState {
 	const columns = state.columns
 
 	return Object.freeze({
-		columns: Object.freeze({
-			...(columns.order ? { order: Object.freeze([...columns.order]) } : {}),
-			...(columns.hidden ? { hidden: Object.freeze([...columns.hidden]) } : {}),
-			...(columns.pinned ? { pinned: Object.freeze([...columns.pinned]) } : {})
-		}),
+		columns: freezeColumnLayout(columns),
 		columnWidths: Object.freeze({ ...state.columnWidths }),
 		filters: Object.freeze(
 			Object.fromEntries(

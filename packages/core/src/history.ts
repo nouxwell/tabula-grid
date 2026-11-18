@@ -21,8 +21,17 @@ export const REDO_ORIGIN = "redo"
 
 const DEFAULT_LIMIT = 100
 
-/** One step: a change, and any that joined it, in the order they were made. */
-type Step = StoreChange[]
+/**
+ * A step of something kept beside the store, such as the colours put on cells: taken back and made
+ * again by the one who recorded it. It has no revision; the rows are not changed by it.
+ */
+export interface HistoryStep {
+	readonly undo: () => void
+	readonly redo: () => void
+}
+
+/** One step: a change, and any that joined it, in the order they were made; or a step kept beside the store. */
+type Step = StoreChange[] | HistoryStep
 
 /**
  * Undo and redo for a sheet: every change to the store is a step, whoever made it.
@@ -84,12 +93,23 @@ export class UndoHistory {
 	 * Null when there is none.
 	 */
 	get nextUndo(): StoreChange | null {
-		return this.#undo[this.#undo.length - 1]?.[0] ?? null
+		return firstChange(this.#undo[this.#undo.length - 1])
 	}
 
 	/** The change that began the step `redo()` would make again. Null when there is none. */
 	get nextRedo(): StoreChange | null {
-		return this.#redo[this.#redo.length - 1]?.[0] ?? null
+		return firstChange(this.#redo[this.#redo.length - 1])
+	}
+
+	/**
+	 * Records a step of something kept beside the store, such as colours put on cells, so Ctrl+Z
+	 * takes it back in its turn with the rows' changes. It ends the way forward, as any change does.
+	 */
+	record(step: HistoryStep): void {
+		this.#undo.push(step)
+		this.#trim()
+		this.#redo = []
+		this.#changed()
 	}
 
 	/**
@@ -105,6 +125,14 @@ export class UndoHistory {
 		const step = this.#undo.pop()
 
 		if (step === undefined) {
+			return null
+		}
+
+		if (!Array.isArray(step)) {
+			step.undo()
+			this.#redo.push(step)
+			this.#changed()
+
 			return null
 		}
 
@@ -131,6 +159,15 @@ export class UndoHistory {
 		const step = this.#redo.pop()
 
 		if (step === undefined) {
+			return null
+		}
+
+		if (!Array.isArray(step)) {
+			step.redo()
+			this.#undo.push(step)
+			this.#trim()
+			this.#changed()
+
 			return null
 		}
 
@@ -169,7 +206,7 @@ export class UndoHistory {
 	}
 
 	/** Runs an undo or a redo; on failure puts the step back, or clears everything on a conflict. */
-	#take(step: Step, from: Step[], fn: () => StoreChange | null): StoreChange | null {
+	#take(step: StoreChange[], from: Step[], fn: () => StoreChange | null): StoreChange | null {
 		this.#making = this.#store.revision + 1
 
 		try {
@@ -200,7 +237,7 @@ export class UndoHistory {
 
 		// Never while a step is being taken: what a listener writes then comes after that step, not
 		// inside the one below it.
-		if (last && this.#making === -1 && this.#joins(change)) {
+		if (Array.isArray(last) && this.#making === -1 && this.#joins(change)) {
 			last.push(change)
 		} else {
 			this.#undo.push([change])
@@ -221,4 +258,8 @@ export class UndoHistory {
 		this.#version++
 		this.#listeners.emit(this)
 	}
+}
+
+function firstChange(step: Step | undefined): StoreChange | null {
+	return Array.isArray(step) ? (step[0] ?? null) : null
 }

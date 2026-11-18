@@ -79,8 +79,9 @@ export const PRICE_UPDATE: ModuleSchemaInput = {
 /**
  * The templates an authorized user prepared for the module, as the backend keeps and sends them. One
  * here: December's price rise, with its header, its stricter minimum, its date and currency for new
- * rows, the price with tax worked out, a note column of its own that is never sent, and two row
- * checks: a warning on a price cut, and the note required for a price that starts early.
+ * rows, the price with tax worked out, a note column of its own that is never sent, two row checks:
+ * a warning on a price cut, and the note required for a price that starts early; and two colour
+ * rules: a price in another currency in blue, a price under 100 on orange.
  */
 export const PRICE_TEMPLATES = [
 	{
@@ -116,6 +117,16 @@ export const PRICE_TEMPLATES = [
 					en: "Write an internal note for a price that starts before 1 December."
 				}
 			}
+		],
+		styles: [
+			{
+				id: "foreign-currency",
+				when: [{ field: "currency", op: "!=", value: "TRY" }],
+				field: "currency",
+				color: "blue",
+				bold: true
+			},
+			{ id: "low-price", when: [{ field: "newPrice", op: "<", value: 100 }], field: "newPrice", fill: "orange" }
 		],
 		view: { columns: { hidden: ["sku"], pinned: ["productId"] }, columnWidths: {}, filters: {}, sort: null }
 	}

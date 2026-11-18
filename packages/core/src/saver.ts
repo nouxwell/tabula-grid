@@ -3,6 +3,7 @@ import { createDraft, type Draft, type DraftView } from "./draft.js"
 import { TabulaError } from "./errors.js"
 import { sequence } from "./ids.js"
 import { Listeners } from "./listeners.js"
+import type { CellMarks } from "./marks.js"
 import type { RowStore } from "./rows.js"
 import type { ModuleSchema } from "./schema.js"
 import type { SheetSession } from "./session.js"
@@ -22,6 +23,8 @@ export interface DraftSaverOptions {
 	readonly name?: string | null
 	/** Read at each save: the user's view of the sheet, such as the grid's column widths. */
 	readonly view?: () => DraftView
+	/** The marks on the cells: kept with each draft, and a change to them is a change to save. */
+	readonly marks?: CellMarks
 	/** Milliseconds after the last change before it saves on its own; 0 saves only when asked. 2,000 by default. */
 	readonly delay?: number
 	readonly createId?: () => string
@@ -78,6 +81,10 @@ export class DraftSaver {
 		this.#name = options.name ?? null
 		this.id = options.id ?? (options.createId ?? sequence("d"))()
 		this.#stops.push(options.store.subscribe(() => this.changed()))
+
+		if (options.marks) {
+			this.#stops.push(options.marks.subscribe(() => this.changed()))
+		}
 
 		if (options.session) {
 			this.#stops.push(options.session.results.subscribe(() => this.changed()))
@@ -182,6 +189,7 @@ export class DraftSaver {
 			store: options.store,
 			session: options.session ?? null,
 			...(options.view ? { view: options.view() } : {}),
+			...(options.marks ? { marks: options.marks } : {}),
 			...(options.now ? { now: options.now } : {})
 		})
 

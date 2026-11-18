@@ -1128,6 +1128,197 @@ describe("TabulaGrid", () => {
 		})
 	})
 
+	describe("formats, marks, colour rules, totals and find", () => {
+		const NEW_PRICE = 3
+		const NOTE = 8
+		const setCell = (page: Page, row: number, key: string, value: string | null) =>
+			page.evaluate(
+				([index, field, text]) => {
+					const { store } = window.__playground!
+
+					store.setCell(store.rowIdAt(index as number)!, field as string, text)
+				},
+				[row, key, value] as const
+			)
+
+		it("draws a column's alignment and decimals as its format says, keeping the value", async () => {
+			await withPage(5, async page => {
+				await setCell(page, 0, "newPrice", "1533.8")
+				await page.evaluate(() =>
+					window.__playground!.setColumns({ formats: { newPrice: { align: "center", decimals: 0 } } })
+				)
+
+				await expect.poll(() => cell(page, 0, NEW_PRICE).innerText()).toBe("1.534")
+				await expect(cell(page, 0, NEW_PRICE).getAttribute("class")).resolves.toContain("is-center")
+				await expect(header(page, NEW_PRICE).getAttribute("class")).resolves.toContain("is-center")
+				await expect(valueAt(page, 0, "newPrice")).resolves.toBe("1533.8")
+			})
+		})
+
+		it("puts bold and italic on the cells selected with Ctrl+B and Ctrl+I, and takes them back with Ctrl+Z", async () => {
+			await withPage(
+				5,
+				async page => {
+					await cell(page, 0, NEW_PRICE).click()
+					await cell(page, 1, NEW_PRICE).click({ modifiers: ["Shift"] })
+					await press(page, "Control+b")
+					await press(page, "Control+i")
+
+					await expect.poll(() => cell(page, 1, NEW_PRICE).getAttribute("class")).toContain("is-bold")
+					await expect(cell(page, 0, NEW_PRICE).getAttribute("class")).resolves.toContain("is-italic")
+
+					await press(page, "Control+z")
+					await expect.poll(() => cell(page, 0, NEW_PRICE).getAttribute("class")).not.toContain("is-italic")
+					await expect(cell(page, 0, NEW_PRICE).getAttribute("class")).resolves.toContain("is-bold")
+
+					// A fill and a text colour put on by the host.
+					await page.evaluate(() => {
+						const { marks, store } = window.__playground!
+
+						marks!.mark([{ rowId: store.rowIdAt(2)!, field: "note" }], { fill: "yellow", color: "red" })
+					})
+					await expect.poll(() => cell(page, 2, NOTE).getAttribute("class")).toContain("is-fill-yellow")
+					await expect(cell(page, 2, NOTE).getAttribute("class")).resolves.toContain("is-text-red")
+				},
+				"&format=1"
+			)
+		})
+
+		it("colours a cell by the schema's colour rule as its value changes", async () => {
+			await withPage(
+				5,
+				async page => {
+					await setCell(page, 0, "newPrice", "50")
+					await expect.poll(() => cell(page, 0, NEW_PRICE).getAttribute("class")).toContain("is-fill-orange")
+
+					await setCell(page, 0, "newPrice", "150")
+					await expect
+						.poll(() => cell(page, 0, NEW_PRICE).getAttribute("class"))
+						.not.toContain("is-fill-orange")
+				},
+				"&format=1"
+			)
+		})
+
+		it("stretches the columns to the sheet, the last one reaching its edge", async () => {
+			await withPage(
+				5,
+				async page => {
+					await page.evaluate(() =>
+						window.__playground!.setColumns({
+							hidden: [
+								"sku",
+								"change",
+								"currency",
+								"validFrom",
+								"active",
+								"note",
+								"difference",
+								"channels"
+							]
+						})
+					)
+
+					// The sheet is as wide as the scroller: no room left on the right, and nothing to scroll to.
+					const room = () =>
+						page.evaluate(() => {
+							const scroller = document.querySelector<HTMLElement>(".tabula-grid-scroller")!
+							const sheet = document.querySelector<HTMLElement>(".tabula-grid-sheet")!
+
+							return scroller.clientWidth - sheet.offsetWidth
+						})
+
+					await expect.poll(room).toBe(0)
+				},
+				"&format=1"
+			)
+		})
+
+		it("sums each number column under it, and gives its average, smallest or largest instead", async () => {
+			await withPage(
+				2,
+				async page => {
+					await setCell(page, 0, "newPrice", "10")
+					await setCell(page, 1, "newPrice", "20.5")
+
+					const totals = () => page.locator(".tabula-grid-totals-cell").allInnerTexts()
+
+					await expect.poll(totals).toContain("30,50")
+
+					const kind = page.locator(".tabula-grid-totals-kind select")
+
+					await kind.selectOption("average")
+					await expect.poll(totals).toContain("15,25")
+					await kind.selectOption("min")
+					await expect.poll(totals).toContain("10,00")
+					await kind.selectOption("max")
+					await expect.poll(totals).toContain("20,50")
+				},
+				"&format=1"
+			)
+		})
+
+		it("draws the rows taller and the text larger by the zoom", async () => {
+			await withPage(
+				3,
+				async page => {
+					const height = (await cell(page, 0, NEW_PRICE).boundingBox())?.height ?? 0
+					const size = await cell(page, 0, NEW_PRICE).evaluate(element => getComputedStyle(element).fontSize)
+
+					expect(height).toBe(45)
+					expect(size).toBe("19.5px")
+				},
+				"&zoom=1.5"
+			)
+		})
+
+		it("finds text with Ctrl+H, goes from one cell found to the next, and replaces them all in one step", async () => {
+			await withPage(
+				5,
+				async page => {
+					await setCell(page, 0, "note", "Kampanya A")
+					await setCell(page, 1, "note", "kampanya B")
+					await setCell(page, 2, "note", "Yok")
+					await setCell(page, 3, "note", null)
+					await setCell(page, 4, "note", null)
+					await cell(page, 0, NOTE).click()
+					await press(page, "Control+h")
+
+					const find = page.locator(".tabula-find")
+
+					await expect.poll(() => find.count()).toBe(1)
+					await page.keyboard.type("kampanya")
+					await expect.poll(() => find.locator(".tabula-find-count").innerText()).toBe("1 / 2 hücre")
+					await expect(page.locator(".tabula-grid-cell.is-found-current").count()).resolves.toBe(1)
+					await expect(page.locator(".tabula-grid-cell.is-found").count()).resolves.toBe(1)
+
+					await press(page, "Enter")
+					await expect.poll(() => find.locator(".tabula-find-count").innerText()).toBe("2 / 2 hücre")
+
+					await find.getByRole("textbox").nth(1).fill("İndirim")
+					await find.getByRole("button", { name: "Tümünü değiştir" }).click()
+
+					await expect.poll(() => valueAt(page, 0, "note")).toBe("İndirim A")
+					await expect(valueAt(page, 1, "note")).resolves.toBe("İndirim B")
+					await expect(valueAt(page, 2, "note")).resolves.toBe("Yok")
+					await expect.poll(() => find.locator(".tabula-find-count").innerText()).toBe("Bulunamadı")
+
+					// One step: Ctrl+Z takes both back.
+					await page.evaluate(() => window.__playground!.history.undo())
+					await expect(valueAt(page, 0, "note")).resolves.toBe("Kampanya A")
+					await expect(valueAt(page, 1, "note")).resolves.toBe("kampanya B")
+
+					await find.getByRole("button", { name: "Kapat" }).click()
+					await expect.poll(() => find.count()).toBe(0)
+					await expect(
+						page.locator(".tabula-grid-cell.is-found, .tabula-grid-cell.is-found-current").count()
+					).resolves.toBe(0)
+				},
+				"&format=1"
+			)
+		})
+	})
+
 	describe("where the user is", () => {
 		it("gives back the active cell and the scroll, and puts the user there again", async () => {
 			await withPage(300, async page => {

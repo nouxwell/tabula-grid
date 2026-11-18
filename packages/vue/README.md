@@ -39,6 +39,8 @@ const validator = new SheetValidator(schema, store, VALUE_SETTINGS.tr)
   it, and writes a value typed there, as a spreadsheet's formula bar. A formula shows by the fields'
   names, each in the colour its column takes in the sheet.
 - **`TabulaStatusBar`** counts the rows and issues and sums and averages the numbers selected.
+- **`TabulaFind`** finds and replaces over the sheet, as a strip: in the cells selected, a column
+  or the whole sheet; the grid tints what it finds, and "Replace all" is one Ctrl+Z.
 - **`TabulaSheetTabs`** draws a workbook's sheets as tabs under the sheet, with their errors
   counted, and renames, duplicates, reorders, deletes and adds them.
 - **`TabulaDraftMapping`** maps the fields of a draft saved under an older schema before it opens:

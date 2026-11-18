@@ -2,6 +2,7 @@
 import {
 	applyFormulas,
 	arrangeColumns,
+	CellMarks,
 	csvDelimiterFor,
 	decodeText,
 	DraftSaver,
@@ -27,6 +28,7 @@ import {
 	type ColumnLayout,
 	type DraftChanges,
 	type DraftOpening,
+	type FoundCell,
 	type Issue,
 	type ProcessOutcome,
 	type ProcessPlan,
@@ -37,6 +39,7 @@ import {
 	TabulaFormulaBar,
 	TabulaGrid,
 	TabulaDraftMapping,
+	TabulaFind,
 	TabulaIssues,
 	TabulaPreview,
 	TabulaSheetTabs,
@@ -61,7 +64,27 @@ const issuesShown = ref(true)
 
 // `?channels=1`: a multi-select column of sales channels after the others.
 const channels = params.get("channels") === "1"
-const schema = ModuleSchema.from(channels ? withChannels(priceUpdate) : priceUpdate)
+// `?format=1`: cells coloured by hand and by a colour rule (a new price under 100 on orange), the
+// columns stretched to the sheet, their totals under them, and find and replace. `?zoom=1.5` draws
+// the sheet larger.
+const formatting = params.get("format") === "1"
+const zoom = Number(params.get("zoom") ?? 1)
+const withRules = channels ? withChannels(priceUpdate) : priceUpdate
+const schema = ModuleSchema.from(
+	formatting
+		? {
+				...withRules,
+				styles: [
+					{
+						id: "cheap",
+						when: [{ field: "newPrice", op: "<", value: 100 }],
+						field: "newPrice",
+						fill: "orange"
+					}
+				]
+			}
+		: withRules
+)
 
 // A draft left from last time is opened, unless the schema has moved on since: then the user sees
 // what changed, maps the fields that went, and decides. `accept=1` is that decision, and `rename`
@@ -109,6 +132,9 @@ watch(valueSettings, settings => validator.setSettings(settings))
 
 // The playground's own history, so its buttons know when there is something to undo or redo.
 const history = new UndoHistory(store)
+const marks = formatting ? new CellMarks({ history }) : null
+const findOpen = ref(false)
+const found = ref<{ readonly cells: readonly FoundCell[]; readonly current: FoundCell | null } | null>(null)
 const historyVersion = shallowRef(history.version)
 const canUndo = computed(() => historyVersion.value >= 0 && history.canUndo)
 const canRedo = computed(() => historyVersion.value >= 0 && history.canRedo)
@@ -640,7 +666,9 @@ onMounted(() => {
 		position: () => grid.value?.position() ?? null,
 		restorePosition: position => grid.value?.restorePosition(position),
 		widths: () => widths.value,
-		columns: () => columns.value
+		columns: () => columns.value,
+		marks,
+		setColumns: layout => (columns.value = layout)
 	}
 	grid.value?.focus()
 })
@@ -777,6 +805,18 @@ onMounted(() => {
 			<button type="button" class="playground-preview-close" @click="plan = null">×</button>
 		</div>
 		<TabulaFormulaBar :grid="grid" :theme="theme" :locale="language" />
+		<TabulaFind
+			v-if="formatting"
+			v-model:open="findOpen"
+			v-model:found="found"
+			:grid="grid"
+			:store="store"
+			:schema="schema"
+			:view="view"
+			:value-settings="valueSettings"
+			:theme="theme"
+			:locale="language"
+		/>
 		<main class="playground-main" :class="{ 'is-sheet': issueVariant === 'sheet' }">
 			<TabulaGrid
 				ref="grid"
@@ -796,7 +836,13 @@ onMounted(() => {
 				:theme="theme"
 				:locale="language"
 				:value-settings="valueSettings"
+				:marks="marks ?? undefined"
+				:found="found ?? undefined"
+				:fit="formatting"
+				:totals="formatting"
+				:zoom="zoom"
 				@menu="onMenu"
+				@find="findOpen = true"
 			/>
 			<TabulaIssues
 				v-if="issuesShown"

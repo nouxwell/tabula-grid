@@ -10,6 +10,7 @@ import {
 	type ModuleSchemaInput,
 	type RuleInput
 } from "./schema.js"
+import type { StyleRuleInput } from "./styles.js"
 import type { CellValue } from "./value.js"
 import { readViewState, type ViewState } from "./views.js"
 
@@ -60,6 +61,8 @@ export interface GridTemplate {
 	readonly columns: readonly FieldInput[]
 	/** Row checks added after the schema's own, written as a schema's; see `RowCheck`. */
 	readonly checks: readonly CheckInput[]
+	/** Colour rules added after the schema's own, written as a schema's; see `StyleRule`. */
+	readonly styles: readonly StyleRuleInput[]
 	/** How the sheet opens: the columns, widths, filters and sort, under each user's own views. */
 	readonly view: ViewState | null
 }
@@ -159,6 +162,20 @@ export function readTemplate(input: unknown, module: string): GridTemplate {
 		})
 	}
 
+	const styles: StyleRuleInput[] = []
+
+	if (root.styles !== undefined && !Array.isArray(root.styles)) {
+		problem("styles", "must be a list of colour rules.")
+	} else {
+		;((root.styles as unknown[] | undefined) ?? []).forEach((rule, index) => {
+			if (plain(rule)) {
+				styles.push(rule as unknown as StyleRuleInput)
+			} else {
+				problem(`styles[${index}]`, "must be an object, written as a schema's colour rule.")
+			}
+		})
+	}
+
 	const view = root.view === undefined || root.view === null ? null : readViewState(root.view, "view", problem)
 
 	if (problems.length > 0) {
@@ -174,6 +191,7 @@ export function readTemplate(input: unknown, module: string): GridTemplate {
 		fields: Object.freeze(fields),
 		columns: Object.freeze(columns),
 		checks: Object.freeze(checks),
+		styles: Object.freeze(styles),
 		view
 	})
 }
@@ -299,10 +317,12 @@ function merge(
 	}
 
 	const ownChecks = json.checks ?? []
+	const ownStyles = json.styles ?? []
 	const merged: ModuleSchemaInput = {
 		...json,
 		fields: [...fields, ...columns],
-		...(ownChecks.length + template.checks.length > 0 ? { checks: [...ownChecks, ...template.checks] } : {})
+		...(ownChecks.length + template.checks.length > 0 ? { checks: [...ownChecks, ...template.checks] } : {}),
+		...(ownStyles.length + template.styles.length > 0 ? { styles: [...ownStyles, ...template.styles] } : {})
 	}
 
 	try {
@@ -317,6 +337,7 @@ function merge(
 		for (const item of error.problems) {
 			const field = /^fields\[(\d+)\](.*)$/.exec(item.path)
 			const check = /^checks\[(\d+)\](.*)$/.exec(item.path)
+			const style = /^styles\[(\d+)\](.*)$/.exec(item.path)
 			let path = item.path
 
 			if (field) {
@@ -328,6 +349,8 @@ function merge(
 						: `columns[${index - json.fields.length}]${field[2] ?? ""}`
 			} else if (check && Number(check[1]) >= ownChecks.length) {
 				path = `checks[${Number(check[1]) - ownChecks.length}]${check[2] ?? ""}`
+			} else if (style && Number(style[1]) >= ownStyles.length) {
+				path = `styles[${Number(style[1]) - ownStyles.length}]${style[2] ?? ""}`
 			}
 
 			problem(path, item.message)

@@ -210,8 +210,8 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
 - **Themes.** `light`, `dark` or `auto`, in colours an application changes (see below).
 
 With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>`, `<TabulaIssues>`,
-`<TabulaFormulaBar>`, `<TabulaStatusBar>`, `<TabulaPreview>`, `<TabulaDraftMapping>` and
-`<TabulaSheetTabs>` are available everywhere, drawn in the browser only.
+`<TabulaFormulaBar>`, `<TabulaStatusBar>`, `<TabulaPreview>`, `<TabulaDraftMapping>`,
+`<TabulaSheetTabs>` and `<TabulaFind>` are available everywhere, drawn in the browser only.
 
 ### The formula bar and the status bar
 
@@ -343,6 +343,64 @@ needs. A rise and a fall in a column coloured by sign are `--tabula-positive` an
 Every other `--tabula-*` variable, such as `--tabula-range-bg` or `--tabula-error-bg`, can still be
 set on its own. [examples/nuxt](examples/nuxt/README.md) writes an application's palette into
 these from the one file its Naive UI theme and Tailwind colours are made from.
+
+## How cells look
+
+What a cell looks like is never what it holds: nothing here changes a value, and nothing of it is
+sent to the backend. Where each look is kept is what tells them apart.
+
+- **A column's format**, its alignment and the decimals it shows, is part of the columns' layout,
+  `columns.formats`: kept with the draft and in a saved view, and in a template's view. A number
+  shown with fewer digits keeps every digit it has.
+
+  ```ts
+  columns.value = withColumnFormat(columns.value, "newPrice", { align: "center", decimals: 0 })
+  ```
+
+- **What the user colours by hand**, a fill, a text colour, bold, italic, is a `CellMarks`: kept
+  with the draft, taken back with Ctrl+Z in its turn with the rows' changes, and `rowsMarked`
+  filters a `RowView` to its rows. Give it to the grid's `marks`; Ctrl+B and Ctrl+I put bold and
+  italic on what is selected, and the grid's `markSelection`, `toggleSelection` and
+  `clearSelectionMarks` are a toolbar's.
+
+  ```ts
+  const marks = new CellMarks({ marks: opening.marks, history })
+  const saver = new DraftSaver({ schema, store, session, marks, save })
+  grid.value.markSelection({ fill: "yellow" })
+  ```
+
+- **Colour rules** colour cells by what the row holds, for everyone who opens the schema or the
+  template, and follow the values as they change. A rule's conditions are a check's; it colours its
+  field's cell, or the whole row without one. A later rule is drawn over an earlier one, and what
+  the user put on by hand over both.
+
+  ```json
+  {
+    "id": "low-price",
+    "when": [{ "field": "newPrice", "op": "<", "value": 100 }],
+    "field": "newPrice",
+    "fill": "orange"
+  }
+  ```
+
+The colours are names, `yellow`, `green`, `blue`, `purple`, `pink`, `orange`, `grey`, `red`: the
+theme draws each as a light tint for a fill and towards the text colour for text, in light and in
+dark alike (`--tabula-mark-yellow` and the rest). An issue's tint stays over a fill.
+
+The grid also takes `fit`, which shares the room left on its right among the columns the user has
+not sized by hand; `totals`, a row under the rows with each number column's sum, average, smallest
+or largest over the rows shown; and `zoom`, which draws the text, the rows and the widths larger
+or smaller together. A double click on a column's edge fits it to its contents.
+
+**Find and replace** is `findCells` and `replaceCells` in the core, and `TabulaFind` in the Vue
+package: a strip that looks among the cells selected, in a column or in the sheet, as the cells show
+their values, tints what it finds in the grid (bind its `found` to the grid's), and replaces as
+typing would, every cell in one step. The grid says when Ctrl+H is pressed with `@find`.
+
+```vue
+<TabulaFind v-model:open="finding" v-model:found="found" :grid="grid" :store="store" :schema="schema" :view="view" />
+<TabulaGrid ref="grid" :found="found ?? undefined" @find="finding = true" … />
+```
 
 ## Rules and issues
 

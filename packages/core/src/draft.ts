@@ -1,6 +1,7 @@
-import type { ColumnLayout } from "./columns.js"
+import { freezeColumnLayout, mapColumnLayout, readColumnLayout, type ColumnLayout } from "./columns.js"
 import type { ProcessRequest } from "./contract.js"
 import { TabulaError } from "./errors.js"
+import { readMarks, type CellMark, type CellMarks, type MarksData } from "./marks.js"
 import type { RowEntry, RowInit, RowStore } from "./rows.js"
 import { FIELD_TYPES, type FieldSchema, type FieldType, type ModuleSchema } from "./schema.js"
 import type { PendingRun, PersistedSession, RowResult, SheetSession } from "./session.js"
@@ -54,6 +55,8 @@ export interface Draft {
 	readonly rows: readonly RowEntry[]
 	readonly session: PersistedSession
 	readonly view: DraftView
+	/** What the user put on cells by hand, by row id then field key; left out when nothing is. */
+	readonly marks?: MarksData
 }
 
 export interface CreateDraftOptions {
@@ -64,12 +67,15 @@ export interface CreateDraftOptions {
 	/** Its results and any run with no answer go into the draft. */
 	readonly session?: SheetSession | null
 	readonly view?: DraftView
+	/** The marks on the cells: kept for the rows the sheet has. */
+	readonly marks?: CellMarks | null
 	readonly now?: () => Date
 }
 
 /** The sheet as it stands, as a draft. */
 export function createDraft(options: CreateDraftOptions): Draft {
 	const { schema, store, session } = options
+	const marks = options.marks ? options.marks.toJSON(store.rowIds()) : {}
 
 	return Object.freeze({
 		format: DRAFT_FORMAT,
@@ -88,8 +94,9 @@ export function createDraft(options: CreateDraftOptions): Draft {
 		session: session?.persisted() ?? Object.freeze({ results: Object.freeze([]), pending: null }),
 		view: Object.freeze({
 			columnWidths: Object.freeze({ ...options.view?.columnWidths }),
-			...(options.view?.columns ? { columns: freezeLayout(options.view.columns) } : {})
-		})
+			...(options.view?.columns ? { columns: freezeColumnLayout(options.view.columns) } : {})
+		}),
+		...(Object.keys(marks).length > 0 ? { marks: freezeMarks(marks) } : {})
 	})
 }
 
@@ -125,6 +132,8 @@ export type DraftOpening =
 			/** For a new `SheetSession`'s `restore`. */
 			readonly session: PersistedSession
 			readonly view: DraftView
+			/** For a new `CellMarks`: the marks on the cells, by row id then field key. */
+			readonly marks: MarksData
 			/** What moved on since the draft was saved, or null when nothing did. */
 			readonly changes: DraftChanges | null
 	  }
@@ -180,22 +189,26 @@ export function openDraft(draft: Draft, schema: ModuleSchema, options: OpenDraft
 		}
 	}
 
-	// The layout follows renamed fields, and lets go of removed ones.
-	const layout = draft.view.columns
-	const keys = (list: readonly string[]): string[] => list.map(keep).filter((key): key is string => key !== null)
-	const columns = layout
-		? freezeLayout({
-				...(layout.order ? { order: keys(layout.order) } : {}),
-				...(layout.hidden ? { hidden: keys(layout.hidden) } : {}),
-				...(layout.pinned ? { pinned: keys(layout.pinned) } : {})
-			})
-		: undefined
+	// The layout and the marks follow renamed fields, and let go of removed ones.
+	const columns = draft.view.columns ? mapColumnLayout(draft.view.columns, keep) : undefined
+	const marks: Record<string, Record<string, CellMark>> = {}
+
+	for (const [rowId, cells] of Object.entries(draft.marks ?? {})) {
+		for (const [key, mark] of Object.entries(cells)) {
+			const target = keep(key)
+
+			if (target !== null) {
+				marks[rowId] = { ...marks[rowId], [target]: mark }
+			}
+		}
+	}
 
 	return {
 		status: "opened",
 		rows,
 		session: draft.session,
 		view: Object.freeze({ columnWidths: Object.freeze(columnWidths), ...(columns ? { columns } : {}) }),
+		marks: freezeMarks(marks),
 		changes
 	}
 }
@@ -492,7 +505,8 @@ export function readDraft(input: unknown): Draft {
 		}
 	}
 
-	const columns = readLayout(plain(root.view)?.columns, "view.columns", problem)
+	const columns = readColumnLayout(plain(root.view)?.columns, "view.columns", problem)
+	const marks = readMarks(root.marks, "marks", problem)
 
 	if (problems.length > 0) {
 		throw new TabulaError(
@@ -514,52 +528,15 @@ export function readDraft(input: unknown): Draft {
 		revision,
 		rows: Object.freeze(rows),
 		session: Object.freeze({ results: Object.freeze(results), pending }),
-		view: Object.freeze({ columnWidths: Object.freeze(columnWidths), ...(columns ? { columns } : {}) })
+		view: Object.freeze({ columnWidths: Object.freeze(columnWidths), ...(columns ? { columns } : {}) }),
+		...(Object.keys(marks).length > 0 ? { marks: freezeMarks(marks) } : {})
 	})
 }
 
-function readLayout(input: unknown, path: string, problem: Problem): ColumnLayout | undefined {
-	if (input === undefined || input === null) {
-		return undefined
-	}
-
-	const layout = plain(input)
-
-	if (!layout) {
-		problem(path, "must be an object.")
-
-		return undefined
-	}
-
-	const list = (name: "order" | "hidden" | "pinned"): string[] | undefined => {
-		const value = layout[name]
-
-		if (value === undefined) {
-			return undefined
-		}
-
-		if (!Array.isArray(value) || value.some(item => typeof item !== "string")) {
-			problem(`${path}.${name}`, "must be a list of field keys.")
-
-			return undefined
-		}
-
-		return value as string[]
-	}
-
-	const order = list("order")
-	const hidden = list("hidden")
-	const pinned = list("pinned")
-
-	return freezeLayout({ ...(order ? { order } : {}), ...(hidden ? { hidden } : {}), ...(pinned ? { pinned } : {}) })
-}
-
-function freezeLayout(layout: ColumnLayout): ColumnLayout {
-	return Object.freeze({
-		...(layout.order ? { order: Object.freeze([...layout.order]) } : {}),
-		...(layout.hidden ? { hidden: Object.freeze([...layout.hidden]) } : {}),
-		...(layout.pinned ? { pinned: Object.freeze([...layout.pinned]) } : {})
-	})
+function freezeMarks(marks: MarksData): MarksData {
+	return Object.freeze(
+		Object.fromEntries(Object.entries(marks).map(([rowId, cells]) => [rowId, Object.freeze({ ...cells })]))
+	)
 }
 
 type Plain = Record<string, unknown>

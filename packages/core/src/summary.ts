@@ -1,4 +1,4 @@
-import { add, decimalToText, divide, parseDecimal, round, ZERO, type Decimal } from "./formula/decimal.js"
+import { add, compare, decimalToText, divide, parseDecimal, round, ZERO, type Decimal } from "./formula/decimal.js"
 import { isFormulaError } from "./formula/error.js"
 import type { FieldSchema, FieldType } from "./schema.js"
 import type { CellValue } from "./value.js"
@@ -17,6 +17,10 @@ export interface CellSummary {
 	readonly sum: string | null
 	/** Decimal text, to 10 places at most; null when no cell holds a number. */
 	readonly average: string | null
+	/** The smallest number, as decimal text; null when no cell holds a number. */
+	readonly min: string | null
+	/** The largest number, as decimal text; null when no cell holds a number. */
+	readonly max: string | null
 }
 
 const NUMERIC: ReadonlySet<FieldType> = new Set(["integer", "decimal", "money", "quantity", "percent"])
@@ -33,6 +37,8 @@ export function summarizeCells(
 	let filled = 0
 	let numbers = 0
 	let sum: Decimal = ZERO
+	let min: Decimal | null = null
+	let max: Decimal | null = null
 
 	for (const { field, value } of cells) {
 		if (value === null) {
@@ -51,11 +57,13 @@ export function summarizeCells(
 		if (number !== null) {
 			numbers++
 			sum = add(sum, number)
+			min = min === null || compare(number, min) < 0 ? number : min
+			max = max === null || compare(number, max) > 0 ? number : max
 		}
 	}
 
-	if (numbers === 0) {
-		return Object.freeze({ filled, numbers, sum: null, average: null })
+	if (numbers === 0 || min === null || max === null) {
+		return Object.freeze({ filled, numbers, sum: null, average: null, min: null, max: null })
 	}
 
 	const average = divide(sum, parseDecimal(String(numbers)) ?? ZERO)
@@ -64,6 +72,8 @@ export function summarizeCells(
 		filled,
 		numbers,
 		sum: decimalToText(sum),
-		average: average === null ? null : decimalToText(round(average, AVERAGE_PLACES, "half"))
+		average: average === null ? null : decimalToText(round(average, AVERAGE_PLACES, "half")),
+		min: decimalToText(min),
+		max: decimalToText(max)
 	})
 }

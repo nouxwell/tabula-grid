@@ -17,6 +17,7 @@ import {
 	REDO_ORIGIN,
 	rowOrder,
 	rowsMatching,
+	rowStyles,
 	RowView,
 	summarizeCells,
 	resolveColumnSizing,
@@ -30,6 +31,11 @@ import {
 	withColumn,
 	withDefaults,
 	type Adjustment,
+	type CellMarkChange,
+	type CellMarks,
+	type CellStyle,
+	type FoundCell,
+	type MarkedCell,
 	type CellPosition,
 	type CellRange,
 	type ColumnFilters,
@@ -129,12 +135,37 @@ const props = defineProps({
 	 */
 	menuItems: { type: Array as PropType<readonly GridMenuItem[]>, default: () => [] },
 	/** The language of the grid's own words: issue messages and labels. */
-	locale: { type: String as PropType<GridLocale>, default: "tr" }
+	locale: { type: String as PropType<GridLocale>, default: "tr" },
+	/**
+	 * What the user put on cells by hand, such as a `CellMarks` kept with the draft: fills, text
+	 * colours, bold and italic, drawn over the schema's colour rules. Ctrl+B and Ctrl+I put bold and
+	 * italic on the cells selected. Left out, nothing is marked.
+	 */
+	marks: { type: Object as PropType<CellMarks>, default: undefined },
+	/** Cells found, such as a find's answer: each one tinted, and `current` outlined. */
+	found: {
+		type: Object as PropType<{ readonly cells: readonly FoundCell[]; readonly current?: FoundCell | null }>,
+		default: undefined
+	},
+	/**
+	 * Columns narrower together than the sheet share the room left between them, those the user has
+	 * not sized by hand. Left out, the room on the right stays empty.
+	 */
+	fit: { type: Boolean, default: false },
+	/**
+	 * A row under the rows, held in place, with each number column's sum, or its average, smallest
+	 * or largest, over the rows shown.
+	 */
+	totals: { type: Boolean, default: false },
+	/** How large the sheet is drawn, 1 as it is: its text, rows and widths together. */
+	zoom: { type: Number, default: 1 }
 })
 
 const emit = defineEmits<{
 	/** One of the host's `menuItems` was chosen, by its key; the selection is what it is about. */
 	menu: [key: string]
+	/** Ctrl+H was pressed in the grid: the host opens its find and replace. */
+	find: []
 }>()
 
 /** Widths the user set by dragging or fitting, by field key. Bind it with v-model to keep them. */
@@ -222,8 +253,14 @@ const autoWidths = shallowRef<readonly number[]>([])
 /** The width of the column being dragged, kept apart until the drag ends so the model changes once. */
 const liveWidth = shallowRef<{ key: string; width: number } | null>(null)
 
-const widths = computed<readonly number[]>(() =>
-	fields.value.map((field, index) => {
+/** The room the body has across, past the row numbers: what `fit` fills. */
+const bodyWidth = shallowRef(0)
+
+/** Rows' height as drawn: the host's, by the zoom. */
+const rowH = computed(() => Math.max(16, Math.round(props.rowHeight * props.zoom)))
+
+const widths = computed<readonly number[]>(() => {
+	const base = fields.value.map((field, index) => {
 		const sizing = sizings.value[index] ?? resolveColumnSizing()
 
 		if (liveWidth.value?.key === field.key) {
@@ -232,10 +269,44 @@ const widths = computed<readonly number[]>(() =>
 
 		const manual = columnWidths.value[field.key]
 
-		// A width the user chose is never replaced by a measured one.
-		return manual === undefined ? (autoWidths.value[index] ?? sizing.minWidth) : clampColumnWidth(manual, sizing)
+		// A width the user chose is never replaced by a measured one. It is kept as at 100%, and drawn
+		// by the zoom; a measured one is measured in the zoomed text already.
+		// A column at its narrowest grows with the zoom too, so a larger text still fits it.
+		return manual === undefined
+			? Math.max(autoWidths.value[index] ?? sizing.minWidth, Math.round(sizing.minWidth * props.zoom))
+			: Math.round(clampColumnWidth(manual, sizing) * props.zoom)
 	})
-)
+
+	return props.fit ? fitted(base) : base
+})
+
+/**
+ * The widths stretched to the body: the room left shared among the columns the user has not sized,
+ * each by its width, the last taking what rounding leaves. Nothing changes when there is no room.
+ */
+function fitted(base: readonly number[]): readonly number[] {
+	const room = bodyWidth.value - base.reduce((sum, width) => sum + width, 0) - SCROLL_ROOM
+	const free = fields.value.flatMap((field, index) =>
+		columnWidths.value[field.key] === undefined && liveWidth.value?.key !== field.key ? [index] : []
+	)
+	const share = free.reduce((sum, index) => sum + (base[index] ?? 0), 0)
+
+	if (room <= 0 || share <= 0) {
+		return base
+	}
+
+	const next = [...base]
+	let left = room
+
+	free.forEach((index, place) => {
+		const extra = place === free.length - 1 ? left : Math.floor((room * (base[index] ?? 0)) / share)
+
+		next[index] = (next[index] ?? 0) + extra
+		left -= extra
+	})
+
+	return next
+}
 
 const offsets = computed<readonly number[]>(() => {
 	const list = [0]
@@ -249,7 +320,7 @@ const offsets = computed<readonly number[]>(() => {
 
 const totalWidth = computed(() => offsets.value[offsets.value.length - 1] ?? 0)
 const pinnedWidth = computed(() => offsets.value[pinnedCount.value] ?? 0)
-const totalHeight = computed(() => rowCount.value * props.rowHeight)
+const totalHeight = computed(() => rowCount.value * rowH.value)
 const gutterWidth = computed(() => Math.max(44, String(Math.max(rowCount.value, 1)).length * 8 + 20))
 
 const cellStyles = computed(() =>
@@ -258,9 +329,12 @@ const cellStyles = computed(() =>
 
 const headerHeight = computed(() => HEADER_HEIGHT + (props.columnLetters ? LETTERS_HEIGHT : 0))
 
+/** How each column is drawn over its field's own way, by field key: the user's formats. */
+const formats = computed(() => columns.value.formats ?? {})
+
 const cellClasses = computed(() =>
 	fields.value.map(field => {
-		const align = alignmentOf(field)
+		const align = formats.value[field.key]?.align ?? alignmentOf(field)
 		const classes = align === "left" ? "" : `is-${align}`
 
 		return isEditable(field) ? classes : `${classes} is-readonly`
@@ -364,9 +438,12 @@ function autoFit(col: number): void {
 	setWidth(field.key, autoColumnWidth(content, sizing))
 }
 
+/** Keeps a width as drawn now, as it would be at 100%: the zoom draws it again. */
 function setWidth(key: string, width: number): void {
-	if (columnWidths.value[key] !== width) {
-		columnWidths.value = Object.freeze({ ...columnWidths.value, [key]: width })
+	const kept = Math.round(width / props.zoom)
+
+	if (columnWidths.value[key] !== kept) {
+		columnWidths.value = Object.freeze({ ...columnWidths.value, [key]: kept })
 	}
 }
 
@@ -415,16 +492,19 @@ function updateWindow(): void {
 	}
 
 	const { width, height } = bodySize()
+
+	bodyWidth.value = width
+
 	const rows = rowCount.value
 	const cols = fields.value.length
 	const top = element.scrollTop
 	const left = element.scrollLeft
 	const narrowest = Math.max(1, Math.min(...widths.value, Number.POSITIVE_INFINITY))
 
-	rowPool.value = Math.ceil(height / props.rowHeight) + OVERSCAN_ROWS * 2 + 2
+	rowPool.value = Math.ceil(height / rowH.value) + OVERSCAN_ROWS * 2 + 2
 	colPool.value = Math.max(1, Math.min(cols, Math.ceil(width / narrowest) + OVERSCAN_COLS * 2 + 2))
-	firstRow.value = Math.max(0, Math.floor(top / props.rowHeight) - OVERSCAN_ROWS)
-	lastRow.value = Math.min(rows - 1, Math.floor((top + height) / props.rowHeight) + OVERSCAN_ROWS)
+	firstRow.value = Math.max(0, Math.floor(top / rowH.value) - OVERSCAN_ROWS)
+	lastRow.value = Math.min(rows - 1, Math.floor((top + height) / rowH.value) + OVERSCAN_ROWS)
 	const pinned = pinnedCount.value
 
 	// The pinned columns cover the first pixels of the body on screen: the ones that scroll start after.
@@ -447,14 +527,14 @@ function reveal(target: CellPosition | null = selection.head): void {
 	}
 
 	const { width, height } = bodySize()
-	const top = target.row * props.rowHeight
+	const top = target.row * rowH.value
 	const left = offsets.value[target.col] ?? 0
 	const right = offsets.value[target.col + 1] ?? left
 
 	if (top < element.scrollTop) {
 		element.scrollTop = top
-	} else if (top + props.rowHeight > element.scrollTop + height) {
-		element.scrollTop = top + props.rowHeight - height
+	} else if (top + rowH.value > element.scrollTop + height) {
+		element.scrollTop = top + rowH.value - height
 	}
 
 	// A pinned column is always in view; one that scrolls must clear the pinned ones.
@@ -485,7 +565,7 @@ function text(row: number, col: number): string {
 	}
 
 	const value = store.value.get(rowId, field.key)
-	const shown = formatCell(field, value, props.valueSettings)
+	const shown = formatCell(field, value, props.valueSettings, { decimals: formats.value[field.key]?.decimals })
 
 	// A rise carries its plus, as a change column writes it; only on screen, never copied.
 	return hasSignTone(field) && signOf(value) > 0 ? `+${shown}` : shown
@@ -522,6 +602,255 @@ function toneClass(row: number, col: number): string | undefined {
 	const sign = rowId === undefined ? 0 : signOf(store.value.get(rowId, field.key))
 
 	return sign > 0 ? "is-positive" : sign < 0 ? "is-negative" : undefined
+}
+
+// ---------------------------------------------------------------- looks
+
+const marksVersion = shallowRef(0)
+
+watch(
+	() => toRaw(props.marks),
+	(marks, _previous, onCleanup) => {
+		marksVersion.value++
+
+		if (marks) {
+			onCleanup(marks.subscribe(() => marksVersion.value++))
+		}
+	},
+	{ immediate: true }
+)
+
+/** What the colour rules put on each row, worked out once a row is drawn and kept until the rows change. */
+const ruleStyles = new Map<string, Map<string | null, CellStyle>>()
+let ruleStylesAt = -1
+
+watch([schema, () => props.valueSettings], () => ruleStyles.clear())
+
+function stylesOf(rowId: string): Map<string | null, CellStyle> | null {
+	const rules = schema.value.styles
+
+	if (rules.length === 0) {
+		return null
+	}
+
+	if (ruleStylesAt !== dataVersion.value) {
+		ruleStyles.clear()
+		ruleStylesAt = dataVersion.value
+	}
+
+	let styles = ruleStyles.get(rowId)
+
+	if (!styles) {
+		const sheet = schema.value
+
+		styles = rowStyles(
+			rules,
+			key => sheet.field(key),
+			key => store.value.get(rowId, key),
+			props.valueSettings
+		)
+		ruleStyles.set(rowId, styles)
+	}
+
+	return styles
+}
+
+/** A cell's fill, text colour, bold and italic: the colour rules', then the user's own, which win. */
+function lookClass(row: number, col: number): string | undefined {
+	void dataVersion.value
+	void marksVersion.value
+
+	const rowId = view.value.rowIdAt(row)
+	const field = fields.value[col]
+
+	if (rowId === undefined || field === undefined) {
+		return undefined
+	}
+
+	const styles = stylesOf(rowId)
+	const ofRow = styles?.get(null)
+	const ofCell = styles?.get(field.key)
+	const mark = toRaw(props.marks)?.get(rowId, field.key) ?? null
+	const fill = mark?.fill ?? ofCell?.fill ?? ofRow?.fill ?? null
+	const color = mark?.color ?? ofCell?.color ?? ofRow?.color ?? null
+	const classes: string[] = []
+
+	if (fill) {
+		classes.push(`is-fill-${fill}`)
+	}
+
+	if (color) {
+		classes.push(`is-text-${color}`)
+	}
+
+	if (mark?.bold || ofCell?.bold || ofRow?.bold) {
+		classes.push("is-bold")
+	}
+
+	if (mark?.italic) {
+		classes.push("is-italic")
+	}
+
+	return classes.length > 0 ? classes.join(" ") : undefined
+}
+
+const foundKeys = computed(() => {
+	const found = props.found
+
+	return found ? new Set(found.cells.map(cell => JSON.stringify([cell.rowId, cell.field]))) : null
+})
+
+/** A cell a find found, and the one it is on. */
+function foundClass(row: number, col: number): string | undefined {
+	const keys = foundKeys.value
+
+	if (!keys || keys.size === 0) {
+		return undefined
+	}
+
+	const rowId = view.value.rowIdAt(row)
+	const field = fields.value[col]
+
+	if (rowId === undefined || field === undefined) {
+		return undefined
+	}
+
+	const current = props.found?.current
+
+	if (current && current.rowId === rowId && current.field === field.key) {
+		return "is-found-current"
+	}
+
+	return keys.has(JSON.stringify([rowId, field.key])) ? "is-found" : undefined
+}
+
+/** The cells selected, by row id and field key, row by row. */
+function selectedCells(): MarkedCell[] {
+	const area = range.value
+
+	if (!area) {
+		return []
+	}
+
+	const cells: MarkedCell[] = []
+
+	for (let row = area.top; row <= area.bottom; row++) {
+		const rowId = view.value.rowIdAt(row)
+
+		if (rowId === undefined) {
+			continue
+		}
+
+		for (let col = area.left; col <= area.right; col++) {
+			const field = fields.value[col]
+
+			if (field) {
+				cells.push({ rowId, field: field.key })
+			}
+		}
+	}
+
+	return cells
+}
+
+/** The keys of the columns the selection spans, as they stand on screen. */
+function selectedFields(): string[] {
+	const area = range.value
+
+	return area ? fields.value.slice(area.left, area.right + 1).map(field => field.key) : []
+}
+
+/** Puts a mark on the cells selected. False when there is nothing selected or no `marks`. */
+function markSelection(change: CellMarkChange): boolean {
+	const marks = toRaw(props.marks)
+	const cells = selectedCells()
+
+	if (!marks || cells.length === 0) {
+		return false
+	}
+
+	marks.mark(cells, change)
+
+	return true
+}
+
+/** Bold or italic on the cells selected, or off when every one has it, as Ctrl+B and Ctrl+I. */
+function toggleSelection(style: "bold" | "italic"): boolean {
+	const marks = toRaw(props.marks)
+	const cells = selectedCells()
+
+	if (!marks || cells.length === 0) {
+		return false
+	}
+
+	marks.toggle(cells, style)
+
+	return true
+}
+
+/** Takes every mark off the cells selected. */
+function clearSelectionMarks(): boolean {
+	const marks = toRaw(props.marks)
+	const cells = selectedCells()
+
+	if (!marks || cells.length === 0) {
+		return false
+	}
+
+	marks.clear(cells)
+
+	return true
+}
+
+/** Whether a cell may be written: its column takes typing and its row is not locked by a result. */
+function canEdit(rowId: string, key: string): boolean {
+	return schema.value.has(key) && isEditable(schema.value.field(key)) && !isLockedRow(rowId)
+}
+
+// ---------------------------------------------------------------- totals
+
+type TotalKind = "sum" | "average" | "min" | "max"
+
+const totalKind = ref<TotalKind>("sum")
+
+/** Each column's total over the rows shown, as its cells write numbers; null for a column of no numbers. */
+const columnTotals = computed<readonly (string | null)[] | null>(() => {
+	if (!props.totals) {
+		return null
+	}
+
+	void dataVersion.value
+	void viewVersion.value
+
+	const rows = view.value
+
+	return fields.value.map(field => {
+		if (!NUMERIC_TYPES.has(field.type)) {
+			return null
+		}
+
+		const values = function* () {
+			for (let row = 0; row < rows.size; row++) {
+				const rowId = rows.rowIdAt(row)
+
+				if (rowId !== undefined) {
+					yield { field, value: store.value.get(rowId, field.key) }
+				}
+			}
+		}
+		const total = summarizeCells(values())[totalKind.value]
+
+		return total === null
+			? ""
+			: formatCell(field, total, props.valueSettings, { decimals: formats.value[field.key]?.decimals })
+	})
+})
+
+/** Where a total sits: under its column, the pinned ones held in place as the rest scroll. */
+function totalStyle(col: number): string {
+	const shift = col < pinnedCount.value ? 0 : scrollX.value
+
+	return `left:${gutterWidth.value + (offsets.value[col] ?? 0) - shift}px;width:${widths.value[col] ?? 0}px`
 }
 
 /** A cell the user changed since the sheet was loaded, as the host's `changes` say. */
@@ -723,9 +1052,9 @@ function box(area: CellRange, shift = 0): Record<string, string> {
 	const left = offsets.value[area.left] ?? 0
 
 	return {
-		transform: `translate(${left + shift}px, ${area.top * props.rowHeight}px)`,
+		transform: `translate(${left + shift}px, ${area.top * rowH.value}px)`,
 		width: `${(offsets.value[area.right + 1] ?? left) - left}px`,
-		height: `${(area.bottom - area.top + 1) * props.rowHeight}px`
+		height: `${(area.bottom - area.top + 1) * rowH.value}px`
 	}
 }
 
@@ -754,7 +1083,7 @@ const fillHandle = computed(() => {
 	}
 
 	const x = Math.min(offsets.value[area.right + 1] ?? 0, totalWidth.value - 4)
-	const y = Math.min((area.bottom + 1) * props.rowHeight, totalHeight.value - 4)
+	const y = Math.min((area.bottom + 1) * rowH.value, totalHeight.value - 4)
 
 	return { pinned: area.right < pinnedCount.value, style: { transform: `translate(${x}px, ${y}px)` } }
 })
@@ -1335,7 +1664,7 @@ function onKeydown(event: KeyboardEvent): void {
 	const mod = event.ctrlKey || event.metaKey
 	const extend = event.shiftKey
 	const from = (extend ? selection.head : selection.active) ?? { row: 0, col: 0 }
-	const page = Math.max(1, Math.floor(bodySize().height / props.rowHeight) - 1)
+	const page = Math.max(1, Math.floor(bodySize().height / rowH.value) - 1)
 	const direction = ARROWS[event.key]
 	const undo = undoKeyOf(event)
 
@@ -1478,6 +1807,20 @@ function handleShortcut(event: KeyboardEvent, mod: boolean): boolean {
 
 	// Taken from the browser's bookmark and reload only where the grid can fill.
 	const key = event.key.toLowerCase()
+
+	// Bold and italic on what is selected, as a spreadsheet's; only where the host keeps marks.
+	if (mod && !altGr && !event.shiftKey && (key === "b" || key === "i") && toRaw(props.marks)) {
+		toggleSelection(key === "b" ? "bold" : "italic")
+
+		return true
+	}
+
+	// Find and replace is the host's: the grid only says it was asked for.
+	if (mod && !altGr && !event.shiftKey && key === "h") {
+		emit("find")
+
+		return true
+	}
 
 	if (mod && !altGr && !event.shiftKey && (key === "d" || key === "r") && !props.readonly) {
 		fillFromEdge(key === "d" ? "down" : "right")
@@ -2007,7 +2350,7 @@ function cellAt(event: MouseEvent): CellPosition | null {
 	const rect = element.getBoundingClientRect()
 
 	return {
-		row: clamp(Math.floor((event.clientY - rect.top) / props.rowHeight), 0, rowCount.value - 1),
+		row: clamp(Math.floor((event.clientY - rect.top) / rowH.value), 0, rowCount.value - 1),
 		col: columnAtClient(event.clientX)
 	}
 }
@@ -2061,7 +2404,7 @@ function columnAtClient(clientX: number): number {
 function rowAtClient(clientY: number): number {
 	const rect = gutter.value?.getBoundingClientRect()
 
-	return clamp(Math.floor((clientY - (rect?.top ?? 0)) / props.rowHeight), 0, Math.max(0, rowCount.value - 1))
+	return clamp(Math.floor((clientY - (rect?.top ?? 0)) / rowH.value), 0, Math.max(0, rowCount.value - 1))
 }
 
 function onHeaderDown(event: MouseEvent, col: number): void {
@@ -2301,6 +2644,10 @@ watch(
 )
 
 watch(sizings, () => measureHeaders())
+watch(
+	() => props.zoom,
+	() => void nextTick(() => measureHeaders())
+)
 
 // Columns hidden, shown, pinned or moved: positions on screen mean other columns now.
 watch(arranged, () => {
@@ -2687,7 +3034,7 @@ function onFilterKeydown(event: KeyboardEvent): void {
 
 watch(offsets, () => updateWindow())
 watch(
-	() => props.rowHeight,
+	() => rowH.value,
 	() => updateWindow()
 )
 
@@ -2728,7 +3075,7 @@ function goTo(rowId: string, field?: string | null): boolean {
 }
 
 /** `mayShow`: a column the user hid is shown first, once; the cell is gone to when it is. */
-function go(rowId: string, field: string | null, mayShow: boolean): boolean {
+function go(rowId: string, field: string | null, mayShow: boolean, focus = true): boolean {
 	if (!view.value.show(rowId)) {
 		return false
 	}
@@ -2746,14 +3093,17 @@ function go(rowId: string, field: string | null, mayShow: boolean): boolean {
 	if (field && col < 0 && mayShow && columns.value.hidden?.includes(field)) {
 		columns.value = withColumn(columns.value, field, { hidden: false })
 		// The layout comes back through v-model on the next render.
-		void nextTick(() => go(rowId, field, false))
+		void nextTick(() => go(rowId, field, false, focus))
 
 		return true
 	}
 
 	selection.moveTo(row, col < 0 ? (selection.active?.col ?? 0) : col)
 	reveal()
-	focusInput()
+
+	if (focus) {
+		focusInput()
+	}
 
 	return true
 }
@@ -3442,6 +3792,22 @@ defineExpose({
 	focus: focusInput,
 	/** Fits a column to its header and contents, as a double click on its edge does. */
 	autoFit,
+	/** The cells selected, by row id and field key: what a toolbar's marks go on. */
+	selectedCells,
+	/** The keys of the columns the selection spans: what a toolbar's column formats go on. */
+	selectedFields,
+	/** Puts a fill, a text colour, bold or italic on the cells selected, into `marks`. */
+	markSelection,
+	/** Bold or italic on the cells selected, or off when every one has it. */
+	toggleSelection,
+	/** Takes every mark off the cells selected. */
+	clearSelectionMarks,
+	/** Whether a cell may be written: what a find and replace leaves alone. */
+	canEdit,
+	/** Selects a cell and scrolls it into view, leaving the keyboard where it is: a find's Next. */
+	showCell: (rowId: string, field?: string | null): boolean => go(rowId, field ?? null, true, false),
+	/** The keys of the columns shown, in the order they stand. */
+	shownFields: (): string[] => fields.value.map(field => field.key),
 	/** Takes the last step back, as Ctrl+Z does, and gives the grid the keyboard. False when there was none. */
 	undo: (): boolean => {
 		focusInput()
@@ -3470,7 +3836,7 @@ defineExpose({
 			'is-filling': fillDrag,
 			'has-letters': columnLetters
 		}"
-		:style="{ '--tabula-row-height': `${rowHeight}px` }"
+		:style="{ '--tabula-row-height': `${rowH}px`, '--tabula-zoom': zoom }"
 		:aria-rowcount="rowCount + 1"
 		:aria-colcount="fields.length"
 		:aria-readonly="readonly || undefined"
@@ -3510,7 +3876,11 @@ defineExpose({
 							:aria-colindex="c + 1"
 							:aria-sort="ariaSort(c)"
 							:class="[
-								{ 'is-right': cellClasses[c]?.includes('is-right'), 'is-selected': colSelected(c) },
+								{
+									'is-right': cellClasses[c]?.includes('is-right'),
+									'is-center': cellClasses[c]?.includes('is-center'),
+									'is-selected': colSelected(c)
+								},
 								refClass(null, c)
 							]"
 							:style="headerStyle(c)"
@@ -3564,7 +3934,11 @@ defineExpose({
 						:aria-colindex="c + 1"
 						:aria-sort="ariaSort(c)"
 						:class="[
-							{ 'is-right': cellClasses[c]?.includes('is-right'), 'is-selected': colSelected(c) },
+							{
+								'is-right': cellClasses[c]?.includes('is-right'),
+								'is-center': cellClasses[c]?.includes('is-center'),
+								'is-selected': colSelected(c)
+							},
 							refClass(null, c)
 						]"
 						:style="headerStyle(c)"
@@ -3622,7 +3996,7 @@ defineExpose({
 						class="tabula-grid-rh"
 						:class="[{ 'is-selected': rowSelected(r) }, rowClass(r)]"
 						:title="rowTitle(r)"
-						:style="{ transform: `translateY(${r * rowHeight}px)` }"
+						:style="{ transform: `translateY(${r * rowH}px)` }"
 						@mousedown="onGutterDown($event, r)"
 					>
 						{{ sheetRow(r) }}
@@ -3655,7 +4029,7 @@ defineExpose({
 							:class="{ 'is-locked': rowLocked(r) }"
 							role="presentation"
 							:data-row="r"
-							:style="{ transform: `translateY(${r * rowHeight}px)` }"
+							:style="{ transform: `translateY(${r * rowH}px)` }"
 						>
 							<div
 								v-for="c in pinnedCols"
@@ -3672,7 +4046,9 @@ defineExpose({
 									issueClass(r, c),
 									toneClass(r, c),
 									changeClass(r, c),
-									refClass(r, c)
+									refClass(r, c),
+									lookClass(r, c),
+									foundClass(r, c)
 								]"
 								:style="cellStyles[c]"
 								:title="issueTitle(r, c)"
@@ -3702,7 +4078,7 @@ defineExpose({
 						:aria-rowindex="r + 2"
 						:data-row="r"
 						:aria-owns="pinnedCount > 0 ? pinnedCols.map(c => `${id}-${r}-${c}`).join(' ') : undefined"
-						:style="{ transform: `translateY(${r * rowHeight}px)` }"
+						:style="{ transform: `translateY(${r * rowH}px)` }"
 					>
 						<div
 							v-for="c in visibleCols"
@@ -3719,7 +4095,9 @@ defineExpose({
 								issueClass(r, c),
 								toneClass(r, c),
 								changeClass(r, c),
-								refClass(r, c)
+								refClass(r, c),
+								lookClass(r, c),
+								foundClass(r, c)
 							]"
 							:style="cellStyles[c]"
 							:title="issueTitle(r, c)"
@@ -3765,6 +4143,31 @@ defineExpose({
 			</div>
 		</div>
 		<ScrollThumbs :target="scroller" :inset-top="headerHeight" :inset-left="gutterWidth + pinnedWidth" />
+		<div v-if="columnTotals" class="tabula-grid-totals" role="row" :style="{ height: `${rowH}px` }">
+			<template v-for="c in [...pinnedCols, ...visibleCols.filter(col => col >= pinnedCount)]" :key="c">
+				<div
+					v-if="columnTotals[c] !== null"
+					class="tabula-grid-totals-cell"
+					:class="{ 'is-pinned': c < pinnedCount }"
+					role="gridcell"
+					:style="totalStyle(c)"
+				>
+					{{ columnTotals[c] }}
+				</div>
+			</template>
+			<label
+				class="tabula-grid-totals-kind"
+				:style="{ width: `${gutterWidth + (columnTotals[0] === null ? (widths[0] ?? 0) : 0)}px` }"
+			>
+				<span class="tabula-grid-sr">{{ GRID_TEXT[locale].totals }}</span>
+				<select v-model="totalKind">
+					<option value="sum">{{ GRID_TEXT[locale].totalSum }}</option>
+					<option value="average">{{ GRID_TEXT[locale].totalAverage }}</option>
+					<option value="min">{{ GRID_TEXT[locale].totalMin }}</option>
+					<option value="max">{{ GRID_TEXT[locale].totalMax }}</option>
+				</select>
+			</label>
+		</div>
 		<ul
 			v-if="listOpen"
 			:id="listId"
@@ -4021,7 +4424,7 @@ defineExpose({
 	outline: none;
 	background: var(--tabula-bg);
 	color: var(--tabula-fg);
-	font-size: var(--tabula-font-size);
+	font-size: calc(var(--tabula-font-size) * var(--tabula-zoom, 1));
 	line-height: 1.35;
 	font-variant-numeric: tabular-nums;
 	user-select: none;
@@ -4100,6 +4503,10 @@ defineExpose({
 
 .tabula-grid-th.is-right {
 	justify-content: flex-end;
+}
+
+.tabula-grid-th.is-center {
+	justify-content: center;
 }
 
 .tabula-grid-th.is-selected,
@@ -4599,6 +5006,165 @@ defineExpose({
 
 .tabula-grid-cell.is-negative {
 	color: var(--tabula-negative);
+}
+
+/*
+ * What the user put on a cell, and what the template's colour rules do: a fill under an issue's tint,
+ * which is never hidden, and a text colour over the sign's and a read-only column's.
+ */
+.tabula-grid-cell.is-fill-yellow {
+	--tabula-fill-look: var(--tabula-mark-yellow);
+}
+
+.tabula-grid-cell.is-fill-green {
+	--tabula-fill-look: var(--tabula-mark-green);
+}
+
+.tabula-grid-cell.is-fill-blue {
+	--tabula-fill-look: var(--tabula-mark-blue);
+}
+
+.tabula-grid-cell.is-fill-purple {
+	--tabula-fill-look: var(--tabula-mark-purple);
+}
+
+.tabula-grid-cell.is-fill-pink {
+	--tabula-fill-look: var(--tabula-mark-pink);
+}
+
+.tabula-grid-cell.is-fill-orange {
+	--tabula-fill-look: var(--tabula-mark-orange);
+}
+
+.tabula-grid-cell.is-fill-grey {
+	--tabula-fill-look: var(--tabula-mark-grey);
+}
+
+.tabula-grid-cell.is-fill-red {
+	--tabula-fill-look: var(--tabula-mark-red);
+}
+
+.tabula-grid-cell.is-text-yellow {
+	--tabula-text-look: var(--tabula-mark-yellow);
+}
+
+.tabula-grid-cell.is-text-green {
+	--tabula-text-look: var(--tabula-mark-green);
+}
+
+.tabula-grid-cell.is-text-blue {
+	--tabula-text-look: var(--tabula-mark-blue);
+}
+
+.tabula-grid-cell.is-text-purple {
+	--tabula-text-look: var(--tabula-mark-purple);
+}
+
+.tabula-grid-cell.is-text-pink {
+	--tabula-text-look: var(--tabula-mark-pink);
+}
+
+.tabula-grid-cell.is-text-orange {
+	--tabula-text-look: var(--tabula-mark-orange);
+}
+
+.tabula-grid-cell.is-text-grey {
+	--tabula-text-look: var(--tabula-mark-grey);
+}
+
+.tabula-grid-cell.is-text-red {
+	--tabula-text-look: var(--tabula-mark-red);
+}
+
+.tabula-grid .tabula-grid-cell[class*="is-fill-"]:not(.is-error, .is-warning) {
+	background: color-mix(in srgb, var(--tabula-fill-look) 24%, var(--tabula-bg));
+}
+
+.tabula-grid .tabula-grid-cell[class*="is-text-"] {
+	color: color-mix(in srgb, var(--tabula-text-look) 58%, var(--tabula-fg));
+}
+
+.tabula-grid-cell.is-bold {
+	font-weight: 700;
+}
+
+.tabula-grid-cell.is-italic {
+	font-style: italic;
+}
+
+/* What a find found, over every other look while it is open; the one it is on outlined. */
+.tabula-grid .tabula-grid-cell.is-found,
+.tabula-grid .tabula-grid-cell.is-found-current {
+	background: color-mix(in srgb, var(--tabula-mark-yellow) 38%, var(--tabula-bg));
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tabula-mark-yellow) 75%, var(--tabula-fg));
+}
+
+.tabula-grid .tabula-grid-cell.is-found-current {
+	box-shadow: inset 0 0 0 2px var(--tabula-accent);
+}
+
+/* The totals, under the rows and held in place, each under its column. */
+.tabula-grid-totals {
+	position: relative;
+	flex: none;
+	overflow: hidden;
+	border-top: 2px solid var(--tabula-head-line);
+	background: var(--tabula-head-bg);
+	font-weight: 700;
+}
+
+.tabula-grid-totals-cell {
+	position: absolute;
+	top: 0;
+	box-sizing: border-box;
+	height: 100%;
+	padding: 0 9px;
+	overflow: hidden;
+	border-right: 1px solid var(--tabula-line);
+	background: var(--tabula-head-bg);
+	line-height: calc(var(--tabula-row-height) - 2px);
+	text-align: right;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tabula-grid-totals-cell.is-pinned {
+	z-index: 1;
+}
+
+.tabula-grid-totals-kind {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 2;
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	height: 100%;
+	padding: 0 6px;
+	border-right: 1px solid var(--tabula-head-line);
+	background: var(--tabula-head-bg);
+}
+
+.tabula-grid-totals-kind select {
+	max-width: 100%;
+	height: calc(100% - 6px);
+	padding: 0 4px;
+	border: 1px solid var(--tabula-head-line);
+	border-radius: var(--tabula-radius-small);
+	background: var(--tabula-bg);
+	color: var(--tabula-fg);
+	font: inherit;
+	font-weight: 600;
+}
+
+.tabula-grid-sr {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
 
 /* The worst issue on any of the row's cells, by its number. */

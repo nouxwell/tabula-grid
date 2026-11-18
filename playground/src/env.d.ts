@@ -1,5 +1,6 @@
 import type {
 	Adjustment,
+	CellMarks,
 	ColumnLayout,
 	DraftSaver,
 	FormulaEngine,
@@ -38,6 +39,9 @@ export interface PlaygroundHandle {
 	readonly restorePosition: (position: GridPosition) => void
 	readonly widths: () => Readonly<Record<string, number>>
 	readonly columns: () => ColumnLayout
+	/** With `?format=1`: the marks the user puts on cells. */
+	readonly marks: CellMarks | null
+	readonly setColumns: (layout: ColumnLayout) => void
 }
 
 declare global {
