@@ -557,6 +557,43 @@ values to its new key. Every value is then checked again. A processed row opens 
 that never answered opens `unknown`, to be sent again under its key: closing the page mid-run
 cannot lead to the rows being processed twice.
 
+## Saved views
+
+A user arranges the sheet for the work in hand (columns moved, hidden or pinned, widths, filters,
+a sort) and keeps it under a name, to come back to: "Haftalık fiyatlar", "Yalnız TRY". A view is
+how to look, never what is there: it holds what the grid's `columns`, `column-widths`, `filters`
+and `sort` models hold, and no rows.
+
+The views of one module are one JSON document, kept wherever the application keeps it: in the
+browser, or on its server for each user. The core changes it by returning a new one, so it can sit
+in a ref as it is:
+
+```ts
+import { addView, emptyViews, readViews, sameView, setDefaultView, viewFor } from "@nouxwell/tabula-core"
+
+let views = emptyViews(schema.module) // or readViews(JSON.parse(stored), schema.module)
+const state = { columns: columns.value, columnWidths: widths.value, filters: filters.value, sort: sort.value }
+
+views = addView(views, { id: crypto.randomUUID(), name: "Haftalık fiyatlar", ...state })
+views = setDefaultView(views, views.views[0].id) // the sheet opens in it
+
+const shown = viewFor(views.views[0], schema) // as it applies to the schema now
+const changed = !sameView(schema, state, views.views[0]) // "· değişti" beside its name
+```
+
+- **Opening under a newer schema.** `viewFor` passes over a column the schema no longer has, and a
+  filter or sort on one, so a view saved before a column was removed still opens.
+- **Telling a view changed.** `sameView` compares what the views show, not how they are written:
+  the schema's own order written out is no order, and ticked values match in any order.
+- **Names.** `viewNameProblem` says `empty`, `too_long` (past 60) or `taken` (another view's,
+  in any case); `addView` and `renameView` refuse the same. `updateView`, `removeView` and
+  `setDefaultView` complete it, and `readViews` checks what comes back from storage, every
+  problem at once (`invalid_views`).
+
+[examples/nuxt](examples/nuxt/README.md) has the menu: the views to choose from, with a tick by the
+one shown and "· değişti" once the sheet no longer matches it, and save, save as, rename, delete
+and "open in this view".
+
 ## Where the line is drawn
 
 The packages never talk to a database and never choose an HTTP client. The application that embeds

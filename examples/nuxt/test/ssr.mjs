@@ -36,6 +36,7 @@ try {
 	assert.equal(page.status, 200)
 	assert.match(html, /Toplu fiyat güncelleme/, "the title the schema gives, fetched and drawn on the server")
 	assert.match(html, /Kontrol et/, "the toolbar's AppButtons, drawn on the server")
+	assert.match(html, /Standart düzen/, "the view menu's button, before the browser reads the saved views")
 	assert.match(html, /<style[^>]*cssr-id/, "Naive UI's styles, collected on the server")
 	assert.match(html, /--app-primary: #00b27b/, "the palette's variables, light")
 	assert.match(html, /--tabula-accent: #00b27b/, "the grid's colours from the palette")

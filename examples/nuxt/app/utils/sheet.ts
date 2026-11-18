@@ -204,6 +204,8 @@ export function createSheet(
 		lookups,
 		view,
 		saver,
+		/** Whether a kept draft was opened, with the columns the user had. */
+		restored: opened !== null,
 		version,
 		onlyIssueRows,
 		importCsv,

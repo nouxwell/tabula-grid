@@ -129,6 +129,7 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 17  | Toolbar with import and export menus                | application | done; rules screen phase two |
 | 18  | Phone layout                                        | application | done                         |
 | 19  | Darker green for words                              | both        | done                         |
+| 20  | Saved views (personal views)                        | both        | done (phase two)             |
 
 A part marked "not chosen" is not built without asking first.
 
@@ -143,6 +144,8 @@ Every screen takes these; none uses the Naive UI component underneath directly.
   give it the action's promise (an `async` function) and write no `loading` of your own. `icon`
   names an `AppIcon`; when it changes (sun ↔ moon) the new one turns in. An icon-only button has
   an `aria-label` and an `AppTooltip`, and is at least 44px on a phone (`min-h-11 min-w-11`).
+- **`AppInput`**: every text field. Naive UI's props pass through; a refused value sets
+  `status="error"` and says why under the field, in a `role="alert"` line.
 - **`AppScrollbar`**: every scroll area of the application's own; Naive UI's thin bar, which
   turns the pointer into a hand. `x-scrollable` for one that scrolls sideways.
 - **`AppSpin`**: the spinner of a part that waits for its data. It passes on only the slots it is

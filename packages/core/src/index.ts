@@ -84,6 +84,23 @@ export type { RowFilter, RowOrder } from "./view.js"
 export { summarizeCells } from "./summary.js"
 export { compareValues, distinctValues, filterKey, hasRange, rowOrder, rowsMatching } from "./filters.js"
 export { fillValues } from "./fill.js"
+export {
+	addView,
+	emptyViews,
+	PLAIN_VIEW,
+	readViews,
+	removeView,
+	renameView,
+	sameView,
+	setDefaultView,
+	updateView,
+	VIEW_NAME_LIMIT,
+	viewFor,
+	viewNameProblem,
+	VIEWS_FORMAT,
+	VIEWS_VERSION
+} from "./views.js"
+export type { SavedView, SavedViews, ViewNameProblem, ViewState } from "./views.js"
 export type { FillMode, FillOptions } from "./fill.js"
 export type { ColumnCondition, ColumnFilters, ColumnSort, DistinctValue } from "./filters.js"
 export type { CellSummary } from "./summary.js"

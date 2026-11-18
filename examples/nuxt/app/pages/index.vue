@@ -143,6 +143,19 @@
 						<span class="hidden md:inline">Sütunlar</span>
 						<span class="sr-only md:hidden">Sütunlar</span>
 					</AppButton>
+					<AppDropdown :options="viewOptions" @select="chooseView">
+						<AppButton
+							:size="controlSize"
+							:disabled="!sheet"
+							class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+						>
+							<template #icon><AppIcon name="views" /></template>
+							<span class="hidden md:inline">{{ viewLabel }}</span>
+							<span class="sr-only md:hidden">Görünüm: {{ viewLabel }}</span>
+							<span v-if="viewModified" class="ml-1.5 hidden text-muted md:inline">· değişti</span>
+							<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
+						</AppButton>
+					</AppDropdown>
 					<input ref="csvInput" type="file" accept=".csv,text/csv" hidden @change="importChosen" />
 				</div>
 			</AppScrollbar>
@@ -158,6 +171,8 @@
 						ref="grid"
 						v-model:columns="columns"
 						v-model:column-widths="widths"
+						v-model:filters="filters"
+						v-model:sort="sort"
 						class="h-full"
 						:schema="sheet.schema"
 						:store="sheet.store"
@@ -306,19 +321,69 @@
 				</div>
 			</template>
 		</AppModal>
+
+		<AppModal
+			v-model:show="nameOpen"
+			:title="naming === 'rename' ? 'Görünümü yeniden adlandır' : 'Yeni görünüm'"
+			width="440px"
+		>
+			<AppModalScrollWrapper>
+				<form class="flex flex-col gap-2" @submit.prevent="submitName">
+					<label for="view-name" class="text-sm text-muted">
+						Sütunlar, genişlikler, süzgeçler ve sıralama bu adla saklanır.
+					</label>
+					<AppInput
+						v-model:value="viewName"
+						:input-props="{ id: 'view-name' }"
+						:maxlength="VIEW_NAME_LIMIT"
+						:status="nameProblemText ? 'error' : undefined"
+						placeholder="Örn. Haftalık fiyatlar"
+						autofocus
+					/>
+					<p v-if="nameProblemText" class="m-0 text-sm text-error" role="alert">{{ nameProblemText }}</p>
+				</form>
+			</AppModalScrollWrapper>
+			<template #footer>
+				<div class="flex justify-end gap-2">
+					<AppButton @click="nameOpen = false">Vazgeç</AppButton>
+					<AppButton type="primary" @click="submitName">Kaydet</AppButton>
+				</div>
+			</template>
+		</AppModal>
+
+		<AppModal v-model:show="removeOpen" title="Görünümü sil" width="440px">
+			<AppModalScrollWrapper>
+				<p class="m-0">
+					“{{ currentView?.name }}” görünümü silinsin mi? Bu geri alınamaz; tablo şimdiki hâliyle kalır.
+				</p>
+			</AppModalScrollWrapper>
+			<template #footer>
+				<div class="flex justify-end gap-2">
+					<AppButton @click="removeOpen = false">Vazgeç</AppButton>
+					<AppButton type="error" @click="confirmRemove">Sil</AppButton>
+				</div>
+			</template>
+		</AppModal>
 	</div>
 </template>
 
 <script setup lang="ts">
 import {
 	VALUE_SETTINGS,
+	VIEW_NAME_LIMIT,
+	viewNameProblem,
 	withColumn,
+	type ColumnFilters,
 	type ColumnLayout,
+	type ColumnSort,
 	type ModuleSchemaInput,
-	type RowInit
+	type RowInit,
+	type ViewNameProblem
 } from "@nouxwell/tabula-core"
 import type { TabulaGrid as Grid } from "@nouxwell/tabula-vue"
 import { useMessage, type DropdownOption } from "naive-ui"
+import { h } from "vue"
+import AppIcon from "~/components/atoms/AppIcon.vue"
 import { localeMenu, type Locale } from "~/utils/locales"
 import type { ImportResult, Sheet } from "~/utils/sheet"
 import { FIT_TOOLTIP_STYLE } from "~/utils/tooltip"
@@ -354,6 +419,10 @@ const sheet = shallowRef<Sheet | null>(null)
 const grid = ref<InstanceType<typeof Grid> | null>(null)
 const columns = ref<ColumnLayout>({})
 const widths = ref<Readonly<Record<string, number>>>({})
+const filters = ref<ColumnFilters>({})
+const sort = ref<ColumnSort | null>(null)
+const savedViews = useSavedViews({ columns, widths, filters, sort })
+const { views, currentId: viewId, current: currentView, modified: viewModified } = savedViews
 const columnsOpen = ref(false)
 const onlyIssueRows = ref(false)
 const issuesOpen = ref(false)
@@ -383,6 +452,7 @@ watch(
 	([schemaInput, rowList]) => {
 		if (!sheet.value && schemaInput && rowList) {
 			sheet.value = createSheet(schemaInput, rowList, locale, { columns, widths })
+			savedViews.open(sheet.value.schema, sheet.value.restored)
 		}
 	},
 	{ immediate: true }
@@ -503,6 +573,117 @@ function columnStatus(column: ImportResult["columns"][number]): string {
 
 function labelOf(key: string): string {
 	return input.value?.fields.find(field => field.key === key)?.label ?? key
+}
+
+// ---------------------------------------------------------------- saved views
+
+const viewLabel = computed(() => currentView.value?.name ?? "Standart düzen")
+
+const viewOptions = computed<DropdownOption[]>(() => {
+	const tick = (on: boolean) => (on ? () => h(AppIcon, { name: "tick", size: 16 }) : undefined)
+	const chosen = currentView.value
+	const opensIn = views.value?.defaultId ?? null
+
+	return [
+		{
+			type: "group",
+			label: "Görünümler",
+			key: "views",
+			children: [
+				{ label: "Standart düzen", key: "view:", icon: tick(viewId.value === null) },
+				...(views.value?.views ?? []).map(view => ({
+					label: view.id === opensIn ? `${view.name} · açılışta` : view.name,
+					key: `view:${view.id}`,
+					icon: tick(view.id === viewId.value)
+				}))
+			]
+		},
+		{ type: "divider", key: "divider" },
+		{ label: "Değişiklikleri kaydet", key: "save", disabled: !chosen || !viewModified.value },
+		{ label: "Yeni görünüm olarak kaydet…", key: "saveAs" },
+		{ label: "Yeniden adlandır…", key: "rename", disabled: !chosen },
+		{
+			label: chosen && chosen.id === opensIn ? "Açılışta bu görünümle açma" : "Açılışta bu görünümle aç",
+			key: "default",
+			disabled: !chosen
+		},
+		{ label: "Görünümü sil…", key: "remove", disabled: !chosen }
+	]
+})
+
+const nameOpen = ref(false)
+const naming = ref<"new" | "rename">("new")
+const viewName = ref("")
+/** Whether Kaydet was pressed: an empty name is said to be wrong only then. */
+const nameTried = ref(false)
+const removeOpen = ref(false)
+
+const NAME_TEXT: Readonly<Record<ViewNameProblem, string>> = {
+	empty: "Bir ad yazın.",
+	too_long: `En çok ${VIEW_NAME_LIMIT} karakter olabilir.`,
+	taken: "Bu adda bir görünüm zaten var."
+}
+
+const nameProblem = computed(() =>
+	views.value ? viewNameProblem(views.value, viewName.value, naming.value === "rename" ? viewId.value : null) : null
+)
+const nameProblemText = computed(() =>
+	nameProblem.value && (nameTried.value || nameProblem.value === "taken") ? NAME_TEXT[nameProblem.value] : null
+)
+
+function chooseView(key: string | number): void {
+	const choice = String(key)
+
+	if (choice.startsWith("view:")) {
+		savedViews.show(choice.slice("view:".length) || null)
+
+		return
+	}
+
+	if (choice === "save") {
+		savedViews.save()
+		message.success("Görünüm kaydedildi.")
+	} else if (choice === "saveAs" || choice === "rename") {
+		naming.value = choice === "rename" ? "rename" : "new"
+		viewName.value = choice === "rename" ? (currentView.value?.name ?? "") : ""
+		nameTried.value = false
+		nameOpen.value = true
+	} else if (choice === "default") {
+		const opening = currentView.value?.id !== views.value?.defaultId
+
+		savedViews.toggleDefault()
+		message.success(
+			opening ? "Sayfa bundan sonra bu görünümle açılacak." : "Sayfa bundan sonra standart düzende açılacak."
+		)
+	} else if (choice === "remove") {
+		removeOpen.value = true
+	}
+}
+
+function submitName(): void {
+	nameTried.value = true
+
+	if (nameProblem.value !== null) {
+		return
+	}
+
+	if (naming.value === "rename") {
+		savedViews.rename(viewName.value)
+		message.success("Görünüm yeniden adlandırıldı.")
+	} else {
+		savedViews.saveAs(viewName.value)
+		message.success("Görünüm kaydedildi.")
+	}
+
+	nameOpen.value = false
+}
+
+function confirmRemove(): void {
+	const name = currentView.value?.name ?? ""
+
+	savedViews.remove()
+	removeOpen.value = false
+	message.success(`“${name}” görünümü silindi.`)
 }
 
 async function saveDraft(): Promise<void> {

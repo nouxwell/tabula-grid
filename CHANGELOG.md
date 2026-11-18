@@ -17,6 +17,13 @@ The three packages are versioned together.
   column beside goes. Ctrl+D and Ctrl+R copy the selection's first row down or first column across.
   A fill is one step to undo, writes only into the rows shown and passes over columns that cannot
   be edited. Not drawn on a touch screen.
+- **Saved views.** A user keeps the sheet as they arranged it (columns, widths, filters, sort)
+  under a name, and opens the page in the one they choose. The core has the document and its
+  changes: `emptyViews`, `addView`, `updateView`, `renameView`, `removeView`,
+  `setDefaultView`, `readViews` (error code `invalid_views`), `viewFor` for a schema that has moved
+  on, `sameView` to tell a view changed, `viewNameProblem`, and the types `SavedView`,
+  `SavedViews`, `ViewState` and `ViewNameProblem`. The example has the menu, the name dialog and
+  `AppInput`, and keeps the views in the browser.
 - **`fillValues`** in the core, with `FillMode` and `FillOptions`: the values a fill writes,
   worked out exactly, numbers as decimal text.
 - **Thin scroll bars**, as the CRM draws them: a 5px rounded thumb on a clear track that turns the

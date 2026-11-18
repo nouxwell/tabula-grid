@@ -23,6 +23,9 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
   `AppButton` spins while the promise its click returns runs, and `AppSpin` shows a part that
   waits for its data; the page around it is never covered. `AppScrollbar` scrolls an area of the
   page's own under a thin bar the pointer turns into a hand over.
+- **Saved views.** The toolbar's view menu keeps the sheet as the user arranged it under a name,
+  in the browser's storage ([app/utils/views.ts](app/utils/views.ts)); the page opens in the view
+  chosen for it. An application keeps the same JSON on its server for each user.
   The rules are in the repository's [DESIGN.md](../../DESIGN.md).
 - **Server rendering.** The page, its Naive UI styles and the palette arrive drawn; the grid is
   drawn in the browser, where the sheet's parts are made ([app/utils/sheet.ts](app/utils/sheet.ts)).
