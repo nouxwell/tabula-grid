@@ -1983,6 +1983,36 @@ describe("filling", () => {
 		})
 	})
 
+	it("fills a block when the handle is dragged across the corner, down and then across", async () => {
+		await withPage(20, async page => {
+			const notes = await column(page, "note", 3)
+
+			await put(page, "active", [true])
+			await cell(page, 0, 7).click()
+			await dragHandle(page, cell(page, 2, 8), undefined, async () => {
+				// The preview is the whole block, not one way of it.
+				const preview = await page.locator(".tabula-grid-fill-preview").boundingBox()
+				const corner = await cell(page, 2, 8).boundingBox()
+
+				if (!preview || !corner) {
+					throw new Error("The preview or the corner cell is not on screen.")
+				}
+
+				expect(Math.abs(preview.x + preview.width - (corner.x + corner.width))).toBeLessThanOrEqual(2)
+				expect(Math.abs(preview.y + preview.height - (corner.y + corner.height))).toBeLessThanOrEqual(2)
+			})
+
+			await expect.poll(() => column(page, "active", 3)).toEqual([true, true, true])
+			// Across from every row the fill reached: yes as the sheet writes it, in a text column.
+			await expect.poll(() => column(page, "note", 3)).toEqual(["Evet", "Evet", "Evet"])
+			await expect(selected(page)).resolves.toMatchObject({ range: { top: 0, bottom: 2, left: 7, right: 8 } })
+
+			await press(page, "Control+z")
+
+			await expect.poll(() => column(page, "note", 3)).toEqual(notes)
+		})
+	})
+
 	it("leaves a column that cannot be edited as it was", async () => {
 		await withPage(20, async page => {
 			const before = await column(page, "sku", 4)
@@ -1992,6 +2022,62 @@ describe("filling", () => {
 
 			await expect(column(page, "sku", 4)).resolves.toEqual(before)
 			await expect(selected(page)).resolves.toMatchObject({ range: { top: 0, bottom: 3 } })
+		})
+	})
+})
+
+describe("scroll bars", () => {
+	it("draws the sheet's own thumbs, which turn the pointer into a hand and scroll the sheet when dragged", async () => {
+		await withPage(1000, async page => {
+			const thumb = page.locator(".tabula-grid > .tabula-thumb.is-vertical")
+
+			await expect.poll(() => thumb.count()).toBe(1)
+			await expect(page.locator(".tabula-grid > .tabula-thumb.is-horizontal").count()).resolves.toBe(1)
+
+			// The browser's own bar is hidden: it would show the arrow, whatever the page asks.
+			const scroller = page.locator(".tabula-grid-scroller")
+
+			await expect(
+				scroller.evaluate((element: HTMLElement) => element.offsetWidth - element.clientWidth)
+			).resolves.toBe(0)
+			await expect(thumb.evaluate(element => getComputedStyle(element).cursor)).resolves.toBe("pointer")
+
+			const box = await thumb.boundingBox()
+			const header = await page.locator(".tabula-grid-head").boundingBox()
+
+			if (!box || !header) {
+				throw new Error("The thumb or the header is not on screen.")
+			}
+
+			// Below the header, which does not scroll.
+			expect(box.y).toBeGreaterThanOrEqual(header.y + header.height)
+
+			await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+			await page.mouse.down()
+			await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 100, { steps: 4 })
+			await page.mouse.up()
+
+			await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+			await expect.poll(async () => (await thumb.boundingBox())?.y ?? 0).toBeGreaterThan(box.y + 50)
+		})
+	})
+
+	it("draws one over the issue list when it is longer than the panel", async () => {
+		await withPage(60, async page => {
+			await page.evaluate(() => {
+				const { store } = window.__playground!
+
+				store.transact(() => {
+					for (let index = 0; index < 40; index++) {
+						store.setCell(store.rowIdAt(index)!, "newPrice", null)
+					}
+				})
+			})
+
+			const thumb = page.locator(".tabula-issues-body > .tabula-thumb.is-vertical")
+
+			await expect.poll(() => thumb.count()).toBe(1)
+			await expect(thumb.evaluate(element => getComputedStyle(element).cursor)).resolves.toBe("pointer")
 		})
 	})
 })

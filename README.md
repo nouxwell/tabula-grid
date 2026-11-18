@@ -134,7 +134,8 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
 - **Clipboard.** Copy gives text a spreadsheet reads. A pasted block lands at the top left of the
   selection, one pasted value fills the whole selection, and a paste that runs past the last row
   adds the rows it needs. A read-only column is passed over and keeps its values.
-- **Filling, as in Excel.** Drag the square on the selection's corner down, up or across: numbers
+- **Filling, as in Excel.** Drag the square on the selection's corner down, up, across, or across
+  the corner to fill a block (down first, then across from every row reached): numbers
   with one step between them go on by it (10, 20 gives 30, 40), a date goes on a day at a time,
   dates on one day of the month by months, and a name ending in a number counts on ("Ürün 9",
   "Ürün 10", "A009", "A010"); anything else, and one number alone, repeats. Ctrl (Option on a Mac)
@@ -262,8 +263,10 @@ with an issue are worked out from them. Both components carry the class `tabula-
 }
 ```
 
-Scroll bars are thin, as the CRM's: `--tabula-scrollbar`, `--tabula-scrollbar-hover` and
-`--tabula-scrollbar-size` (5px) change them, on every area of the grid and the panel that scrolls.
+Scroll bars are thin, as the CRM's, and the pointer turns into a hand over them: the grid and the
+panel hide the browser's own and draw their thumbs, which can be dragged, while wheel, keys and touch
+scroll as before. `--tabula-scrollbar`, `--tabula-scrollbar-hover` and `--tabula-scrollbar-size`
+(5px) change them.
 
 Where the accent carries words, on a link or a button, the grid takes it a step towards the text
 colour, `--tabula-accent-text`: IONSIS's green reads at 2.9:1 on white, under the 4.5:1 text

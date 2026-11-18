@@ -31,6 +31,9 @@ export interface Palette {
 	readonly error: string
 	readonly divider: string
 	readonly hover: string
+	/** The scroll bars' thumb, and under the pointer: the CRM's stronger dividers. */
+	readonly scrollbar: string
+	readonly scrollbarHover: string
 }
 
 export const PALETTE: Readonly<Record<ColorMode, Palette>> = {
@@ -48,7 +51,9 @@ export const PALETTE: Readonly<Record<ColorMode, Palette>> = {
 		warning: "#ffb600",
 		error: "#ff0156",
 		divider: "rgba(0, 0, 0, 0.1)",
-		hover: "rgba(0, 0, 0, 0.05)"
+		hover: "rgba(0, 0, 0, 0.05)",
+		scrollbar: "rgba(0, 0, 0, 0.2)",
+		scrollbarHover: "rgba(0, 0, 0, 0.3)"
 	},
 	dark: {
 		body: "#14161a",
@@ -64,7 +69,9 @@ export const PALETTE: Readonly<Record<ColorMode, Palette>> = {
 		warning: "#ffb600",
 		error: "#ff0156",
 		divider: "rgba(255, 255, 255, 0.1)",
-		hover: "rgba(255, 255, 255, 0.05)"
+		hover: "rgba(255, 255, 255, 0.05)",
+		scrollbar: "rgba(255, 255, 255, 0.2)",
+		scrollbarHover: "rgba(255, 255, 255, 0.3)"
 	}
 }
 
@@ -89,7 +96,9 @@ export function paletteCss(mode: ColorMode): string {
 		`--tabula-muted: ${colors.muted};`,
 		`--tabula-error: ${colors.error};`,
 		`--tabula-warning: ${colors.warning};`,
-		`--tabula-success: ${colors.success};`
+		`--tabula-success: ${colors.success};`,
+		`--tabula-scrollbar: ${colors.scrollbar};`,
+		`--tabula-scrollbar-hover: ${colors.scrollbarHover};`
 	].join(" ")
 
 	// The grid sets its colours on .tabula-theme[data-tabula-theme]; this is one step more specific.
@@ -130,6 +139,12 @@ export function naiveOverrides(mode: ColorMode): GlobalThemeOverrides {
 			dividerColor: colors.divider,
 			borderColor: colors.divider,
 			hoverColor: colors.hover,
+			// Scroll bars as the grid's: 5px, the CRM's stronger dividers.
+			scrollbarColor: colors.scrollbar,
+			scrollbarColorHover: colors.scrollbarHover,
+			scrollbarWidth: "5px",
+			scrollbarHeight: "5px",
+			scrollbarBorderRadius: "5px",
 			borderRadius: "6px",
 			borderRadiusSmall: "3px",
 			fontFamily: FONT_FAMILY,

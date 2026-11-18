@@ -143,6 +143,8 @@ Every screen takes these; none uses the Naive UI component underneath directly.
   give it the action's promise (an `async` function) and write no `loading` of your own. `icon`
   names an `AppIcon`; when it changes (sun ↔ moon) the new one turns in. An icon-only button has
   an `aria-label` and an `AppTooltip`, and is at least 44px on a phone (`min-h-11 min-w-11`).
+- **`AppScrollbar`**: every scroll area of the application's own; Naive UI's thin bar, which
+  turns the pointer into a hand. `x-scrollable` for one that scrolls sideways.
 - **`AppSpin`**: the spinner of a part that waits for its data. It passes on only the slots it is
   given: Naive UI hides its own spinner behind an empty one.
 - **`AppIcon`**: the one icon set, by name; a name it lacks is a type error. Stroke icons,
@@ -188,20 +190,26 @@ As the CRM's loading standard has it:
 ## Scroll bars
 
 As the CRM draws them: **a thin rounded thumb on a clear track**, 5px, in the text colour at 20%
-(30% under the pointer), never the browser's own bar with its arrows.
+(30% under the pointer), **that turns the pointer into a hand** and can be dragged; never the
+browser's own bar with its arrows. A browser draws its own bar with the arrow whatever the page
+asks, so ours hide it and draw the thumb themselves, as Naive UI's `n-scrollbar` does. Wheel, keys
+and touch scroll the area as the browser scrolls it.
 
-- **In the packages**, every scroll area carries the class `tabula-scroll` from `theme.css`: the
-  sheet, the filter's list of values, the editor's suggestions, the issue list. A new one does the
-  same. `--tabula-scrollbar`, `--tabula-scrollbar-hover` and `--tabula-scrollbar-size` change it.
-- **In an application**, a scroll area of its own takes `scrollbar-thin` beside its overflow
-  utility: `overflow-y-auto scrollbar-thin`. Areas Naive UI scrolls (`AppDrawer`, `AppModal`)
-  draw their own thumb and do not take it.
-- **No `scrollbar-width` or `scrollbar-color` beside these**, and no `::-webkit-scrollbar` rules
-  in a component. In Chromium the standard pair turns the thin bar off and brings the thick one
-  back, which is why the class keeps them for browsers without the pseudo-elements only.
-- **A bar never runs against content.** A list inside a padded panel reaches into the padding with
-  a negative margin and gives the room back with `scrollbar-gutter: stable` and a little padding,
-  so the bar runs in the panel's padding and the content ends where the rest of the panel does.
+- **In the packages**, every scroll area carries `tabula-scroll` from `theme.css`, which hides the
+  browser's bar, and has a `ScrollThumbs` beside it in the same positioned parent, which draws
+  ours over its edges: the sheet, the filter's list of values, the editor's suggestions, the issue
+  list. A new one does both; `tabula-scroll` alone leaves an area with no bar at all.
+  `--tabula-scrollbar`, `--tabula-scrollbar-hover` and `--tabula-scrollbar-size` change them.
+- **In an application**, a scroll area of its own is an `AppScrollbar` (`x-scrollable` for one that
+  scrolls sideways), as the CRM's. Areas Naive UI scrolls (`AppDrawer`, `AppModal`) draw their own
+  already. `scrollbar-thin` in `main.css` is only for a scroll area that cannot be wrapped: it is
+  thin, but under it the pointer stays an arrow.
+- **No `scrollbar-width` or `scrollbar-color` utilities, and no `::-webkit-scrollbar` rules in a
+  component.** In Chromium the standard pair turns the thin bar off and brings the thick one back.
+- **A bar never runs against content.** It is drawn over the area's edge, so the area keeps room
+  there: the sheet scrolls 10px past its last row and column, and a list inside a padded panel
+  reaches into the padding with a negative margin and gives the same room back as padding, so the
+  bar runs in the panel's padding and the content ends where the rest of the panel does.
 
 ---
 
@@ -235,6 +243,9 @@ As the CRM draws them: **a thin rounded thumb on a clear track**, 5px, in the te
 - **Tailwind 4 has a `scrollbar-thin` utility of its own** (`scrollbar-width: thin`), which in
   Chromium would bring the thick bar back. The application's `scrollbar-thin` in `main.css` sits
   outside Tailwind's layers so it wins, and resets it.
+- **A browser's own scroll bar ignores `cursor`.** Neither `::-webkit-scrollbar-thumb` nor the
+  area itself can turn the pointer into a hand over it; only a thumb drawn as an element can, which
+  is why the packages have `ScrollThumbs` and the application `AppScrollbar`.
 - **The grid is drawn in the browser only.** Its rows are fetched by the browser
   (`useFetch(…, { server: false })`); in the page's payload they would be sent twice.
 
@@ -250,7 +261,8 @@ As the CRM draws them: **a thin rounded thumb on a clear track**, 5px, in the te
 - [ ] Every hint is an `AppTooltip`; every modal the `AppModal` shape; every drawer
       `AppDrawer` + `AppDrawerContent`.
 - [ ] What opens, closes or swaps animates; reduced motion turns it off.
-- [ ] No browser scroll bar: `tabula-scroll` in a package, `scrollbar-thin` in an application.
+- [ ] No browser scroll bar: `tabula-scroll` + `ScrollThumbs` in a package, `AppScrollbar` in an
+      application; the pointer turns into a hand over every thumb.
 - [ ] Every action's button spins while it runs (its click returns the promise); a waiting part
       spins alone; a failure says so with a way to try again.
 - [ ] A part marked "not chosen" above was asked about before it was built.

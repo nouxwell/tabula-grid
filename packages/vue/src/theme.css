@@ -87,35 +87,57 @@
 }
 
 /*
- * Every scroll area of the grid and the issue panel: the sheet, the lists. A thin rounded thumb on a
- * clear track, as the IONSIS CRM draws its scroll areas, in place of the browser's own bar with its
- * arrows. Chromium and Safari draw it with the ::-webkit-scrollbar rules alone; in Chromium the
- * standard scrollbar-width and scrollbar-color would turn those off and bring the thick bar back,
- * so the standard pair is only for browsers without them, such as Firefox.
+ * Every scroll area of the grid and the issue panel (the sheet, the lists) carries tabula-scroll:
+ * the browser's own bars are hidden, and ScrollThumbs draws the CRM's over the area's edges. A
+ * browser draws its bars with the arrow whatever a page asks; these turn it into a hand, as the
+ * CRM's AppScrollbar does. Wheel, keys and touch scroll the area as before.
  */
+.tabula-scroll {
+	scrollbar-width: none;
+}
+
 .tabula-scroll::-webkit-scrollbar {
-	width: var(--tabula-scrollbar-size);
-	height: var(--tabula-scrollbar-size);
+	display: none;
+	width: 0;
+	height: 0;
 }
 
-.tabula-scroll::-webkit-scrollbar-track,
-.tabula-scroll::-webkit-scrollbar-corner {
-	background: transparent;
-}
-
-.tabula-scroll::-webkit-scrollbar-thumb {
+.tabula-thumb {
+	position: absolute;
+	z-index: 4;
+	box-sizing: border-box;
 	border-radius: var(--tabula-scrollbar-size);
 	background: var(--tabula-scrollbar);
+	cursor: pointer;
+	touch-action: none;
+	transition: background-color 0.2s ease;
 }
 
-.tabula-scroll::-webkit-scrollbar-thumb:hover {
+.tabula-thumb.is-vertical {
+	width: var(--tabula-scrollbar-size);
+	margin-left: calc(-1 * var(--tabula-scrollbar-size) - 2px);
+}
+
+.tabula-thumb.is-horizontal {
+	height: var(--tabula-scrollbar-size);
+	margin-top: calc(-1 * var(--tabula-scrollbar-size) - 2px);
+}
+
+/* Easier to catch than to see. */
+.tabula-thumb::before {
+	position: absolute;
+	inset: -3px;
+	content: "";
+}
+
+.tabula-thumb:hover,
+.tabula-thumb.is-dragging {
 	background: var(--tabula-scrollbar-hover);
 }
 
-@supports not selector(::-webkit-scrollbar) {
-	.tabula-scroll {
-		scrollbar-width: thin;
-		scrollbar-color: var(--tabula-scrollbar) transparent;
+@media (prefers-reduced-motion: reduce) {
+	.tabula-thumb {
+		transition: none;
 	}
 }
 

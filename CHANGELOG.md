@@ -9,7 +9,8 @@ The three packages are versioned together.
 
 ### Added
 
-- **Filling, as in Excel.** The square on the selection's corner drags a fill down, up or across:
+- **Filling, as in Excel.** The square on the selection's corner drags a fill down, up, across, or
+  across the corner for a block (down first, then across from every row it reached):
   numbers go on by their step, a date a day at a time, dates on one day of the month by months, a
   name ending in a number counts on with its leading zeros, and anything else repeats; Ctrl or
   Alt held when letting go swaps a series and copies. Double-clicking it fills down as far as the
@@ -18,11 +19,15 @@ The three packages are versioned together.
   be edited. Not drawn on a touch screen.
 - **`fillValues`** in the core, with `FillMode` and `FillOptions`: the values a fill writes,
   worked out exactly, numbers as decimal text.
-- **Thin scroll bars**, as the CRM draws them: every scroll area of the grid and the issue panel
-  carries `tabula-scroll`, a 5px rounded thumb on a clear track, set with `--tabula-scrollbar`,
-  `--tabula-scrollbar-hover` and `--tabula-scrollbar-size`. The issue list's and the filter
-  list's bars run in their panel's padding, clear of the cards and counts. The example has the
-  CRM's `scrollbar-thin` for its own scroll areas.
+- **Thin scroll bars**, as the CRM draws them: a 5px rounded thumb on a clear track that turns the
+  pointer into a hand and darkens under it, and can be dragged. The grid and the issue panel hide
+  the browser's own bar, which ignores `cursor`, and draw their thumbs over the edges of the sheet
+  and of every list; wheel, keys and touch scroll as before. Set with `--tabula-scrollbar`,
+  `--tabula-scrollbar-hover` and `--tabula-scrollbar-size`. The thumbs stay clear of the
+  header and the pinned columns, the sheet scrolls 10px past its edges so they never cover a cell,
+  and the lists' run in their panel's padding. The example gains `AppScrollbar` (Naive UI's bar
+  in the same colours) for its toolbar, and the CRM's `scrollbar-thin` for an area that cannot be
+  wrapped.
 - **`TabulaFormulaBar`**: the active cell's address and value above the sheet. An address typed and
   Entered goes there; a value typed is written as typing it into the cell writes it, into the cell
   it was typed for even when a click has moved the selection on. A formula column shows its formula,

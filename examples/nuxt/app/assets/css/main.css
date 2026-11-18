@@ -66,9 +66,9 @@
 }
 
 /*
- * Scroll areas, as the CRM's: a thin rounded thumb on a clear track, never the browser's own bar.
- * Put `scrollbar-thin` beside the overflow utility: `overflow-y-auto scrollbar-thin`. Areas Naive UI
- * scrolls (AppDrawer, AppModal) draw their own thumb and do not take it.
+ * A thin bar for a scroll area that cannot be an AppScrollbar, as the CRM has: a rounded thumb on a
+ * clear track, beside the overflow utility, `overflow-y-auto scrollbar-thin`. Prefer AppScrollbar:
+ * under this bar, the browser's own, the pointer stays an arrow whatever is asked.
  *
  * It stays outside Tailwind's layers on purpose. Tailwind 4 has a `scrollbar-thin` utility of its
  * own, `scrollbar-width: thin`, and in Chromium the standard scrollbar-width and scrollbar-color

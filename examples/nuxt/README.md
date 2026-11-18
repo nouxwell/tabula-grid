@@ -21,7 +21,8 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
   `AppModal` + `AppModalScrollWrapper` never run off it, `AppDrawer` + `AppDrawerContent`,
   `AppNumberAnimation`, `AppButton` with a turning icon, and the language select with flags.
   `AppButton` spins while the promise its click returns runs, and `AppSpin` shows a part that
-  waits for its data; the page around it is never covered.
+  waits for its data; the page around it is never covered. `AppScrollbar` scrolls an area of the
+  page's own under a thin bar the pointer turns into a hand over.
   The rules are in the repository's [DESIGN.md](../../DESIGN.md).
 - **Server rendering.** The page, its Naive UI styles and the palette arrive drawn; the grid is
   drawn in the browser, where the sheet's parts are made ([app/utils/sheet.ts](app/utils/sheet.ts)).

@@ -7,8 +7,9 @@ import {
 	type RowStore,
 	type ValueSettings
 } from "@nouxwell/tabula-core"
-import { computed, shallowRef, toRaw, watch, type PropType } from "vue"
+import { computed, ref, shallowRef, toRaw, watch, type PropType } from "vue"
 import { issueText, PANEL_TEXT, type GridLocale } from "./messages.js"
+import ScrollThumbs from "./ScrollThumbs.vue"
 import type { GridTheme } from "./types.js"
 
 /**
@@ -75,6 +76,8 @@ const summary = computed(() => {
 })
 const shown = computed(() => issues.value.slice(0, props.limit))
 const text = computed(() => PANEL_TEXT[props.locale])
+/** The list of issues, for the scroll bar drawn over its edge. */
+const list = ref<HTMLElement | null>(null)
 
 /** Where the issue is: the sheet, a row, or a row and a column. */
 function label(issue: Issue): string {
@@ -226,7 +229,7 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 				</span>
 			</header>
 			<p v-if="issues.length === 0" class="tabula-issues-none">{{ text.none }}</p>
-			<ul v-else class="tabula-issues-list tabula-scroll">
+			<ul v-else ref="list" class="tabula-issues-list tabula-scroll">
 				<li v-for="issue in shown" :key="issue.id">
 					<button type="button" class="tabula-issues-item" :class="itemClass(issue)" @click="choose(issue)">
 						<span class="tabula-issues-line">
@@ -245,6 +248,7 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 					+{{ issues.length - shown.length }} {{ text.more }}
 				</li>
 			</ul>
+			<ScrollThumbs v-if="issues.length > 0" :target="list" />
 			<div v-if="$slots.actions" class="tabula-issues-actions"><slot name="actions" /></div>
 		</div>
 	</section>
@@ -268,6 +272,7 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 }
 
 .tabula-issues-body {
+	position: relative;
 	display: flex;
 	flex: 1;
 	flex-direction: column;
@@ -409,9 +414,8 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 	min-height: 0;
 	/* Into the panel's padding, so the bar runs there and never against the cards. */
 	margin: 0 -10px 0 0;
-	padding: 0 5px 0 0;
+	padding: 0 10px 0 0;
 	overflow: auto;
-	scrollbar-gutter: stable;
 	list-style: none;
 }
 

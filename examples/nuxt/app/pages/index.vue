@@ -79,70 +79,73 @@
 				</div>
 			</div>
 
-			<div
-				role="toolbar"
-				aria-label="Tablo araçları"
-				class="scrollbar-thin flex items-center gap-2 overflow-x-auto pb-1"
-			>
-				<AppTooltip>
-					<template #trigger>
+			<!-- On a narrow screen the toolbar scrolls sideways, under a bar that stays clear of its buttons. -->
+			<AppScrollbar x-scrollable trigger="none">
+				<div role="toolbar" aria-label="Tablo araçları" class="flex w-max min-w-full items-center gap-2 pb-2">
+					<AppTooltip>
+						<template #trigger>
+							<AppButton
+								:size="controlSize"
+								icon="undo"
+								:disabled="!canUndo"
+								aria-label="Geri al"
+								class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+								@click="grid?.undo()"
+							/>
+						</template>
+						Geri al (Ctrl+Z)
+					</AppTooltip>
+					<AppTooltip>
+						<template #trigger>
+							<AppButton
+								:size="controlSize"
+								icon="redo"
+								:disabled="!canRedo"
+								aria-label="Yinele"
+								class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+								@click="grid?.redo()"
+							/>
+						</template>
+						Yinele (Ctrl+Y)
+					</AppTooltip>
+					<span class="mx-1 hidden h-5 w-px bg-divider md:block" aria-hidden="true" />
+					<AppDropdown :options="importOptions" @select="chooseImport">
 						<AppButton
 							:size="controlSize"
-							icon="undo"
-							:disabled="!canUndo"
-							aria-label="Geri al"
+							:disabled="!sheet"
+							:loading="importing"
 							class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
-							@click="grid?.undo()"
-						/>
-					</template>
-					Geri al (Ctrl+Z)
-				</AppTooltip>
-				<AppTooltip>
-					<template #trigger>
+						>
+							<template #icon><AppIcon name="upload" /></template>
+							<span class="hidden md:inline">İçe aktar</span>
+							<span class="sr-only md:hidden">İçe aktar</span>
+							<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
+						</AppButton>
+					</AppDropdown>
+					<AppDropdown :options="exportOptions" @select="chooseExport">
 						<AppButton
 							:size="controlSize"
-							icon="redo"
-							:disabled="!canRedo"
-							aria-label="Yinele"
+							:disabled="!sheet"
 							class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
-							@click="grid?.redo()"
-						/>
-					</template>
-					Yinele (Ctrl+Y)
-				</AppTooltip>
-				<span class="mx-1 hidden h-5 w-px bg-divider md:block" aria-hidden="true" />
-				<AppDropdown :options="importOptions" @select="chooseImport">
+						>
+							<template #icon><AppIcon name="download" /></template>
+							<span class="hidden md:inline">Dışa aktar</span>
+							<span class="sr-only md:hidden">Dışa aktar</span>
+							<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
+						</AppButton>
+					</AppDropdown>
 					<AppButton
 						:size="controlSize"
-						:disabled="!sheet"
-						:loading="importing"
 						class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+						@click="columnsOpen = true"
 					>
-						<template #icon><AppIcon name="upload" /></template>
-						<span class="hidden md:inline">İçe aktar</span>
-						<span class="sr-only md:hidden">İçe aktar</span>
-						<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
+						<template #icon><AppIcon name="columns" /></template>
+						<span class="hidden md:inline">Sütunlar</span>
+						<span class="sr-only md:hidden">Sütunlar</span>
 					</AppButton>
-				</AppDropdown>
-				<AppDropdown :options="exportOptions" @select="chooseExport">
-					<AppButton :size="controlSize" :disabled="!sheet" class="min-h-11 min-w-11 md:min-h-0 md:min-w-0">
-						<template #icon><AppIcon name="download" /></template>
-						<span class="hidden md:inline">Dışa aktar</span>
-						<span class="sr-only md:hidden">Dışa aktar</span>
-						<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
-					</AppButton>
-				</AppDropdown>
-				<AppButton
-					:size="controlSize"
-					class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
-					@click="columnsOpen = true"
-				>
-					<template #icon><AppIcon name="columns" /></template>
-					<span class="hidden md:inline">Sütunlar</span>
-					<span class="sr-only md:hidden">Sütunlar</span>
-				</AppButton>
-				<input ref="csvInput" type="file" accept=".csv,text/csv" hidden @change="importChosen" />
-			</div>
+					<input ref="csvInput" type="file" accept=".csv,text/csv" hidden @change="importChosen" />
+				</div>
+			</AppScrollbar>
 
 			<TabulaFormulaBar :grid="grid" :theme="theme" :locale="locale" />
 		</div>
