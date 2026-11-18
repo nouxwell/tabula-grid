@@ -35,6 +35,8 @@ const validator = new SheetValidator(schema, store, VALUE_SETTINGS.tr)
 - **`TabulaFormulaBar`** shows the active cell's address and value, goes to an address typed into
   it, and writes a value typed there, as a spreadsheet's formula bar.
 - **`TabulaStatusBar`** counts the rows and issues and sums and averages the numbers selected.
+- **`TabulaPreview`** shows what a run would do before it is sent: new records, updates from the
+  old value to the new, and the rows that would not change, as the backend's check said.
 
 IONSIS's palette, light, dark and following the system; a few `--tabula-*` CSS variables change it
 and the rest follow. Turkish and English text. Vue 3.5 or later.

@@ -299,6 +299,118 @@ describe("SheetSession", () => {
 		})
 	})
 
+	describe("the plan before a run", () => {
+		it("says what each row would become, with the backend's values beside the sheet's", async () => {
+			const { session, preflight } = setup()
+			const checking = session.check()
+
+			at(preflight.calls, 0).resolve({
+				plan: [
+					{ rowId: "row_1", action: "update", previous: { price: "8", note: "eski" } },
+					{ rowId: "row_2", action: "create" },
+					{ rowId: "row_3", action: "unchanged" },
+					// Not a row the check was sent: passed over.
+					{ rowId: "row_9", action: "create" }
+				]
+			})
+			await checking
+
+			const plan = session.plan()
+
+			expect(plan).toMatchObject({ current: true, check: { requestId: "req_1", outcome: "valid" } })
+			expect(plan.counts).toEqual({ create: 1, update: 1, unchanged: 1, unknown: 0 })
+			expect(plan.rows).toEqual([
+				{
+					rowId: "row_1",
+					action: "update",
+					changes: [
+						{ field: "price", before: "8", after: "10" },
+						{ field: "note", before: "eski", after: null }
+					]
+				},
+				{
+					rowId: "row_2",
+					action: "create",
+					// What the new record gets: the fields sent with a value, as the sheet holds them.
+					changes: [
+						{ field: "product", before: null, after: { id: 2, label: "Ürün 2" } },
+						{ field: "price", before: null, after: "20" }
+					]
+				},
+				{ rowId: "row_3", action: "unchanged", changes: [] }
+			])
+		})
+
+		it("calls a row changed or added since the check unknown, and the plan no longer current", async () => {
+			const { store, session, preflight } = setup()
+			const checking = session.check()
+
+			at(preflight.calls, 0).resolve({
+				plan: ["row_1", "row_2", "row_3"].map(rowId => ({ rowId, action: "unchanged" as const }))
+			})
+			await checking
+
+			store.setCell("row_2", "price", "25")
+
+			expect(session.plan()).toMatchObject({ current: false, counts: { unchanged: 2, unknown: 1 } })
+			expect(session.plan().rows[1]).toEqual({ rowId: "row_2", action: "unknown", changes: [] })
+
+			// Back to what was checked: the check's answer holds again.
+			store.setCell("row_2", "price", "20")
+			// A column that is never sent changes nothing a run would do.
+			store.setCell("row_1", "sku", "SKU-X")
+
+			expect(session.plan()).toMatchObject({ current: true, counts: { unchanged: 3, unknown: 0 } })
+
+			store.appendRows([{ values: { product: { id: 7, label: "Ürün 7" }, price: "70" } }])
+
+			expect(session.plan()).toMatchObject({ current: false, counts: { unchanged: 3, unknown: 1 } })
+		})
+
+		it("has nothing to go by before a check, nor after a run changed what the backend holds", async () => {
+			const { session, preflight, process } = setup({ rows: 2 })
+
+			expect(session.plan()).toMatchObject({ check: null, current: false, counts: { unknown: 2 } })
+
+			// A backend that does not say what rows would become: the plan is current, every row unknown.
+			const checking = session.check()
+
+			at(preflight.calls, 0).resolve({ issues: [] })
+			await checking
+
+			expect(session.plan()).toMatchObject({ current: true, counts: { unknown: 2 } })
+
+			const running = session.process()
+
+			at(process.calls, 0).resolve({ status: "partial", rows: [{ rowId: "row_2", result: "failed" }] })
+			await running
+
+			expect(session.plan()).toMatchObject({ check: null, current: false, counts: { unknown: 2 } })
+		})
+
+		it("refuses a plan not in the contract's shape", async () => {
+			const { session, preflight } = setup({ rows: 1 })
+			const checking = session.check()
+
+			at(preflight.calls, 0).resolve({ plan: [{ rowId: "row_1", action: "delete", previous: [] }] } as never)
+
+			await expect(checking).resolves.toMatchObject({ status: "failed" })
+			expect(session.state.failure?.message).toContain("plan[0].action")
+			expect(session.state.failure?.message).toContain("plan[0].previous")
+		})
+
+		it("counts the rows an error holds back from a run", () => {
+			const { store, session } = setup()
+
+			expect(session.blocked()).toBe(0)
+
+			store.setCell("row_1", "price", "-1")
+			store.setCell("row_3", "price", null)
+
+			expect(session.blocked()).toBe(2)
+		})
+	})
+
 	describe("processing", () => {
 		it("holds the run back while an error stands, local or the backend's, but not a stale one", async () => {
 			const { store, session, preflight, process } = setup()

@@ -7,7 +7,9 @@ import {
 	type ProcessRequest,
 	type ProcessResponse,
 	type ProcessStatus,
+	type RowAction,
 	type RowOutcome,
+	type RowPlanInput,
 	type SheetAdapters,
 	type SheetRequest,
 	type StatusQuery
@@ -144,6 +146,49 @@ export interface RowResults {
 	subscribe(listener: () => void): () => void
 }
 
+/** A field a run would write: what the backend holds now, and what the sheet holds. */
+export interface PlannedChange {
+	readonly field: string
+	/** As the backend sent it; null for a new record. */
+	readonly before: CellValue
+	/** As the sheet holds it, to be shown the way its cell shows it. */
+	readonly after: CellValue
+}
+
+/** `unknown`: the check said nothing of the row, or the row changed after it. */
+export type PlannedAction = RowAction | "unknown"
+
+export interface RowPlan {
+	readonly rowId: RowId
+	readonly action: PlannedAction
+	/**
+	 * For an update, the fields that would change, as far as the backend said; for a new record,
+	 * every field it would be given. Empty otherwise.
+	 */
+	readonly changes: readonly PlannedChange[]
+}
+
+/** What a run would do, row by row, by the last check's answer: for a preview before it is sent. */
+export interface ProcessPlan {
+	/** The check the plan comes from; null when there is none to go by. */
+	readonly check: CheckRecord | null
+	/**
+	 * Whether that check saw every row a run would send just as the run would send it. When it did
+	 * not, check again before showing the plan as what will be done.
+	 */
+	readonly current: boolean
+	/** Every row a run would send, in sheet order. */
+	readonly rows: readonly RowPlan[]
+	readonly counts: Readonly<Record<PlannedAction, number>>
+}
+
+/** A check's answer, kept to build a plan from: what each row was sent as, and what it would become. */
+interface CheckedPlan {
+	readonly record: CheckRecord
+	readonly payloads: ReadonlyMap<RowId, string>
+	readonly plans: ReadonlyMap<RowId, RowPlanInput>
+}
+
 const DEFAULT_POLL_INTERVAL = 1000
 
 /**
@@ -184,6 +229,8 @@ export class SheetSession {
 	#running: AbortController | null = null
 	/** The request of a run without a final answer: what is sent again, under the same key. */
 	#pending: ProcessRequest | null = null
+	/** The last check that was answered, until a run changes what the backend holds. */
+	#checked: CheckedPlan | null = null
 	#disposed = false
 
 	constructor(options: SheetSessionOptions) {
@@ -321,8 +368,22 @@ export class SheetSession {
 		this.#merged.replace(issue => issue.source === "preflight", issues)
 
 		const outcome = issues.some(issue => issue.blocking && !issue.stale) ? "invalid" : "valid"
+		const checkRecord = record(request, outcome)
+		const plans = new Map<RowId, RowPlanInput>()
+		const sent = new Set(request.rows.map(row => row.rowId))
 
-		this.#setState({ phase: "idle", check: record(request, outcome) })
+		for (const plan of response.plan ?? []) {
+			if (sent.has(plan.rowId) && !plans.has(plan.rowId)) {
+				plans.set(plan.rowId, plan)
+			}
+		}
+
+		this.#checked = {
+			record: checkRecord,
+			payloads: new Map(request.rows.map(row => [row.rowId, JSON.stringify(row.values)])),
+			plans
+		}
+		this.#setState({ phase: "idle", check: checkRecord })
 
 		return { status: outcome, issues: issues.length }
 	}
@@ -399,6 +460,39 @@ export class SheetSession {
 		}
 
 		return this.#follow(sending, response, controller)
+	}
+
+	/**
+	 * What a run would do now, by the last check's answer: each row it would send, in sheet order,
+	 * with what the backend said would become of it. A row the backend said nothing of, or one that
+	 * changed or was added after the check, is `unknown`. A finished run leaves nothing to go by,
+	 * since it changed what the backend holds.
+	 */
+	plan(): ProcessPlan {
+		const checked = this.#checked
+		const counts: Record<PlannedAction, number> = { create: 0, update: 0, unchanged: 0, unknown: 0 }
+		let current = checked !== null
+		const rows = this.unfinishedRows().map(rowId => {
+			const same = checked?.payloads.get(rowId) === JSON.stringify(this.#payload(rowId))
+			const plan = this.#rowPlan(rowId, same ? checked?.plans.get(rowId) : undefined)
+
+			current &&= same
+			counts[plan.action]++
+
+			return plan
+		})
+
+		return Object.freeze({
+			check: checked?.record ?? null,
+			current,
+			rows: Object.freeze(rows),
+			counts: Object.freeze(counts)
+		})
+	}
+
+	/** How many rows an error, the sheet's own or the backend's, holds back from a run now. */
+	blocked(): number {
+		return this.#blockedRows(this.unfinishedRows())
 	}
 
 	/** Asks the backend how a run with no answer went, while the session is `unknown`. */
@@ -553,6 +647,7 @@ export class SheetSession {
 
 		this.#record(request, response, true)
 		this.#pending = null
+		this.#checked = null
 		this.#running = null
 		this.#results.setInFlight(new Set())
 		this.#setState({
@@ -660,6 +755,33 @@ export class SheetSession {
 			issues
 		)
 		this.#results.record(results)
+	}
+
+	#rowPlan(rowId: RowId, given: RowPlanInput | undefined): RowPlan {
+		if (given === undefined) {
+			return Object.freeze({ rowId, action: "unknown", changes: Object.freeze([]) })
+		}
+
+		const changes: PlannedChange[] = []
+		const previous = given.previous ?? {}
+
+		for (const field of this.schema.fields) {
+			if (!field.submit) {
+				continue
+			}
+
+			const value = this.store.get(rowId, field.key)
+			// An error a formula gave is not sent, so it is not written either.
+			const after = isFormulaError(value) ? null : value
+
+			if (given.action === "create" && after !== null) {
+				changes.push(Object.freeze({ field: field.key, before: null, after }))
+			} else if (given.action === "update" && Object.hasOwn(previous, field.key)) {
+				changes.push(Object.freeze({ field: field.key, before: previous[field.key] ?? null, after }))
+			}
+		}
+
+		return Object.freeze({ rowId, action: given.action, changes: Object.freeze(changes) })
 	}
 
 	#query(): StatusQuery {

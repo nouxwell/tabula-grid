@@ -18,6 +18,8 @@
 	--tabula-error: #ff0156;
 	--tabula-warning: #ffb600;
 	--tabula-success: #00b27b;
+	/* A new record in a preview of a run: neither good nor bad, only new. */
+	--tabula-info: #6267ff;
 	--tabula-radius: 6px;
 	--tabula-radius-small: 3px;
 	--tabula-font-size: 13px;
@@ -51,6 +53,8 @@
 	--tabula-stale-mark: var(--tabula-muted);
 	--tabula-success-bg: color-mix(in srgb, var(--tabula-success) 10%, var(--tabula-bg));
 	--tabula-success-mark: color-mix(in srgb, var(--tabula-success) 85%, var(--tabula-fg));
+	--tabula-info-text: color-mix(in srgb, var(--tabula-info) 85%, var(--tabula-fg));
+	--tabula-info-bg: color-mix(in srgb, var(--tabula-info) 10%, var(--tabula-bg));
 
 	--tabula-issues-bg: var(--tabula-bg);
 	--tabula-issues-fg: var(--tabula-fg);
@@ -82,6 +86,7 @@
 	--tabula-error: #ff0156;
 	--tabula-warning: #ffb600;
 	--tabula-success: #00e19b;
+	--tabula-info: #6267ff;
 
 	color-scheme: dark;
 }
@@ -151,6 +156,7 @@
 		--tabula-error: #ff0156;
 		--tabula-warning: #ffb600;
 		--tabula-success: #00e19b;
+		--tabula-info: #6267ff;
 
 		color-scheme: dark;
 	}

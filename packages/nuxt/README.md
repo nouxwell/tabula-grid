@@ -15,7 +15,7 @@ export default defineNuxtConfig({
 })
 ```
 
-`<TabulaGrid>`, `<TabulaIssues>`, `<TabulaFormulaBar>` and `<TabulaStatusBar>` from
+`<TabulaGrid>`, `<TabulaIssues>`, `<TabulaFormulaBar>`, `<TabulaStatusBar>` and `<TabulaPreview>` from
 [@nouxwell/tabula-vue](https://www.npmjs.com/package/@nouxwell/tabula-vue) are then available in
 every page, with their stylesheet. They are drawn in the browser only: the grid measures text and
 reads the clipboard, and a server has neither. The schema, the rows and the checks come from

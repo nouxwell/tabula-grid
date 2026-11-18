@@ -9,6 +9,17 @@ The three packages are versioned together.
 
 ### Added
 
+- **A preview before a run.** A pre-flight answer may say what each row would do, in `plan`:
+  `create`, `update` with the fields that would change and the values the backend holds now, or
+  `unchanged`. `session.plan()` reads it against the sheet as it stands, a row changed since the
+  check as `unknown`, and `session.blocked()` counts the rows an error holds back.
+  `TabulaPreview` in the Vue package draws it: counts, a filter by kind, each row's fields from
+  the old value to the new, and its warnings; choosing a row emits `select`. A `--tabula-info`
+  colour marks new records. In the example (design H), İşle checks the sheet when needed and opens
+  the preview, with "N satırı işle" to go on; its server keeps a price list to answer from, and
+  opens with three discontinued products rather than one in nine, so the errors can be put right
+  by hand.
+
 - **Filling, as in Excel.** The square on the selection's corner drags a fill down, up, across, or
   across the corner for a block (down first, then across from every row it reached):
   numbers go on by their step, a date a day at a time, dates on one day of the month by months, a

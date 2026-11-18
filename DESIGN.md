@@ -63,7 +63,7 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | Error            | `#ff0156`            | `#ff0156`                  | `--tabula-error`             |
 | Warning          | `#ffb600`            | `#ffb600`                  | `--tabula-warning`           |
 | Success          | `#00b27b`            | `#00e19b`                  | `--tabula-success`           |
-| Info             | `#6267ff`            | `#6267ff`                  | —                            |
+| Info             | `#6267ff`            | `#6267ff`                  | `--tabula-info`              |
 | Divider          | `rgba(0, 0, 0, 0.1)` | `rgba(255, 255, 255, 0.1)` | `--tabula-line` (worked out) |
 
 - **The green that carries words is a step darker on light.** `#00b27b` on white reads at 2.9:1,
@@ -153,6 +153,11 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 28  | A function's help and its arguments, as written     | both        | done (phase two)   |
 | 29  | Live preview of a formula                           | application | done (phase two)   |
 | 30  | A formula typed into one cell with "="              | package     | not chosen         |
+| 31  | A preview before a run, in a window (H)             | both        | done (phase two)   |
+| 32  | The old values in the sheet's own cells (I)         | package     | not chosen         |
+| 33  | The check says what each row would do (`plan`)      | package     | done (phase two)   |
+| 34  | Choosing a row in the preview goes to it            | both        | done (phase two)   |
+| 35  | Rows that would not change are not sent             | package     | not chosen         |
 | —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
 | —   | Saved views (personal views)                        | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)      | both        | done (phase two)   |

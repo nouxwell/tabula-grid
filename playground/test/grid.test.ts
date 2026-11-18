@@ -863,6 +863,54 @@ describe("TabulaGrid", () => {
 			})
 		})
 
+		it("previews a run: what each row becomes, the backend's value beside the sheet's, and its warnings", async () => {
+			await withPage(8, async page => {
+				const preview = page.locator(".tabula-preview")
+
+				// Over 5,000: a warning, which does not hold the run back, so the preview shows it.
+				await type(page, 1, 3, "6000")
+				await page.locator(".playground-preview-open").click()
+
+				// Checked first: the sheet was never checked, and the plan comes from the check.
+				await expect
+					.poll(() => preview.locator(".tabula-preview-chip").allInnerTexts())
+					.toEqual(["2 yeni kayıt", "4 güncelleme", "2 değişmeyen", "1 uyarılı"])
+				await expect(preview.locator(".tabula-preview-row").nth(1).innerText()).resolves.toBe(
+					"Ürün 000002\nSatır 2\nGüncelleme\nYeni fiyat\n5.454,55\n→\n6.000,00\n5.000 üzerindeki fiyatlar onaya düşer."
+				)
+				await expect(preview.locator(".tabula-preview-row").first().innerText()).resolves.toBe(
+					"Ürün 000001\nSatır 1\nDeğişmeyen\nSunucudaki kayıtla aynı; bir şey değişmeyecek."
+				)
+
+				await preview.locator(".tabula-preview-filters button", { hasText: "Yeni" }).click()
+
+				await expect(preview.locator(".tabula-preview-name strong").allInnerTexts()).resolves.toEqual([
+					"Ürün 000004",
+					"Ürün 000008"
+				])
+				// A new record's fields, the product only as its heading.
+				await expect(preview.locator(".tabula-preview-row").first().innerText()).resolves.toContain(
+					"Yeni kayıt\nYeni fiyat\n1.961,31\nDeğişim %\n2,1\nPara birimi\nTRY"
+				)
+
+				// A row chosen: the preview steps aside and the grid goes to it.
+				await preview.locator(".tabula-preview-row", { hasText: "Ürün 000004" }).click()
+
+				await expect(preview.count()).resolves.toBe(0)
+				await expect(selected(page)).resolves.toMatchObject({ active: { row: 3 } })
+
+				// Nothing changed since: the preview opens again without asking the backend.
+				const checks = await page.evaluate(() => window.__playground!.session.state.check?.requestId)
+
+				await page.locator(".playground-preview-open").click()
+				await preview.waitFor()
+
+				await expect(page.evaluate(() => window.__playground!.session.state.check?.requestId)).resolves.toBe(
+					checks
+				)
+			})
+		})
+
 		it("processes the sheet, shows each row's result by its number, and locks the rows that went through", async () => {
 			await withPage(20, async page => {
 				await type(page, 2, 8, "red alert")

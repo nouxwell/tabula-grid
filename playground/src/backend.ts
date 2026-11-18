@@ -5,6 +5,7 @@ import type {
 	PayloadRow,
 	ProcessRequest,
 	ProcessResponse,
+	RowPlanInput,
 	RowResultInput,
 	SheetAdapters,
 	SheetRequest
@@ -23,6 +24,10 @@ interface Run {
  *
  * The rules: a product whose id divides by 9 is inactive, a price over 5,000 needs approval (a
  * warning), and a note with "red" in it is refused, which only a run finds out.
+ *
+ * Its price list, as a check tells what a run would do to it: a product whose id leaves 3 over 4
+ * has no line yet, one whose id divides by 5 already holds the price, and the rest change from a
+ * price a tenth lower.
  */
 export class FakeBackend {
 	/** Milliseconds each answer takes. */
@@ -43,7 +48,11 @@ export class FakeBackend {
 		preflight: async (request: SheetRequest, { signal }) => {
 			await this.#wait(signal)
 
-			return { requestId: request.requestId, issues: request.rows.flatMap(row => this.#check(row)) }
+			return {
+				requestId: request.requestId,
+				issues: request.rows.flatMap(row => this.#check(row)),
+				plan: request.rows.flatMap(row => this.#plan(row))
+			}
 		},
 		process: async (request: ProcessRequest, { signal }) => {
 			await this.#wait(signal)
@@ -182,6 +191,31 @@ export class FakeBackend {
 			polls: 0,
 			cancelled: false
 		}
+	}
+
+	/** What a run would do to the row's line; nothing for a product the list cannot hold. */
+	#plan(row: PayloadRow): RowPlanInput[] {
+		const product = row.values.productId
+
+		if (typeof product !== "number" || product % 9 === 0) {
+			return []
+		}
+
+		if (product % 4 === 3) {
+			return [{ rowId: row.rowId, action: "create" }]
+		}
+
+		if (product % 5 === 0) {
+			return [{ rowId: row.rowId, action: "unchanged" }]
+		}
+
+		return [
+			{
+				rowId: row.rowId,
+				action: "update",
+				previous: { newPrice: (Number(row.values.newPrice) / 1.1).toFixed(2) }
+			}
+		]
 	}
 
 	/** What a pre-flight check finds, and a run finds again. */

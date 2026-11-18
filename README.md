@@ -180,7 +180,8 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
 - **Themes.** `light`, `dark` or `auto`, in colours an application changes (see below).
 
 With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>`, `<TabulaIssues>`,
-`<TabulaFormulaBar>` and `<TabulaStatusBar>` are available everywhere, drawn in the browser only.
+`<TabulaFormulaBar>`, `<TabulaStatusBar>` and `<TabulaPreview>` are available everywhere, drawn in
+the browser only.
 
 ### The formula bar and the status bar
 
@@ -460,6 +461,42 @@ an issue for a deleted row is dropped, one for an unknown field is kept as the r
 
 Give the grid `:issues="session.issues"` and `:results="session.results"`, and the panel the same
 issues. Each row's number then shows its result, and a processed row can no longer be changed.
+
+### Before a run: what it would do
+
+Only the backend knows whether a row makes a new record or changes one, and what that record holds
+now. A pre-flight answer may say so, in `plan`, one entry for each row it can tell about:
+
+```ts
+{
+  issues: [],
+  plan: [
+    { rowId: "r1", action: "update", previous: { newPrice: "1496.66", validFrom: "2026-11-01" } },
+    { rowId: "r2", action: "create" },
+    { rowId: "r3", action: "unchanged" }
+  ]
+}
+```
+
+`previous` holds, for an update, each field that would change, with the value the backend has now
+in the form rows are sent in (a lookup may come as `{ id, label }`). A field left out is not
+changing. `plan` is optional: without it a preview has only the number of rows to show.
+
+`session.plan()` reads it against the sheet as it stands: each row a run would send, in sheet order,
+with its `action` and its `changes` (the backend's value and the sheet's), and the counts. A row
+changed or added after the check is `unknown`, and `current` is false until the sheet is checked
+again; a finished run leaves nothing to go by, since it changed what the backend holds.
+`session.blocked()` says how many rows an error holds back.
+
+```vue
+<TabulaPreview :session="session" :plan="plan" name-field="productId" @select="goTo" />
+```
+
+`TabulaPreview` draws a plan: the counts, a filter by kind, and each row with its fields from the
+old value to the new (`1.496,66 → 1.533,80`), a new record with the fields it gets, and the warnings
+standing on it. The host puts it in a window of its own with the buttons to go on; choosing a row
+emits `select` with its id. The example's İşle checks the sheet when the last check no longer
+holds, stops on rows with an error, and otherwise opens the preview before anything is sent.
 
 ## Importing and exporting
 

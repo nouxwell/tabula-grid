@@ -154,6 +154,68 @@ export const PANEL_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, str
 	}
 }
 
+/** The words of the preview of a run. */
+export const PREVIEW_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, string>>>> = {
+	tr: {
+		title: "İşlenecekler",
+		create: "yeni kayıt",
+		update: "güncelleme",
+		unchanged: "değişmeyen",
+		unknown: "bilinmeyen",
+		warned: "uyarılı",
+		createOne: "Yeni kayıt",
+		updateOne: "Güncelleme",
+		unchangedOne: "Değişmeyen",
+		unknownOne: "Bilinmiyor",
+		all: "Tümü",
+		filterCreate: "Yeni",
+		filterUpdate: "Güncelleme",
+		filterUnchanged: "Değişmeyen",
+		filterUnknown: "Bilinmeyen",
+		filterWarned: "Uyarılı",
+		filters: "Satırları süz",
+		row: "Satır",
+		empty: "boş",
+		same: "Sunucudaki kayıtla aynı; bir şey değişmeyecek.",
+		noChanges: "Sunucu hangi alanların değişeceğini bildirmedi.",
+		unknownRow: "Ne olacağı bilinmiyor.",
+		noPlan: "Sunucu satırların ne olacağını bildirmedi; yalnız sayıları belli.",
+		stale: "Tablo son kontrolden sonra değişti; önizleme eski olabilir.",
+		sent: "satır gönderilecek",
+		more: "{n} satır daha göster",
+		none: "Bu süzgeçte satır yok."
+	},
+	en: {
+		title: "To be processed",
+		create: "new",
+		update: "updates",
+		unchanged: "unchanged",
+		unknown: "unknown",
+		warned: "with warnings",
+		createOne: "New record",
+		updateOne: "Update",
+		unchangedOne: "Unchanged",
+		unknownOne: "Unknown",
+		all: "All",
+		filterCreate: "New",
+		filterUpdate: "Updates",
+		filterUnchanged: "Unchanged",
+		filterUnknown: "Unknown",
+		filterWarned: "Warnings",
+		filters: "Filter the rows",
+		row: "Row",
+		empty: "empty",
+		same: "The same as the record on the server; nothing will change.",
+		noChanges: "The server did not say which fields will change.",
+		unknownRow: "What it will do is not known.",
+		noPlan: "The server did not say what the rows will do; only their number is known.",
+		stale: "The sheet changed after the last check; the preview may be out of date.",
+		sent: "rows to send",
+		more: "Show {n} more rows",
+		none: "No rows under this filter."
+	}
+}
+
 /** The words of the formula bar and the status bar. */
 export const BAR_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, string>>>> = {
 	tr: {

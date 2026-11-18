@@ -27,9 +27,18 @@ import {
 	type DraftOpening,
 	type Issue,
 	type ProcessOutcome,
+	type ProcessPlan,
+	type RowId,
 	type TableImport
 } from "@nouxwell/tabula-core"
-import { TabulaFormulaBar, TabulaGrid, TabulaIssues, TabulaStatusBar, type GridTheme } from "@nouxwell/tabula-vue"
+import {
+	TabulaFormulaBar,
+	TabulaGrid,
+	TabulaIssues,
+	TabulaPreview,
+	TabulaStatusBar,
+	type GridTheme
+} from "@nouxwell/tabula-vue"
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
 import { FakeBackend } from "./backend"
 import { clearStoredDraft, loadStoredDraft, storeDraft } from "./drafts"
@@ -241,6 +250,7 @@ const WORDS = {
 		redo: "Yinele",
 		check: "Kontrol et",
 		process: "İşle",
+		preview: "Önizle",
 		stop: "Durdur",
 		resend: "Yeniden gönder",
 		ask: "Durumu sor",
@@ -297,6 +307,7 @@ const WORDS = {
 		redo: "Redo",
 		check: "Check",
 		process: "Process",
+		preview: "Preview",
 		stop: "Stop",
 		resend: "Send again",
 		ask: "Ask status",
@@ -456,6 +467,24 @@ async function process(): Promise<void> {
 	lastRun.value = outcome.status === "unknown" ? null : outcome
 }
 
+/** What a run would do, by a check made for it when the last one no longer says. */
+const plan = shallowRef<ProcessPlan | null>(null)
+
+async function preview(): Promise<void> {
+	lastRun.value = null
+
+	if (!session.plan().current) {
+		await session.check()
+	}
+
+	plan.value = session.plan()
+}
+
+function showPlanned(rowId: RowId): void {
+	plan.value = null
+	grid.value?.goTo(rowId)
+}
+
 async function ask(): Promise<void> {
 	const outcome = await session.refresh()
 
@@ -574,6 +603,14 @@ onMounted(() => {
 					{{ words.process }}
 				</button>
 				<button
+					type="button"
+					class="playground-preview-open"
+					:disabled="state.phase !== 'idle'"
+					@click="preview"
+				>
+					{{ words.preview }}
+				</button>
+				<button
 					v-if="state.phase === 'checking' || state.phase === 'processing'"
 					type="button"
 					class="playground-stop"
@@ -625,6 +662,18 @@ onMounted(() => {
 				{{ words.openAnyway }}
 			</button>
 			<button type="button" class="playground-discard" @click="startOver">{{ words.discard }}</button>
+		</div>
+		<div v-if="plan" class="playground-preview">
+			<TabulaPreview
+				:session="session"
+				:plan="plan"
+				name-field="productId"
+				:theme="theme"
+				:locale="language"
+				:value-settings="valueSettings"
+				@select="showPlanned"
+			/>
+			<button type="button" class="playground-preview-close" @click="plan = null">×</button>
 		</div>
 		<TabulaFormulaBar :grid="grid" :theme="theme" :locale="language" />
 		<main class="playground-main" :class="{ 'is-sheet': issueVariant === 'sheet' }">
@@ -731,6 +780,26 @@ body {
 	background: transparent;
 	color: inherit;
 	font: inherit;
+	cursor: pointer;
+}
+
+.playground-preview {
+	position: relative;
+	max-height: 40vh;
+	padding: 10px 44px 10px 12px;
+	overflow: auto;
+	border: 1px solid #d5d9df;
+	border-radius: 4px;
+}
+
+.playground-preview-close {
+	position: absolute;
+	top: 6px;
+	right: 8px;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	font-size: 18px;
 	cursor: pointer;
 }
 

@@ -41,9 +41,16 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
 - **Server rendering.** The page, its Naive UI styles and the palette arrive drawn; the grid is
   drawn in the browser, where the sheet's parts are made ([app/utils/sheet.ts](app/utils/sheet.ts)).
   Light or dark comes from a cookie, so the server draws the mode the user chose.
+- **A preview before a run.** İşle checks the sheet when the last check no longer holds, stops
+  on rows with an error, and otherwise opens İşlenecekler (`TabulaPreview` in an `AppModal`): how
+  many rows make a new price line, change one or leave one as it is, and each row's fields from
+  the old value to the new. Choosing a row goes to it; "N satırı işle" sends the rows.
 - **A backend.** [server/api](server/api) answers in the grid's contract: the module schema, the
   rows, the pre-flight check, the run and the product lookups. A PHP backend writes the schema with
   nouxwell/tabula's `Tabula::gridSchema()` and checks rows with `Tabula::checkRows()`.
+  Its price list lives in memory: the check says from it what each row would do, and a run writes
+  to it. The sheet opens with three discontinued products, which the check refuses: pick another
+  product for them and İşle opens the preview.
 
 ## Naive UI on the server
 

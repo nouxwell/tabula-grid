@@ -21,7 +21,13 @@ const module: NuxtModule<ModuleOptions, ModuleOptions, false> = defineNuxtModule
 	},
 	setup(options, nuxt) {
 		// Client only: the grid measures text and reads the clipboard, and a server has neither.
-		for (const component of ["TabulaGrid", "TabulaIssues", "TabulaFormulaBar", "TabulaStatusBar"]) {
+		for (const component of [
+			"TabulaGrid",
+			"TabulaIssues",
+			"TabulaFormulaBar",
+			"TabulaStatusBar",
+			"TabulaPreview"
+		]) {
 			addComponent({
 				name: `${options.prefix}${component}`,
 				export: component,

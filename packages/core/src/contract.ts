@@ -64,10 +64,33 @@ export interface IssueInput {
 	readonly params?: Readonly<Record<string, string | number | boolean | null>>
 }
 
+/**
+ * What processing a row would do: make a new record, change one, or leave one as it is. Only the
+ * backend can tell, for only it holds the records.
+ */
+export type RowAction = "create" | "update" | "unchanged"
+
+/** What a pre-flight check says a row would do, for a preview before the run. */
+export interface RowPlanInput {
+	readonly rowId: RowId
+	readonly action: RowAction
+	/**
+	 * For an update, each field that would change, with the value the backend holds now, in the form
+	 * rows are sent in; a lookup may come as `{ id, label }`, to be shown by its label. A field left
+	 * out is not changing.
+	 */
+	readonly previous?: Readonly<Record<string, CellValue>>
+}
+
 export interface CheckResponse {
 	/** When given, it must be the request's. */
 	readonly requestId?: string
 	readonly issues?: readonly IssueInput[]
+	/**
+	 * What each row would do if it were processed now. A backend that cannot tell leaves it out, and
+	 * a preview then has only the count of rows to show; so does a row it leaves out.
+	 */
+	readonly plan?: readonly RowPlanInput[]
 }
 
 /**
@@ -143,6 +166,7 @@ const SCOPES: readonly string[] = ["cell", "row", "sheet", "workbook"]
 const SEVERITIES: readonly string[] = ["error", "warning"]
 const STATUSES: readonly string[] = ["pending", "succeeded", "partial", "failed", "cancelled"]
 const OUTCOMES: readonly string[] = ["succeeded", "failed", "skipped"]
+const ACTIONS: readonly string[] = ["create", "update", "unchanged"]
 
 /**
  * Checks a pre-flight answer against the contract. Properties it does not know are passed over, so
@@ -160,7 +184,8 @@ export function readCheckResponse(input: unknown): CheckResponse {
 
 	return reader.done({
 		...optional("requestId", reader.string(root.requestId, "requestId", true)),
-		...optional("issues", reader.issues(root.issues, "issues"))
+		...optional("issues", reader.issues(root.issues, "issues")),
+		...optional("plan", reader.plans(root.plan, "plan"))
 	})
 }
 
@@ -365,6 +390,34 @@ class Reader {
 			result,
 			...optional("issues", this.issues(item.issues, `${path}.issues`)),
 			...optional("data", data === null ? undefined : (data as Record<string, CellValue>))
+		}
+	}
+
+	plans(value: unknown, path: string): RowPlanInput[] | undefined {
+		return this.array(value, path)
+			?.map((item, index) => this.plan(item, `${path}[${index}]`))
+			.filter((plan): plan is RowPlanInput => plan !== null)
+	}
+
+	plan(value: unknown, path: string): RowPlanInput | null {
+		const item = this.object(value, path)
+
+		if (item === null) {
+			return null
+		}
+
+		const rowId = this.string(item.rowId, `${path}.rowId`)
+		const action = this.oneOf(item.action, `${path}.action`, ACTIONS) as RowAction | undefined
+		const previous = item.previous === undefined ? undefined : this.object(item.previous, `${path}.previous`)
+
+		if (rowId === undefined || action === undefined) {
+			return null
+		}
+
+		return {
+			rowId,
+			action,
+			...optional("previous", previous === null ? undefined : (previous as Record<string, CellValue>))
 		}
 	}
 

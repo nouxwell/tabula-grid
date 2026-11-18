@@ -72,7 +72,12 @@
 						<template #icon><AppIcon name="check" :size="16" /></template>
 						Kontrol et
 					</AppButton>
-					<AppButton type="primary" :disabled="!sheet" :loading="phase === 'processing'" @click="process">
+					<AppButton
+						type="primary"
+						:disabled="!sheet"
+						:loading="phase === 'processing' || preparing"
+						@click="process"
+					>
 						<template #icon><AppIcon name="play" :size="16" /></template>
 						İşle
 					</AppButton>
@@ -277,7 +282,7 @@
 				type="primary"
 				class="flex-1"
 				:disabled="!sheet || errors > 0"
-				:loading="phase === 'processing'"
+				:loading="phase === 'processing' || preparing"
 				@click="process"
 			>
 				İşle
@@ -394,6 +399,28 @@
 			</template>
 		</AppModal>
 
+		<AppModal v-model:show="previewOpen" title="İşlenecekler" width="880px">
+			<AppModalScrollWrapper>
+				<TabulaPreview
+					v-if="sheet && preview"
+					:session="sheet.session"
+					:plan="preview"
+					name-field="productId"
+					:theme="theme"
+					:locale="locale"
+					:value-settings="valueSettings"
+					@select="showPlannedRow"
+				/>
+			</AppModalScrollWrapper>
+			<template #footer>
+				<div class="flex flex-wrap items-center justify-end gap-2">
+					<span class="mr-auto text-sm text-muted">Bir satıra tıklayınca tabloda o satıra gidilir.</span>
+					<AppButton @click="previewOpen = false">Vazgeç</AppButton>
+					<AppButton type="primary" @click="run">{{ preview?.rows.length ?? 0 }} satırı işle</AppButton>
+				</div>
+			</template>
+		</AppModal>
+
 		<AppModal v-model:show="removeOpen" title="Görünümü sil" width="440px">
 			<AppModalScrollWrapper>
 				<p class="m-0">
@@ -422,6 +449,7 @@ import {
 	type FieldInput,
 	type ColumnSort,
 	type ModuleSchemaInput,
+	type ProcessPlan,
 	type RowId,
 	type RowInit,
 	type ViewNameProblem
@@ -925,7 +953,81 @@ async function check(): Promise<void> {
 	}
 }
 
+/** What the run would do, by the check before it: shown in a window before anything is sent. */
+const preview = shallowRef<ProcessPlan | null>(null)
+const previewOpen = ref(false)
+/** İşle checks the sheet first when the last check no longer says what a run would send. */
+const preparing = ref(false)
+
+/**
+ * İşle: checks the sheet when needed, then shows what the run would do. Rows with an error stop it
+ * there, as they would stop the run.
+ */
 async function process(): Promise<void> {
+	const session = sheet.value?.session
+
+	if (!session || preparing.value) {
+		return
+	}
+
+	// A run with no answer goes again as it was sent: there is nothing new to preview.
+	if (session.state.phase === "unknown") {
+		return run()
+	}
+
+	let plan = session.plan()
+
+	if (!plan.current) {
+		preparing.value = true
+
+		const checked = await session.check().finally(() => (preparing.value = false))
+
+		if (checked.status === "unavailable") {
+			return run()
+		}
+
+		if (checked.status === "failed") {
+			message.error("Kontrol yapılamadı; işlem başlatılmadı.")
+
+			return
+		}
+
+		if (checked.status !== "valid" && checked.status !== "invalid") {
+			return
+		}
+
+		plan = session.plan()
+	}
+
+	const blocked = session.blocked()
+
+	if (blocked > 0) {
+		message.warning(`${blocked} satırda düzeltilmesi gereken hata var.`)
+		issuesOpen.value = narrow.value
+
+		return
+	}
+
+	if (plan.rows.length === 0) {
+		message.info("Gönderilecek satır yok.")
+
+		return
+	}
+
+	preview.value = plan
+	previewOpen.value = true
+}
+
+/** A row chosen in the preview: the window steps aside for it. */
+function showPlannedRow(rowId: RowId): void {
+	previewOpen.value = false
+	grid.value?.goTo(rowId)
+}
+
+/** Sends the rows, from the preview or again after a run with no answer. */
+async function run(): Promise<void> {
+	previewOpen.value = false
+
 	const outcome = await sheet.value?.session.process()
 
 	if (!outcome) {

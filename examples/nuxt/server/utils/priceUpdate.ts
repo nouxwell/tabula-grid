@@ -1,10 +1,12 @@
 import type {
+	CellValue,
 	IssueInput,
 	LookupItem,
 	ModuleSchemaInput,
 	PayloadRow,
 	ProcessResponse,
 	RowInit,
+	RowPlanInput,
 	RowResultInput,
 	SheetRequest
 } from "@nouxwell/tabula-core"
@@ -142,16 +144,27 @@ export const CATALOG: readonly LookupItem[] = [
 	{ id: 90_003, label: "Termos", description: "TRM-1000" }
 ]
 
-/** The same rows on every load. */
 /** The channels each product starts with, by its place: most are sold in the store and online. */
 const CHANNELS = [["store", "web"], ["store"], ["web", "market"], ["store", "web", "market"], ["web"]]
 
+/**
+ * The products the sheet opens with: those still sold, and the first three that are not, for the
+ * server to refuse. A few, so they can be put right by hand before a run.
+ */
+function startingProducts(): LookupItem[] {
+	let refused = 0
+
+	return CATALOG.filter(item => !item.disabled || refused++ < 3).slice(0, ROWS)
+}
+
+/** The same rows on every load. */
 export function startingRows(): RowInit[] {
 	const random = seeded(7)
 	const currencies = ["TRY", "TRY", "TRY", "USD", "EUR"]
+	const products = startingProducts()
 
 	return Array.from({ length: ROWS }, (_, index) => {
-		const item = CATALOG[index]!
+		const item = products[index]!
 		const current = 10 + Math.floor(random() * 249_000) / 100
 		const next = Math.round(current * (95 + random() * 25)) / 100
 
@@ -206,6 +219,94 @@ export function businessIssues(row: PayloadRow): IssueInput[] {
 	return issues
 }
 
+type Line = Readonly<Record<string, CellValue>>
+
+/**
+ * The price list as the server keeps it: each product's line, by product id, in the form rows are
+ * sent in. Most products start with last month's line; every 50th has none yet, so its row makes a
+ * new one, and every 40th already holds what the sheet sends, so its row changes nothing.
+ */
+const priceList = new Map<number, Line>(
+	startingRows().flatMap((row, index): [number, Line][] => {
+		const values = row.values ?? {}
+		const product = values.productId as { readonly id: number }
+
+		if (index % 50 === 7) {
+			return []
+		}
+
+		const sent: Line = {
+			newPrice: values.newPrice ?? null,
+			currency: values.currency ?? null,
+			validFrom: values.validFrom ?? null,
+			active: values.active ?? null,
+			note: null,
+			channels: values.channels ?? null
+		}
+
+		return [
+			[
+				product.id,
+				index % 40 === 13 ? sent : { ...sent, newPrice: values.currentPrice ?? null, validFrom: "2026-11-01" }
+			]
+		]
+	})
+)
+
+/** Whether two values sent for a field are the same: numbers by value, a list of options in any order. */
+function same(left: CellValue, right: CellValue): boolean {
+	if (typeof left === "string" && typeof right === "string" && left !== "" && right !== "") {
+		const a = Number(left)
+		const b = Number(right)
+
+		if (Number.isFinite(a) && Number.isFinite(b)) {
+			return a === b
+		}
+	}
+
+	const sorted = (value: CellValue): string =>
+		JSON.stringify(Array.isArray(value) ? [...(value as readonly CellValue[])].map(String).sort() : (value ?? null))
+
+	return sorted(left) === sorted(right)
+}
+
+/** The fields a row sends to its line: all but the product, which says which line it is. */
+function lineOf(row: PayloadRow): Line {
+	return Object.fromEntries(Object.entries(row.values).filter(([field]) => field !== "productId"))
+}
+
+/**
+ * What processing each row would do to the price list: make a line, change one, or leave one as it
+ * is. A row without a product the list could hold is left out; its issues say why.
+ */
+export function planRows(request: SheetRequest): RowPlanInput[] {
+	return request.rows.flatMap((row): RowPlanInput[] => {
+		const product = row.values.productId
+
+		if (typeof product !== "number" || isInactive(product)) {
+			return []
+		}
+
+		const held = priceList.get(product)
+
+		if (!held) {
+			return [{ rowId: row.rowId, action: "create" }]
+		}
+
+		const previous: Record<string, CellValue> = {}
+
+		for (const [field, value] of Object.entries(lineOf(row))) {
+			if (!same(held[field] ?? null, value)) {
+				previous[field] = held[field] ?? null
+			}
+		}
+
+		return Object.keys(previous).length === 0
+			? [{ rowId: row.rowId, action: "unchanged" }]
+			: [{ rowId: row.rowId, action: "update", previous }]
+	})
+}
+
 const runs = new Map<string, ProcessResponse>()
 let lines = 50_000
 
@@ -223,9 +324,13 @@ export function processRows(request: SheetRequest & { readonly idempotencyKey: s
 	const rows: RowResultInput[] = request.rows.map(row => {
 		const errors = businessIssues(row).filter(issue => (issue.severity ?? "error") === "error")
 
-		return errors.length > 0
-			? { rowId: row.rowId, result: "failed", issues: errors }
-			: { rowId: row.rowId, result: "succeeded", data: { priceListLineId: ++lines } }
+		if (errors.length > 0) {
+			return { rowId: row.rowId, result: "failed", issues: errors }
+		}
+
+		priceList.set(row.values.productId as number, lineOf(row))
+
+		return { rowId: row.rowId, result: "succeeded", data: { priceListLineId: ++lines } }
 	})
 	const failed = rows.filter(row => row.result === "failed").length
 	const answer: ProcessResponse = {
