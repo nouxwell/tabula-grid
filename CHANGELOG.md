@@ -7,6 +7,14 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-18
+
+The second release: the sheet as a spreadsheet user expects it, with filters and sorting, search,
+the fill handle, several options in a cell, personal views, templates with row checks and
+worked-out columns written with help, changes to many numbers at once and a right-click menu; and
+the steps around a run, with what the user changed marked, a preview of what a run would do, and
+an older draft's fields mapped before it opens.
+
 ### Added
 
 - **A template from scratch, in the example.** With no template chosen, Kurallar opens all the same;
@@ -191,6 +199,12 @@ The three packages are versioned together.
 
 ### Changed
 
+- **The formula bar shows a worked-out column's formula by the fields' labels**, each in the colour
+  its column takes in the sheet, in a read-only element rather than an input; it showed their keys.
+  `ActiveCell` carries the formula in pieces (`formula`) and the fields it reads (`references`).
+- **A right click on the grid opens the grid's own menu**, not the browser's, except while a cell
+  is being edited.
+- **Drafts keep each field's label** (`DraftField.label`); drafts saved by 0.1.0 open as before.
 - **`RowView.clear()` without a name takes every filter and the sort away**; `clear(name)` takes
   one filter. `filtered` now means a filter stands; `arranged` is true for a filter or a sort.
 - **`TabulaIssues` draws issues as cards**: where, what, who found it and "go to cell", tinted by
@@ -356,5 +370,6 @@ taken to a backend through the application's own adapters, and kept as a draft.
   gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
   which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.
 
-[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/nouxwell/tabula-grid/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nouxwell/tabula-grid/releases/tag/v0.1.0

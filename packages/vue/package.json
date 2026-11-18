@@ -1,6 +1,6 @@
 {
 	"name": "@nouxwell/tabula-vue",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "The Vue 3 components of Tabula Grid.",
 	"keywords": [
 		"vue",
