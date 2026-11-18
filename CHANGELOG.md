@@ -35,12 +35,32 @@ The three packages are versioned together.
   Its atoms follow the CRM's: a tooltip that stays on a phone's screen, one modal shape with a
   scrolling body, a drawer and its content, numbers that count, a button whose icon turns, and the
   language select with flags; what changes state fades, and reduced motion turns it off.
+- **Sorting and filtering in the header.** A column's menu sorts it either way and opens its
+  filter: the values it holds with their counts, a search, and a range for numbers and dates.
+  `v-model:filters` and `v-model:sort` keep them; a sorted header shows its arrow, a filtered one a
+  funnel, and `aria-sort` says the same to a screen reader. The values listed are those the other
+  columns' filters keep.
+- **The core's filters**: `rowsMatching`, `rowOrder`, `compareValues`, `distinctValues`,
+  `filterKey` and `hasRange`, with the types `ColumnCondition`, `ColumnFilters`, `ColumnSort` and
+  `DistinctValue`. Values are told apart by what they are (12.5 and "12.50" are one), text sorts in
+  the language's order with numbers read as numbers, and cells not of the column's type and empty
+  ones stay last whichever way a column sorts.
+- **`RowView` takes named filters and a sort**: `filter(fn, name)` and `clear(name)`, so the
+  grid's column filters (`"columns"`) and a page's own, such as the issue panel's `"issues"`, stand
+  side by side; `sort(order)` with a `RowOrder`, and `sorted` and `arranged` beside `filtered`.
+  While sorted, a row shown again goes to its place in the order and rows added go at the end.
+- **The example shows that it waits**, as the CRM does: the grid's place spins with "Tablo
+  hazırlanıyor…" until the rows are in, and says "Satırlar yüklenemedi." with a "Yeniden dene"
+  button if they could not be fetched. `AppButton` spins by itself while the promise its click
+  returns runs, and a second click meanwhile does nothing; `AppSpin` is the spinner atom.
 - **`DESIGN.md`, `CLAUDE.md` and `AGENTS.md`**: the palette, the layouts chosen for desktop and
   phone, the parts decided for and against, the component and motion rules, and how work is done
   here, written down once.
 
 ### Changed
 
+- **`RowView.clear()` without a name takes every filter and the sort away**; `clear(name)` takes
+  one filter. `filtered` now means a filter stands; `arranged` is true for a filter or a sort.
 - **`TabulaIssues` draws issues as cards**: where, what, who found it and "go to cell", tinted by
   severity, with the counts as chips. The class names a page or a test reads stay as they were.
 - **`@nouxwell/tabula-nuxt` registers the bars** too: `TabulaFormulaBar` and `TabulaStatusBar`.

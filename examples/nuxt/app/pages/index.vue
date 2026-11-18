@@ -108,7 +108,12 @@
 				</AppTooltip>
 				<span class="mx-1 hidden h-5 w-px bg-divider md:block" aria-hidden="true" />
 				<AppDropdown :options="importOptions" @select="chooseImport">
-					<AppButton :size="controlSize" :disabled="!sheet" class="min-h-11 min-w-11 md:min-h-0 md:min-w-0">
+					<AppButton
+						:size="controlSize"
+						:disabled="!sheet"
+						:loading="importing"
+						class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+					>
 						<template #icon><AppIcon name="upload" /></template>
 						<span class="hidden md:inline">İçe aktar</span>
 						<span class="sr-only md:hidden">İçe aktar</span>
@@ -159,11 +164,20 @@
 						:value-settings="valueSettings"
 						:row-height="narrow ? 40 : 30"
 					/>
+					<!-- Only the part that waits spins; the rest of the page is there and works. -->
 					<div
 						v-else
-						class="flex h-full items-center justify-center rounded-app border border-divider bg-surface text-sm text-muted"
+						class="flex h-full flex-col items-center justify-center gap-3 rounded-app border border-divider bg-surface text-sm text-muted"
+						role="status"
 					>
-						Tablo hazırlanıyor…
+						<template v-if="rowsError">
+							<span>Satırlar yüklenemedi.</span>
+							<AppButton icon="refresh" @click="loadRows">Yeniden dene</AppButton>
+						</template>
+						<template v-else>
+							<AppSpin />
+							<span>Tablo hazırlanıyor…</span>
+						</template>
 					</div>
 				</Transition>
 			</div>
@@ -306,7 +320,16 @@ import { FIT_TOOLTIP_STYLE } from "~/utils/tooltip"
 // the grid needs, and the grid is drawn in the browser, so the browser fetches them: in the page's
 // payload they would be sent twice.
 const { data: input } = await useFetch<ModuleSchemaInput>("/api/modules/price-update")
-const { data: rows } = useFetch<RowInit[]>("/api/price-updates/rows", { server: false })
+const {
+	data: rows,
+	error: rowsError,
+	refresh: refreshRows
+} = useFetch<RowInit[]>("/api/price-updates/rows", { server: false })
+
+/** Fetches the rows again after a failure; the button spins until they are in. */
+function loadRows(): Promise<void> {
+	return refreshRows()
+}
 
 const message = useMessage()
 const mode = useColorMode()
@@ -329,6 +352,8 @@ const onlyIssueRows = ref(false)
 const issuesOpen = ref(false)
 const csvInput = ref<HTMLInputElement | null>(null)
 const importOpen = ref(false)
+/** A file being read: the İçe aktar button spins until its rows are in. */
+const importing = ref(false)
 const imported = shallowRef<ImportResult | null>(null)
 
 /** A phone's width: the issues open as a sheet from the bottom, and buttons are a finger wide. */
@@ -443,7 +468,9 @@ async function importChosen(event: Event): Promise<void> {
 		return
 	}
 
-	const result = await sheet.value.importCsv(file)
+	importing.value = true
+
+	const result = await sheet.value.importCsv(file).finally(() => (importing.value = false))
 
 	if (result.firstRowId) {
 		grid.value?.goTo(result.firstRowId)

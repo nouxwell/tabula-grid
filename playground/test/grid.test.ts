@@ -1743,3 +1743,133 @@ describe("the bars around the sheet", () => {
 		)
 	})
 })
+
+describe("sorting and filtering", () => {
+	/** Opens a column's menu from its header and picks an item. */
+	async function menu(page: Page, col: number, item: string): Promise<void> {
+		await header(page, col).hover()
+		await header(page, col).locator(".tabula-grid-th-menu").click()
+		await page.locator(`.tabula-grid-menu-${item}`).click()
+	}
+
+	/** The values of a field in the rows shown, top to bottom. */
+	function shownValues(page: Page, key: string): Promise<unknown[]> {
+		return page.evaluate(field => {
+			const { view, store } = window.__playground!
+
+			return Array.from({ length: view.size }, (_, index) => store.get(view.rowIdAt(index)!, field))
+		}, key)
+	}
+
+	function allValues(page: Page, key: string): Promise<unknown[]> {
+		return page.evaluate(field => {
+			const { store } = window.__playground!
+
+			return store.rowIds().map(rowId => store.get(rowId, field))
+		}, key)
+	}
+
+	const panel = (page: Page): Locator => page.locator(".tabula-grid-filter")
+
+	it("sorts by a column from its header, numbers by their value, and goes back to the sheet's order", async () => {
+		await withPage(20, async page => {
+			await menu(page, 3, "sort-asc")
+
+			const prices = (await shownValues(page, "newPrice")).map(Number)
+
+			expect(prices).toEqual([...prices].sort((a, b) => a - b))
+			await expect(header(page, 3).getAttribute("aria-sort")).resolves.toBe("ascending")
+			await expect(header(page, 3).locator(".tabula-grid-sort").innerText()).resolves.toBe("↑")
+			// The row numbers stay the rows' numbers in the sheet.
+			await expect(page.locator(".tabula-grid").getAttribute("class")).resolves.toContain("is-filtered")
+
+			await menu(page, 3, "sort-desc")
+
+			const down = (await shownValues(page, "newPrice")).map(Number)
+
+			expect(down).toEqual([...down].sort((a, b) => b - a))
+
+			await menu(page, 3, "sort-clear")
+
+			await expect.poll(() => shownValues(page, "newPrice")).toEqual(await allValues(page, "newPrice"))
+			await expect(header(page, 3).getAttribute("aria-sort")).resolves.toBeNull()
+		})
+	})
+
+	it("keeps the values ticked in a column's filter, and counts the rows shown", async () => {
+		await withPage(20, async page => {
+			await menu(page, 5, "filter")
+			await expect.poll(() => panel(page).count()).toBe(1)
+
+			await panel(page).locator(".tabula-grid-filter-list label", { hasText: "TRY" }).click()
+			await panel(page).locator(".tabula-grid-filter-apply").click()
+
+			const currencies = await shownValues(page, "currency")
+			const others = (await allValues(page, "currency")).filter(value => value !== "TRY")
+
+			expect(currencies).toEqual(others)
+			await expect(header(page, 5).locator(".tabula-grid-filtered").count()).resolves.toBe(1)
+			await expect.poll(() => page.locator(".tabula-status-rows").innerText()).toBe(`${others.length} / 20 satır`)
+
+			await menu(page, 5, "filter-clear")
+
+			await expect.poll(() => shownValues(page, "currency")).toEqual(await allValues(page, "currency"))
+			await expect(header(page, 5).locator(".tabula-grid-filtered").count()).resolves.toBe(0)
+		})
+	})
+
+	it("keeps a range of numbers typed as the sheet writes them, and says so when one cannot be read", async () => {
+		await withPage(20, async page => {
+			await menu(page, 3, "filter")
+			await panel(page).locator(".tabula-grid-filter-from").fill("abc")
+			await panel(page).locator(".tabula-grid-filter-apply").click()
+
+			await expect(panel(page).locator(".tabula-grid-filter-problem").innerText()).resolves.toBe(
+				"Bu değer okunamadı; sütunun yazdığı gibi yazın."
+			)
+
+			await panel(page).locator(".tabula-grid-filter-from").fill("1.000")
+			await panel(page).locator(".tabula-grid-filter-to").press("Enter")
+
+			const kept = (await shownValues(page, "newPrice")).map(Number)
+			const expected = (await allValues(page, "newPrice")).map(Number).filter(price => price >= 1000)
+
+			expect(kept).toEqual(expected)
+			expect(kept.length).toBeGreaterThan(0)
+			await expect(panel(page).count()).resolves.toBe(0)
+		})
+	})
+
+	it("narrows the list by a search, and keeps only the values found and ticked", async () => {
+		await withPage(20, async page => {
+			await menu(page, 5, "filter")
+			await panel(page).locator(".tabula-grid-filter-search").fill("eu")
+
+			await expect.poll(() => panel(page).locator(".tabula-grid-filter-value").allInnerTexts()).toEqual(["EUR"])
+
+			await panel(page).locator(".tabula-grid-filter-apply").click()
+
+			const kept = await shownValues(page, "currency")
+
+			expect(kept.length).toBeGreaterThan(0)
+			expect(kept.every(value => value === "EUR")).toBe(true)
+		})
+	})
+
+	it("filters beside the issue panel's switch, each taken away alone", async () => {
+		await withPage(20, async page => {
+			await cell(page, 2, 3).click()
+			await press(page, "Delete")
+			await page.locator(".tabula-issues-filter input").check()
+
+			await expect.poll(() => page.evaluate(() => window.__playground!.view.size)).toBe(1)
+
+			await menu(page, 3, "sort-desc")
+			await page.locator(".tabula-issues-filter input").uncheck()
+
+			// The issue filter goes; the sort stands.
+			await expect.poll(() => page.evaluate(() => window.__playground!.view.size)).toBe(20)
+			await expect(header(page, 3).getAttribute("aria-sort")).resolves.toBe("descending")
+		})
+	})
+})

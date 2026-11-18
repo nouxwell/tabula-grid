@@ -7,12 +7,23 @@ import type { IssueSet } from "./validation.js"
 /** Whether a row is to be shown. */
 export type RowFilter = (rowId: RowId) => boolean
 
+/** Which of two rows comes first: below zero for `a`, above zero for `b`, zero for either. */
+export type RowOrder = (a: RowId, b: RowId) => number
+
+/** The filter `filter()` sets when given no name. */
+const DEFAULT_FILTER = "default"
+
 /**
- * The rows on screen, in the order the sheet has them: all of them, or those a filter kept.
+ * The rows on screen: all of them in the sheet's order, or those its filters keep, in the order a
+ * sort puts them.
  *
- * A filter is applied at a moment, as a spreadsheet's is. Fixing the issue that put a row in the
- * view does not take it out under the user's cursor; `refresh()` applies the filter again. Rows
- * added while it stands are shown, so a paste lands where the user can see it, and rows removed go.
+ * Filters have names, so several stand together and each is taken away alone: the grid's column
+ * filters and an issue panel's "only rows with issues" are two, and a row is shown when every one
+ * keeps it. Filters and a sort are applied at a moment, as a spreadsheet's are. Fixing the issue that
+ * put a row in the view does not take it out under the user's cursor, and changing a price does not
+ * move its row; `refresh()` applies them again. Rows added meanwhile are shown, at their places in
+ * the sheet's order, or after the others while a sort stands, so a paste lands where the user can
+ * see it; rows removed go.
  *
  * Positions on screen are positions in the view; a row's place in the sheet is the store's.
  */
@@ -20,8 +31,9 @@ export class RowView {
 	readonly store: RowStore
 	readonly #listeners = new Listeners<RowView>()
 	readonly #stop: () => void
-	#filter: RowFilter | null = null
-	/** The rows shown, when a filter stands; null when every row is. */
+	readonly #filters = new Map<string, RowFilter>()
+	#order: RowOrder | null = null
+	/** The rows shown, while a filter or a sort stands; null when every row is, in the sheet's order. */
 	#ids: RowId[] | null = null
 	#positions: Map<RowId, number> | null = null
 	#version = 0
@@ -31,13 +43,26 @@ export class RowView {
 		this.#stop = store.subscribe(change => this.#onChange(change))
 	}
 
-	/** Moves whenever the rows shown change: a filter, a refresh, rows added or removed. */
+	/** Moves whenever the rows shown change: a filter, a sort, a refresh, rows added or removed. */
 	get version(): number {
 		return this.#version
 	}
 
 	/** Whether a filter stands. */
 	get filtered(): boolean {
+		return this.#filters.size > 0
+	}
+
+	/** Whether a sort stands. */
+	get sorted(): boolean {
+		return this.#order !== null
+	}
+
+	/**
+	 * Whether the rows shown are other than every row in the sheet's order, filtered or sorted:
+	 * positions on screen and in the sheet then differ.
+	 */
+	get arranged(): boolean {
 		return this.#ids !== null
 	}
 
@@ -63,44 +88,73 @@ export class RowView {
 		return this.#positions.get(rowId) ?? -1
 	}
 
-	/** Shows only the rows `filter` keeps, as the sheet stands now. */
-	filter(filter: RowFilter): void {
-		this.#filter = filter
+	/**
+	 * Shows only the rows `filter` keeps, with the others that stand, as the sheet is now. A filter
+	 * of the same name is replaced.
+	 */
+	filter(filter: RowFilter, name: string = DEFAULT_FILTER): void {
+		this.#filters.set(name, filter)
 		this.#apply()
 	}
 
-	/** Applies the filter again, to the sheet as it stands now. */
+	/** Puts the rows shown in this order, as the sheet is now; null goes back to the sheet's. */
+	sort(order: RowOrder | null): void {
+		if (order === null && this.#order === null) {
+			return
+		}
+
+		this.#order = order
+		this.#apply()
+	}
+
+	/** Applies the filters and the sort again, to the sheet as it is now. */
 	refresh(): void {
-		if (this.#filter) {
+		if (this.#ids !== null) {
 			this.#apply()
 		}
 	}
 
-	/** Shows every row again. */
-	clear(): void {
-		if (this.#ids === null) {
+	/** Takes away the filter of that name; with none, every filter and the sort, showing every row. */
+	clear(name?: string): void {
+		if (name !== undefined) {
+			if (this.#filters.delete(name)) {
+				this.#apply()
+			}
+
 			return
 		}
 
-		this.#filter = null
-		this.#ids = null
-		this.#positions = null
-		this.#changed()
+		if (this.#ids === null && this.#filters.size === 0 && this.#order === null) {
+			return
+		}
+
+		this.#filters.clear()
+		this.#order = null
+		this.#apply()
 	}
 
 	/**
-	 * Shows a row the filter left out, in its place among the others, such as when the user goes
-	 * to an issue on it. False when there is no such row.
+	 * Shows a row a filter left out, in its place among the others, such as when the user goes to an
+	 * issue on it. False when there is no such row.
 	 */
 	show(rowId: RowId): boolean {
 		if (!this.store.has(rowId)) {
 			return false
 		}
 
-		if (this.#ids && this.indexOf(rowId) < 0) {
-			const shown = new Set(this.#ids).add(rowId)
+		const ids = this.#ids
 
-			this.#rebuild(shown)
+		if (ids && this.indexOf(rowId) < 0) {
+			if (this.#order) {
+				const order = this.#order
+				const at = ids.findIndex(other => order(rowId, other) < 0)
+
+				ids.splice(at < 0 ? ids.length : at, 0, rowId)
+				this.#positions = null
+				this.#changed()
+			} else {
+				this.#rebuild(new Set(ids).add(rowId))
+			}
 		}
 
 		return true
@@ -116,13 +170,25 @@ export class RowView {
 	}
 
 	#apply(): void {
-		const filter = this.#filter
+		if (this.#filters.size === 0 && this.#order === null) {
+			if (this.#ids !== null) {
+				this.#ids = null
+				this.#positions = null
+				this.#changed()
+			}
 
-		if (!filter) {
 			return
 		}
 
-		this.#ids = this.store.rowIds().filter(rowId => filter(rowId))
+		const filters = [...this.#filters.values()]
+		const ids = this.store.rowIds().filter(rowId => filters.every(filter => filter(rowId)))
+
+		// Array.prototype.sort is stable: rows the order holds equal keep the sheet's order.
+		if (this.#order) {
+			ids.sort(this.#order)
+		}
+
+		this.#ids = ids
 		this.#positions = null
 		this.#changed()
 	}
@@ -152,9 +218,21 @@ export class RowView {
 		}
 	}
 
-	/** The rows in `shown`, in the order the sheet has them. */
+	/**
+	 * The rows in `shown` the store still has: in the sheet's order, or, while a sort stands, in the
+	 * order shown so far, with rows new to the view after them in the sheet's order.
+	 */
 	#rebuild(shown: ReadonlySet<RowId>): void {
-		this.#ids = this.store.rowIds().filter(rowId => shown.has(rowId))
+		if (this.#order && this.#ids) {
+			const kept = this.#ids.filter(rowId => this.store.has(rowId))
+			const present = new Set(kept)
+			const added = this.store.rowIds().filter(rowId => shown.has(rowId) && !present.has(rowId))
+
+			this.#ids = [...kept, ...added]
+		} else {
+			this.#ids = this.store.rowIds().filter(rowId => shown.has(rowId))
+		}
+
 		this.#positions = null
 		this.#changed()
 	}

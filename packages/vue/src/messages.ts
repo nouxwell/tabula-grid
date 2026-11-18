@@ -138,7 +138,24 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		pin: "Sabitle",
 		unpin: "Sabitlemeyi kaldır",
 		hide: "Gizle",
-		showHidden: "Gizli kolonları göster"
+		showHidden: "Gizli kolonları göster",
+		sortAsc: "Artan sırala",
+		sortDesc: "Azalan sırala",
+		sortClear: "Sıralamayı kaldır",
+		filter: "Filtrele…",
+		filterClear: "Filtreyi kaldır",
+		filterTitle: "Filtre",
+		filtered: "Filtre uygulanmış",
+		search: "Değerlerde ara",
+		selectAll: "Tümünü seç",
+		empty: "(Boş)",
+		from: "En az",
+		to: "En çok",
+		apply: "Uygula",
+		clear: "Temizle",
+		cancel: "Vazgeç",
+		moreValues: "değer listede yok; arayarak bulun",
+		badBound: "Bu değer okunamadı; sütunun yazdığı gibi yazın."
 	},
 	en: {
 		succeeded: "Processed",
@@ -154,7 +171,24 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		pin: "Pin",
 		unpin: "Unpin",
 		hide: "Hide",
-		showHidden: "Show hidden columns"
+		showHidden: "Show hidden columns",
+		sortAsc: "Sort ascending",
+		sortDesc: "Sort descending",
+		sortClear: "Remove sort",
+		filter: "Filter…",
+		filterClear: "Clear filter",
+		filterTitle: "Filter",
+		filtered: "Filtered",
+		search: "Search the values",
+		selectAll: "Select all",
+		empty: "(Empty)",
+		from: "From",
+		to: "To",
+		apply: "Apply",
+		clear: "Clear",
+		cancel: "Cancel",
+		moreValues: "more values not listed; search to find them",
+		badBound: "This value cannot be read; write it as the column does."
 	}
 }
 

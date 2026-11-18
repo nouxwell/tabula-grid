@@ -80,6 +80,12 @@ Done means all of these pass. CI runs them on Node 22, 24 and 26.
   what is sent goes through `canonicalValue`.
 - **Reading, checking and writing values must agree with `nouxwell/tabula`.** A change there adds
   cases to `conformance/values.json` and passes on both sides.
+- **Waiting is shown where it happens** (DESIGN.md, "Loading"): an action's button spins by itself
+  when its click returns the promise, a part waiting for data shows `AppSpin` alone, a failure
+  offers to try again. No spinner over a whole page, none that turns forever.
+- **Rows shown are a `RowView` with named filters**: the grid's column filters are `"columns"`,
+  the issue panel's switch `"issues"`; take one away with `clear(name)`, never `clear()`, which
+  takes every filter and the sort.
 - **The grid exposes what other parts read** (`cell`, `selected`, `rows`, `issueSummary`,
   `goToAddress`, `writeCell`, `formatValue`); a new bar or panel reads these rather than reaching
   into the grid.

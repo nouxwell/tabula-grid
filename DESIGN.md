@@ -119,7 +119,7 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 7   | A mark by a row's number                            | package     | done                         |
 | 8   | Who found an issue (browser or server)              | package     | done                         |
 | 9   | Search in the sheet                                 | package     | not chosen                   |
-| 10  | Filter and sort in the header                       | package     | phase two                    |
+| 10  | Filter and sort in the header                       | package     | done (phase two)             |
 | 11  | Fill handle                                         | package     | phase two                    |
 | 12  | Status bar with sum and average                     | package     | done                         |
 | 13  | Sheet tabs                                          | package     | not chosen (large)           |
@@ -138,9 +138,13 @@ A part marked "not chosen" is not built without asking first.
 
 Every screen takes these; none uses the Naive UI component underneath directly.
 
-- **`AppButton`**: `size="small"` by default, `size="large"` on a phone. `icon` names an
-  `AppIcon`; when it changes (sun ↔ moon) the new one turns in. An icon-only button has an
-  `aria-label` and an `AppTooltip`, and is at least 44px on a phone (`min-h-11 min-w-11`).
+- **`AppButton`**: `size="small"` by default, `size="large"` on a phone. A click whose handler
+  returns a promise spins the button until it settles, and a second click meanwhile does nothing:
+  give it the action's promise (an `async` function) and write no `loading` of your own. `icon`
+  names an `AppIcon`; when it changes (sun ↔ moon) the new one turns in. An icon-only button has
+  an `aria-label` and an `AppTooltip`, and is at least 44px on a phone (`min-h-11 min-w-11`).
+- **`AppSpin`**: the spinner of a part that waits for its data. It passes on only the slots it is
+  given: Naive UI hides its own spinner behind an empty one.
 - **`AppIcon`**: the one icon set, by name; a name it lacks is a type error. Stroke icons,
   1.8 wide.
 - **`AppTooltip`**: every hint. It keeps itself on a phone's screen (capped to the screen less
@@ -161,6 +165,23 @@ Every screen takes these; none uses the Naive UI component underneath directly.
 - **`AppNumberAnimation`**: a number that counts to its new value, 300ms, thousands separated in
   the locale given.
 - **`AppTag`**, **`AppSwitch`**, **`AppCard`**, **`AppCollapse`** + **`AppCollapseItem`**.
+
+---
+
+## Loading
+
+As the CRM's loading standard has it:
+
+1. **A part that waits shows that it waits, alone.** The grid's place shows `AppSpin` and what it
+   waits for ("Tablo hazırlanıyor…") until its rows are in; the page around it is already there
+   and works. Nothing covers the whole page for one part.
+2. **An action spins its own button only.** Saving, checking, sending, reading a file: the button
+   pressed spins (`AppButton` does it by itself for a promise; `:loading` for work started
+   elsewhere, such as `phase === "checking"`). The page is not covered and its fields are not
+   wrapped in a spinner; what must not be touched meanwhile is `:disabled`.
+3. **A failure says so where it happened, with a way on.** Rows that could not be fetched leave
+   "Satırlar yüklenemedi." and a "Yeniden dene" button in the grid's place, never a spinner that
+   turns forever. A flag that opens a waiting state is closed in `finally`.
 
 ---
 
@@ -206,4 +227,6 @@ Every screen takes these; none uses the Naive UI component underneath directly.
 - [ ] Every hint is an `AppTooltip`; every modal the `AppModal` shape; every drawer
       `AppDrawer` + `AppDrawerContent`.
 - [ ] What opens, closes or swaps animates; reduced motion turns it off.
+- [ ] Every action's button spins while it runs (its click returns the promise); a waiting part
+      spins alone; a failure says so with a way to try again.
 - [ ] A part marked "not chosen" above was asked about before it was built.

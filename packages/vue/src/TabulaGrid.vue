@@ -3,12 +3,16 @@ import {
 	arrangeColumns,
 	autoColumnWidth,
 	clampColumnWidth,
+	distinctValues,
 	editText,
 	formatCell,
+	hasRange,
 	headerDisplayText,
 	parseTsv,
 	readInput,
 	REDO_ORIGIN,
+	rowOrder,
+	rowsMatching,
 	RowView,
 	summarizeCells,
 	resolveColumnSizing,
@@ -22,7 +26,10 @@ import {
 	withColumn,
 	type CellPosition,
 	type CellRange,
+	type ColumnFilters,
 	type ColumnSizing,
+	type ColumnSort,
+	type DistinctValue,
 	type Direction,
 	type CellValue,
 	type ColumnLayout,
@@ -112,6 +119,16 @@ const columnWidths = defineModel<Readonly<Record<string, number>>>("columnWidths
  * keep it; the header's menu changes it.
  */
 const columns = defineModel<ColumnLayout>("columns", { default: () => ({}) })
+
+/**
+ * Each column's filter, by field key: the values it keeps, or a range of its numbers or dates. The
+ * header's menu sets them; bind with v-model to keep them. Applied at a moment, as a spreadsheet's
+ * are: a row changed afterwards stays until they are applied again.
+ */
+const filters = defineModel<ColumnFilters>("filters", { default: () => ({}) })
+
+/** The rows in the order of one column, ascending or descending; null keeps the sheet's order. */
+const sort = defineModel<ColumnSort | null>("sort", { default: null })
 
 const HEADER_HEIGHT = 32
 const OVERSCAN_ROWS = 6
@@ -1719,10 +1736,11 @@ watch(
 )
 
 /** Whether a filter leaves rows out, for the row numbers to say so. */
+/** Whether the rows shown are not every row in the sheet's order: filtered, sorted, or both. */
 const filtered = computed(() => {
 	void viewVersion.value
 
-	return view.value.filtered
+	return view.value.arranged
 })
 
 /** A row's number in the sheet: its place among all the rows, which a filter does not change. */
@@ -1867,13 +1885,33 @@ function closeColumnMenu(refocus = false): void {
 	}
 }
 
-function columnAction(action: "pin" | "unpin" | "hide" | "showHidden"): void {
+type ColumnAction =
+	"pin" | "unpin" | "hide" | "showHidden" | "sortAsc" | "sortDesc" | "sortClear" | "filter" | "filterClear"
+
+function columnAction(action: ColumnAction): void {
 	const menu = columnMenu.value
 	const field = menu ? fields.value[menu.col] : undefined
 
+	if (action === "filter" && menu) {
+		closeColumnMenu()
+		openFilterPanel(menu.col, menu.left, menu.top)
+
+		return
+	}
+
 	closeColumnMenu(true)
 
-	if (action === "showHidden") {
+	if (action === "sortAsc" || action === "sortDesc") {
+		if (field) {
+			sort.value = Object.freeze({ key: field.key, direction: action === "sortAsc" ? "asc" : "desc" })
+		}
+	} else if (action === "sortClear") {
+		sort.value = null
+	} else if (action === "filterClear") {
+		if (field) {
+			setFilter(field.key, null)
+		}
+	} else if (action === "showHidden") {
 		columns.value = Object.freeze({ ...columns.value, hidden: [] })
 	} else if (field) {
 		columns.value = withColumn(
@@ -1903,6 +1941,258 @@ function onMenuKeydown(event: KeyboardEvent): void {
 
 	event.preventDefault()
 }
+
+// ---------------------------------------------------------------- sorting and filtering
+
+/** The view's name for the grid's column filters, beside any filter the host sets. */
+const COLUMN_FILTERS = "columns"
+
+// The filters and the sort are applied when they change, at that moment, as a spreadsheet's are.
+watch(
+	[filters, sort, view, () => props.locale],
+	([given, order, rows]) => {
+		const standing = Object.keys(given).some(key => schema.value.has(key))
+
+		if (standing) {
+			rows.filter(rowsMatching(store.value, schema.value, given), COLUMN_FILTERS)
+		} else {
+			rows.clear(COLUMN_FILTERS)
+		}
+
+		rows.sort(
+			order && schema.value.has(order.key) ? rowOrder(store.value, schema.value, order, props.locale) : null
+		)
+	},
+	{ immediate: true }
+)
+
+function sortOf(col: number): "asc" | "desc" | null {
+	const field = fields.value[col]
+
+	return field && sort.value?.key === field.key ? sort.value.direction : null
+}
+
+function isFiltered(col: number): boolean {
+	const field = fields.value[col]
+
+	return field !== undefined && filters.value[field.key] !== undefined
+}
+
+function ariaSort(col: number): "ascending" | "descending" | undefined {
+	const order = sortOf(col)
+
+	return order === "asc" ? "ascending" : order === "desc" ? "descending" : undefined
+}
+
+/** The filter being set for one column: its list of values, as the column holds them among the rows the other filters keep. */
+interface FilterPanel {
+	readonly col: number
+	readonly field: FieldSchema
+	readonly left: number
+	readonly top: number
+	readonly values: readonly DistinctValue[]
+	readonly more: number
+	readonly range: boolean
+}
+
+const filterPanel = shallowRef<FilterPanel | null>(null)
+const filterSearch = ref("")
+const filterChecked = shallowRef<ReadonlySet<string>>(new Set())
+const filterFrom = ref("")
+const filterTo = ref("")
+const filterProblem = ref<string | null>(null)
+let stopFilterPanel: (() => void) | null = null
+
+/** A value as the list shows it: as the sheet writes it, an empty cell by name. */
+function valueLabel(entry: DistinctValue): string {
+	const field = filterPanel.value?.field
+
+	return entry.key === "" || !field
+		? (GRID_TEXT[props.locale].empty ?? "")
+		: formatCell(field, entry.value, props.valueSettings)
+}
+
+/** The values the search leaves in the list. */
+const shownValues = computed(() => {
+	const panel = filterPanel.value
+	const needle = lower(filterSearch.value)
+
+	return !panel
+		? []
+		: needle === ""
+			? panel.values
+			: panel.values.filter(entry => lower(valueLabel(entry)).includes(needle))
+})
+
+const allShownChecked = computed(() => shownValues.value.every(entry => filterChecked.value.has(entry.key)))
+const someShownChecked = computed(() => shownValues.value.some(entry => filterChecked.value.has(entry.key)))
+
+/** The text a bound of a range opens with: the value as an editor shows it. */
+function boundText(field: FieldSchema, value: string | null): string {
+	return value === null ? "" : editText(field, value, props.valueSettings)
+}
+
+function openFilterPanel(col: number, left: number, top: number): void {
+	const field = fields.value[col]
+
+	if (!field) {
+		return
+	}
+
+	// The list holds what the other columns' filters leave, as a spreadsheet's does.
+	const others = { ...filters.value }
+
+	delete others[field.key]
+
+	const keep = rowsMatching(store.value, schema.value, others)
+	const rows = store.value.rowIds().filter(rowId => keep(rowId))
+	const { values, more } = distinctValues(store.value, field, rows, { locale: props.locale })
+	const current = filters.value[field.key]
+
+	filterPanel.value = { col, field, left, top, values, more, range: hasRange(field) }
+	filterSearch.value = ""
+	filterProblem.value = null
+	filterChecked.value = new Set(current?.kind === "values" ? current.keys : values.map(entry => entry.key))
+	filterFrom.value = current?.kind === "range" ? boundText(field, current.from) : ""
+	filterTo.value = current?.kind === "range" ? boundText(field, current.to) : ""
+
+	const frame = root.value
+	const close = (down: MouseEvent): void => {
+		const panel = frame?.querySelector(".tabula-grid-filter")
+
+		if (!(down.target instanceof Node && panel?.contains(down.target))) {
+			closeFilterPanel()
+		}
+	}
+
+	window.addEventListener("mousedown", close, true)
+	stopFilterPanel = () => window.removeEventListener("mousedown", close, true)
+	void nextTick(() => frame?.querySelector<HTMLElement>(".tabula-grid-filter input")?.focus())
+}
+
+function closeFilterPanel(refocus = false): void {
+	stopFilterPanel?.()
+	stopFilterPanel = null
+	filterPanel.value = null
+
+	if (refocus) {
+		focusInput()
+	}
+}
+
+function toggleValue(key: string): void {
+	const next = new Set(filterChecked.value)
+
+	if (next.has(key)) {
+		next.delete(key)
+	} else {
+		next.add(key)
+	}
+
+	filterChecked.value = next
+}
+
+function toggleShown(): void {
+	const next = new Set(filterChecked.value)
+	const on = !allShownChecked.value
+
+	for (const entry of shownValues.value) {
+		if (on) {
+			next.add(entry.key)
+		} else {
+			next.delete(entry.key)
+		}
+	}
+
+	filterChecked.value = next
+}
+
+/** A bound typed as the sheet writes it, read into the field's own form; undefined when it cannot be read. */
+function readBound(field: FieldSchema, text: string): string | null | undefined {
+	if (text.trim() === "") {
+		return null
+	}
+
+	const { value, problem } = readInput(field, text, props.valueSettings)
+
+	return problem === null && typeof value === "string" ? value : undefined
+}
+
+function setFilter(key: string, condition: ColumnFilters[string] | null): void {
+	const next = { ...filters.value }
+
+	if (condition) {
+		next[key] = condition
+	} else {
+		delete next[key]
+	}
+
+	filters.value = Object.freeze(next)
+}
+
+/**
+ * Sets the column's filter from the panel: a range when one is typed, otherwise the values ticked.
+ * While a search narrows the list, only the ticked values it shows count, as in a spreadsheet.
+ * Every value ticked is no filter at all.
+ */
+function applyFilter(): void {
+	const panel = filterPanel.value
+
+	if (!panel) {
+		return
+	}
+
+	const key = panel.field.key
+
+	if (panel.range && (filterFrom.value.trim() !== "" || filterTo.value.trim() !== "")) {
+		const from = readBound(panel.field, filterFrom.value)
+		const to = readBound(panel.field, filterTo.value)
+
+		if (from === undefined || to === undefined) {
+			filterProblem.value = GRID_TEXT[props.locale].badBound ?? null
+
+			return
+		}
+
+		setFilter(key, { kind: "range", from, to })
+	} else {
+		const searching = filterSearch.value.trim() !== ""
+		const pool = searching ? shownValues.value : panel.values
+		const keys = pool.filter(entry => filterChecked.value.has(entry.key)).map(entry => entry.key)
+
+		setFilter(
+			key,
+			!searching && keys.length === panel.values.length && panel.more === 0 ? null : { kind: "values", keys }
+		)
+	}
+
+	closeFilterPanel(true)
+}
+
+function clearFilter(): void {
+	const panel = filterPanel.value
+
+	if (panel) {
+		setFilter(panel.field.key, null)
+	}
+
+	closeFilterPanel(true)
+}
+
+function onFilterKeydown(event: KeyboardEvent): void {
+	if (event.key === "Escape") {
+		event.preventDefault()
+		closeFilterPanel(true)
+	} else if (event.key === "Enter" && (event.target as HTMLElement).tagName === "INPUT") {
+		const type = (event.target as HTMLInputElement).type
+
+		if (type !== "checkbox") {
+			event.preventDefault()
+			applyFilter()
+		}
+	}
+}
+
 watch(offsets, () => updateWindow())
 watch(
 	() => props.rowHeight,
@@ -1927,6 +2217,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
 	stopSearch()
 	closeColumnMenu()
+	closeFilterPanel()
 	ownValidator?.dispose()
 	ownHistory?.dispose()
 	ownView?.dispose()
@@ -2169,6 +2460,7 @@ defineExpose({
 							class="tabula-grid-th is-pinned"
 							role="columnheader"
 							:aria-colindex="c + 1"
+							:aria-sort="ariaSort(c)"
 							:class="{ 'is-right': cellClasses[c]?.includes('is-right'), 'is-selected': colSelected(c) }"
 							:style="headerStyle(c)"
 							:title="headerTitle(c)"
@@ -2177,6 +2469,18 @@ defineExpose({
 							<span v-if="fields[c]?.formula" class="tabula-grid-fx" aria-hidden="true">ƒx</span>
 							<span class="tabula-grid-th-text">{{ headerText(c) }}</span>
 							<span v-if="fields[c]?.required" class="tabula-grid-required" aria-hidden="true">*</span>
+							<span v-if="sortOf(c)" class="tabula-grid-sort" aria-hidden="true">
+								{{ sortOf(c) === "asc" ? "↑" : "↓" }}
+							</span>
+							<svg
+								v-if="isFiltered(c)"
+								class="tabula-grid-filtered"
+								viewBox="0 0 24 24"
+								role="img"
+								:aria-label="GRID_TEXT[locale].filtered"
+							>
+								<path d="M3 5h18l-7 8v6l-4 2v-8Z" />
+							</svg>
 							<button
 								type="button"
 								class="tabula-grid-th-menu"
@@ -2201,6 +2505,7 @@ defineExpose({
 						class="tabula-grid-th"
 						role="columnheader"
 						:aria-colindex="c + 1"
+						:aria-sort="ariaSort(c)"
 						:class="{ 'is-right': cellClasses[c]?.includes('is-right'), 'is-selected': colSelected(c) }"
 						:style="headerStyle(c)"
 						:title="headerTitle(c)"
@@ -2209,6 +2514,18 @@ defineExpose({
 						<span v-if="fields[c]?.formula" class="tabula-grid-fx" aria-hidden="true">ƒx</span>
 						<span class="tabula-grid-th-text">{{ headerText(c) }}</span>
 						<span v-if="fields[c]?.required" class="tabula-grid-required" aria-hidden="true">*</span>
+						<span v-if="sortOf(c)" class="tabula-grid-sort" aria-hidden="true">
+							{{ sortOf(c) === "asc" ? "↑" : "↓" }}
+						</span>
+						<svg
+							v-if="isFiltered(c)"
+							class="tabula-grid-filtered"
+							viewBox="0 0 24 24"
+							role="img"
+							:aria-label="GRID_TEXT[locale].filtered"
+						>
+							<path d="M3 5h18l-7 8v6l-4 2v-8Z" />
+						</svg>
 						<button
 							type="button"
 							class="tabula-grid-th-menu"
@@ -2384,6 +2701,35 @@ defineExpose({
 			:style="{ left: `${columnMenu.left}px`, top: `${columnMenu.top}px` }"
 			@keydown="onMenuKeydown"
 		>
+			<button type="button" role="menuitem" class="tabula-grid-menu-sort-asc" @click="columnAction('sortAsc')">
+				{{ GRID_TEXT[locale].sortAsc }}
+			</button>
+			<button type="button" role="menuitem" class="tabula-grid-menu-sort-desc" @click="columnAction('sortDesc')">
+				{{ GRID_TEXT[locale].sortDesc }}
+			</button>
+			<button
+				v-if="sortOf(columnMenu.col)"
+				type="button"
+				role="menuitem"
+				class="tabula-grid-menu-sort-clear"
+				@click="columnAction('sortClear')"
+			>
+				{{ GRID_TEXT[locale].sortClear }}
+			</button>
+			<span class="tabula-grid-menu-line" role="separator" />
+			<button type="button" role="menuitem" class="tabula-grid-menu-filter" @click="columnAction('filter')">
+				{{ GRID_TEXT[locale].filter }}
+			</button>
+			<button
+				v-if="isFiltered(columnMenu.col)"
+				type="button"
+				role="menuitem"
+				class="tabula-grid-menu-filter-clear"
+				@click="columnAction('filterClear')"
+			>
+				{{ GRID_TEXT[locale].filterClear }}
+			</button>
+			<span class="tabula-grid-menu-line" role="separator" />
 			<button
 				type="button"
 				role="menuitem"
@@ -2410,6 +2756,71 @@ defineExpose({
 			>
 				{{ GRID_TEXT[locale].showHidden }} ({{ hiddenCount }})
 			</button>
+		</div>
+		<div
+			v-if="filterPanel"
+			class="tabula-grid-filter"
+			role="dialog"
+			:aria-label="`${GRID_TEXT[locale].filterTitle}: ${filterPanel.field.label}`"
+			:style="{ left: `${filterPanel.left}px`, top: `${filterPanel.top}px` }"
+			@keydown="onFilterKeydown"
+		>
+			<strong class="tabula-grid-filter-title">{{ filterPanel.field.label }}</strong>
+			<div v-if="filterPanel.range" class="tabula-grid-filter-range">
+				<label>
+					<span>{{ GRID_TEXT[locale].from }}</span>
+					<input v-model="filterFrom" class="tabula-grid-filter-from" type="text" autocomplete="off" />
+				</label>
+				<label>
+					<span>{{ GRID_TEXT[locale].to }}</span>
+					<input v-model="filterTo" class="tabula-grid-filter-to" type="text" autocomplete="off" />
+				</label>
+			</div>
+			<p v-if="filterProblem" class="tabula-grid-filter-problem" role="alert">{{ filterProblem }}</p>
+			<input
+				v-model="filterSearch"
+				class="tabula-grid-filter-search"
+				type="search"
+				autocomplete="off"
+				:placeholder="GRID_TEXT[locale].search"
+				:aria-label="GRID_TEXT[locale].search"
+			/>
+			<label class="tabula-grid-filter-all">
+				<input
+					type="checkbox"
+					:checked="allShownChecked"
+					:indeterminate="someShownChecked && !allShownChecked"
+					@change="toggleShown"
+				/>
+				{{ GRID_TEXT[locale].selectAll }}
+			</label>
+			<ul class="tabula-grid-filter-list">
+				<li v-for="entry in shownValues" :key="entry.key">
+					<label>
+						<input
+							type="checkbox"
+							:checked="filterChecked.has(entry.key)"
+							@change="toggleValue(entry.key)"
+						/>
+						<span class="tabula-grid-filter-value">{{ valueLabel(entry) }}</span>
+						<span class="tabula-grid-filter-count">{{ entry.count }}</span>
+					</label>
+				</li>
+			</ul>
+			<p v-if="filterPanel.more > 0" class="tabula-grid-filter-more">
+				+{{ filterPanel.more }} {{ GRID_TEXT[locale].moreValues }}
+			</p>
+			<div class="tabula-grid-filter-buttons">
+				<button type="button" class="tabula-grid-filter-apply" @click="applyFilter">
+					{{ GRID_TEXT[locale].apply }}
+				</button>
+				<button type="button" class="tabula-grid-filter-clear" @click="clearFilter">
+					{{ GRID_TEXT[locale].clear }}
+				</button>
+				<button type="button" class="tabula-grid-filter-cancel" @click="closeFilterPanel(true)">
+					{{ GRID_TEXT[locale].cancel }}
+				</button>
+			</div>
 		</div>
 		<div ref="headerProbe" class="tabula-grid-th tabula-grid-probe" aria-hidden="true" />
 		<div ref="cellProbe" class="tabula-grid-cell tabula-grid-probe" aria-hidden="true" />
@@ -2578,6 +2989,157 @@ defineExpose({
 .tabula-grid-menu button:disabled {
 	color: var(--tabula-muted);
 	cursor: default;
+}
+
+.tabula-grid-menu-line {
+	height: 1px;
+	margin: 3px 0;
+	background: var(--tabula-line);
+}
+
+/* A column sorted, and one filtered: by its name, in the accent. */
+.tabula-grid-sort {
+	flex: none;
+	padding-left: 4px;
+	color: var(--tabula-accent-text);
+	font-weight: 700;
+}
+
+.tabula-grid-filtered {
+	flex: none;
+	width: 13px;
+	height: 13px;
+	margin-left: 4px;
+	fill: var(--tabula-accent-text);
+}
+
+/* A column's filter: its values to tick, or a range of its numbers or dates. */
+.tabula-grid-filter {
+	position: absolute;
+	z-index: 7;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	box-sizing: border-box;
+	width: 260px;
+	max-width: calc(100% - 16px);
+	padding: 12px;
+	border: 1px solid var(--tabula-head-line);
+	border-radius: var(--tabula-radius);
+	background: var(--tabula-bg);
+	box-shadow: 0 6px 18px rgb(0 0 0 / 14%);
+	color: var(--tabula-fg);
+	font-weight: 400;
+}
+
+.tabula-grid-filter-title {
+	overflow: hidden;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tabula-grid-filter-range {
+	display: flex;
+	gap: 8px;
+}
+
+.tabula-grid-filter-range label {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+	color: var(--tabula-muted);
+	font-size: 0.92em;
+}
+
+.tabula-grid-filter input[type="text"],
+.tabula-grid-filter input[type="search"] {
+	box-sizing: border-box;
+	width: 100%;
+	height: 30px;
+	padding: 0 8px;
+	border: 1px solid var(--tabula-head-line);
+	border-radius: var(--tabula-radius-small);
+	outline: none;
+	background: var(--tabula-bg);
+	color: var(--tabula-fg);
+	font: inherit;
+}
+
+.tabula-grid-filter input[type="text"]:focus,
+.tabula-grid-filter input[type="search"]:focus {
+	border-color: var(--tabula-accent);
+}
+
+.tabula-grid-filter input[type="checkbox"] {
+	margin: 0;
+	accent-color: var(--tabula-accent-text);
+}
+
+.tabula-grid-filter-all,
+.tabula-grid-filter-list label {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	min-height: 26px;
+	cursor: pointer;
+}
+
+.tabula-grid-filter-list {
+	max-height: 220px;
+	margin: 0;
+	padding: 0;
+	overflow: auto;
+	list-style: none;
+	border-top: 1px solid var(--tabula-line);
+}
+
+.tabula-grid-filter-value {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tabula-grid-filter-count,
+.tabula-grid-filter-more {
+	color: var(--tabula-muted);
+	font-size: 0.9em;
+}
+
+.tabula-grid-filter-more,
+.tabula-grid-filter-problem {
+	margin: 0;
+}
+
+.tabula-grid-filter-problem {
+	color: var(--tabula-required);
+}
+
+.tabula-grid-filter-buttons {
+	display: flex;
+	gap: 6px;
+	justify-content: flex-end;
+}
+
+.tabula-grid-filter-buttons button {
+	padding: 4px 10px;
+	border: 1px solid var(--tabula-head-line);
+	border-radius: var(--tabula-radius-small);
+	background: var(--tabula-bg);
+	color: var(--tabula-fg);
+	font: inherit;
+	cursor: pointer;
+}
+
+.tabula-grid-filter-buttons .tabula-grid-filter-apply {
+	border-color: var(--tabula-accent-text);
+	background: var(--tabula-accent-text);
+	color: var(--tabula-bg);
+	font-weight: 600;
 }
 
 .tabula-grid-resize:hover {

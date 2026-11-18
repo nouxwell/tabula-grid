@@ -110,7 +110,8 @@ const onlyIssueRows = ref(false)
 const shownRows = shallowRef(view.size)
 
 view.subscribe(() => (shownRows.value = view.size))
-watch(onlyIssueRows, only => (only ? view.filter(rowsWithIssues(session.issues)) : view.clear()))
+// Named, so it stands beside the column filters the grid sets and goes without them.
+watch(onlyIssueRows, only => (only ? view.filter(rowsWithIssues(session.issues), "issues") : view.clear("issues")))
 
 if (opened) {
 	void lookups.resolveAll()

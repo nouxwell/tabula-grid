@@ -155,6 +155,9 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
   The user's arrangement is a `ColumnLayout`, `{ order, hidden, pinned }` by field key; bind it
   with `v-model:columns` to keep it, as a draft does. Hiding a column relaxes nothing: its issues
   are still listed, going to one shows the column again, and a paste passes over it.
+- **Sorting and filtering.** The same menu sorts the rows by the column and filters it: tick the
+  values to keep, or give a range of numbers or dates. A sorted header shows its arrow, a filtered
+  one a funnel (see below).
 - **Themes.** `light`, `dark` or `auto`, in colours an application changes (see below).
 
 With Nuxt, add `@nouxwell/tabula-nuxt` to `modules` and `<TabulaGrid>`, `<TabulaIssues>`,
@@ -187,6 +190,39 @@ cell, its address, field and text), `selected` (the range, with `summarizeCells`
 behind its sum and average), `rows`, `issueSummary`, `goToAddress(address)`,
 `writeCell(rowId, field, text)` and `formatValue(field, value)`. Addresses follow the columns as
 they stand on screen; `columnName` and `parseAddress` turn one into the other.
+
+### Sorting and filtering
+
+A header's menu sorts its column either way and opens its filter: the values the column holds,
+each once with how many rows hold it, to tick, with a search above them; a number or date column
+also takes a range, from and to, written as the column writes it. The values listed are those of
+the rows the other columns' filters keep, as in a spreadsheet. Bind both to keep them:
+
+```vue
+<script setup lang="ts">
+import type { ColumnFilters, ColumnSort } from "@nouxwell/tabula-core"
+
+const filters = ref<ColumnFilters>({}) // { price: { kind: "range", from: "10", to: null } }
+const sort = ref<ColumnSort | null>(null) // { key: "price", direction: "desc" }
+</script>
+
+<template>
+  <TabulaGrid v-model:filters="filters" v-model:sort="sort" :schema="schema" :store="store" />
+</template>
+```
+
+- **Values, not text.** 12.5 and "12.50" are one value, a record is its id and an option its
+  value, so a filter does not change with the language or with how a number is written.
+  `filterKey(field, value)` gives the key a `values` condition lists; "" is an empty cell.
+- **What needs fixing stays together.** Numbers sort by value, dates in time, text in the
+  language's order with the numbers in it read as numbers ("Ürün 9" before "Ürün 10"). Whichever
+  way a column sorts, cells holding something not of its type and then the empty ones stay last.
+- **Applied at a moment.** A filter or sort holds the rows as they were when it was applied: a row
+  edited so it no longer matches stays where it is, and rows a paste adds come at the end. Applying
+  the filter again, or the issue panel's Refresh, puts them in their place.
+- **The same in code.** `rowsMatching(store, schema, filters)` is the filter and
+  `rowOrder(store, schema, sort, locale)` the order the grid gives its `RowView`;
+  `compareValues`, `distinctValues` and `hasRange` are what the menu is built from.
 
 ### Colours
 
@@ -263,13 +299,15 @@ checks everything again before it writes.
 ### Only the rows with issues
 
 A `RowView` decides which rows are on screen. Give it to the grid, and bind the panel's switch:
+its filter is named, so it stands beside the column filters (the grid's own, named `"columns"`)
+and goes without them.
 
 ```vue
 <script setup lang="ts">
 const view = new RowView(store)
 const onlyIssueRows = ref(false)
 
-watch(onlyIssueRows, only => (only ? view.filter(rowsWithIssues(issues)) : view.clear()))
+watch(onlyIssueRows, only => (only ? view.filter(rowsWithIssues(issues), "issues") : view.clear("issues")))
 </script>
 
 <template>
@@ -283,7 +321,7 @@ the filter is applied again (the panel's Refresh). Row numbers stay the rows' nu
 sheet. A paste writes only into the rows shown, never into one the filter hides, and rows it adds
 past the last are shown. Going to an issue on a row the filter left out shows that row in its
 place. `rowsWithResult(session.results, ["failed"])` filters by the backend's results instead, and
-any `(rowId) => boolean` will do.
+any `(rowId) => boolean` will do. `clear()` with no name takes every filter and the sort away.
 
 ## Undo
 

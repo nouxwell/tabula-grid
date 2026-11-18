@@ -20,6 +20,8 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
   pass through. They follow the CRM's: `AppTooltip` keeps itself on a phone's screen,
   `AppModal` + `AppModalScrollWrapper` never run off it, `AppDrawer` + `AppDrawerContent`,
   `AppNumberAnimation`, `AppButton` with a turning icon, and the language select with flags.
+  `AppButton` spins while the promise its click returns runs, and `AppSpin` shows a part that
+  waits for its data; the page around it is never covered.
   The rules are in the repository's [DESIGN.md](../../DESIGN.md).
 - **Server rendering.** The page, its Naive UI styles and the palette arrive drawn; the grid is
   drawn in the browser, where the sheet's parts are made ([app/utils/sheet.ts](app/utils/sheet.ts)).

@@ -142,9 +142,9 @@ export function createSheet(
 
 	function onlyIssueRows(only: boolean): void {
 		if (only) {
-			view.filter(rowsWithIssues(session.issues))
+			view.filter(rowsWithIssues(session.issues), "issues")
 		} else {
-			view.clear()
+			view.clear("issues")
 		}
 	}
 
