@@ -143,6 +143,18 @@
 						<span class="hidden md:inline">Sütunlar</span>
 						<span class="sr-only md:hidden">Sütunlar</span>
 					</AppButton>
+					<AppDropdown :options="templateOptions" @select="chooseTemplate">
+						<AppButton
+							:size="controlSize"
+							:disabled="!sheet"
+							class="min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+						>
+							<template #icon><AppIcon name="template" /></template>
+							<span class="hidden md:inline">{{ templateLabel }}</span>
+							<span class="sr-only md:hidden">Şablon: {{ templateLabel }}</span>
+							<AppIcon name="chevronDown" :size="14" class="ml-1 hidden md:block" />
+						</AppButton>
+					</AppDropdown>
 					<AppDropdown :options="viewOptions" @select="chooseView">
 						<AppButton
 							:size="controlSize"
@@ -168,6 +180,7 @@
 				<Transition name="fade" mode="out-in">
 					<TabulaGrid
 						v-if="sheet"
+						:key="sheetKey"
 						ref="grid"
 						v-model:columns="columns"
 						v-model:column-widths="widths"
@@ -397,6 +410,10 @@ const {
 	error: rowsError,
 	refresh: refreshRows
 } = useFetch<RowInit[]>("/api/price-updates/rows", { server: false })
+// The templates prepared for the module: small, so they come with the page, and the menu is drawn.
+const { data: templates } = await useFetch<readonly { readonly id: string; readonly name: string }[]>(
+	"/api/modules/price-update/templates"
+)
 
 /** Fetches the rows again after a failure; the button spins until they are in. */
 function loadRows(): Promise<void> {
@@ -446,17 +463,68 @@ onMounted(() => {
 	stopMedia = () => media.removeEventListener("change", follow)
 })
 
+const route = useRoute()
+/** The template the sheet works with, by its id in the address: `?template=december-rise`. */
+const templateId = computed(() => (typeof route.query.template === "string" ? route.query.template : null))
+/** Counts the sheets made, so the grid is made afresh for a new one. */
+const sheetKey = ref(0)
+
+/**
+ * Makes the sheet with the template the address names, and opens it in the user's default view or
+ * the template's arrangement. `carried` rows are the sheet's own, when it is made again for another
+ * template: what the user typed stays.
+ */
+function makeSheet(schemaInput: ModuleSchemaInput, rowList: readonly RowInit[], carried?: readonly RowInit[]): void {
+	const template = templates.value?.find(item => item.id === templateId.value) ?? null
+	const made = createSheet(
+		schemaInput,
+		carried ?? rowList,
+		locale,
+		{ columns, widths },
+		{ template, carried: carried !== undefined }
+	)
+
+	sheetKey.value++
+	sheet.value = made
+	savedViews.open(made.schema, made.restored, made.template?.view ?? undefined)
+
+	if (made.templateError) {
+		message.error("Şablon uygulanamadı; tablo modül şemasıyla açıldı.")
+	}
+}
+
 // Made once the rows are in the browser.
 watch(
 	[input, rows],
 	([schemaInput, rowList]) => {
 		if (!sheet.value && schemaInput && rowList) {
-			sheet.value = createSheet(schemaInput, rowList, locale, { columns, widths })
-			savedViews.open(sheet.value.schema, sheet.value.restored)
+			makeSheet(schemaInput, rowList)
 		}
 	},
 	{ immediate: true }
 )
+
+// Another template: the same rows, under the schema as that template narrows it.
+watch(templateId, () => {
+	const current = sheet.value
+
+	if (!current || !input.value || !rows.value) {
+		return
+	}
+
+	const carried = current.store.snapshot()
+
+	current.dispose()
+	makeSheet(input.value, rows.value, carried)
+
+	const name = sheet.value?.template?.name
+
+	if (name) {
+		message.success(`Tablo «${name}» şablonuyla açıldı.`)
+	} else if (!sheet.value?.templateError) {
+		message.info("Tablo şablonsuz, modül şemasıyla açıldı.")
+	}
+})
 
 onBeforeUnmount(() => {
 	stopMedia?.()
@@ -573,6 +641,37 @@ function columnStatus(column: ImportResult["columns"][number]): string {
 
 function labelOf(key: string): string {
 	return input.value?.fields.find(field => field.key === key)?.label ?? key
+}
+
+// ---------------------------------------------------------------- templates
+
+const templateLabel = computed(() => templates.value?.find(item => item.id === templateId.value)?.name ?? "Şablonsuz")
+
+const templateOptions = computed<DropdownOption[]>(() => {
+	const tick = (on: boolean) => (on ? () => h(AppIcon, { name: "tick", size: 16 }) : undefined)
+
+	return [
+		{
+			type: "group",
+			label: "Şablonlar",
+			key: "templates",
+			children: [
+				{ label: "Şablonsuz (modül şeması)", key: "template:", icon: tick(templateId.value === null) },
+				...(templates.value ?? []).map(item => ({
+					label: item.name,
+					key: `template:${item.id}`,
+					icon: tick(item.id === templateId.value)
+				}))
+			]
+		}
+	]
+})
+
+/** Puts the template in the address, so a reload or a shared link opens the sheet with it. */
+function chooseTemplate(key: string | number): void {
+	const id = String(key).slice("template:".length)
+
+	void navigateTo({ query: { ...route.query, template: id || undefined } }, { replace: true })
 }
 
 // ---------------------------------------------------------------- saved views

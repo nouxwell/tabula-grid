@@ -51,6 +51,8 @@ function stored(module: string): SavedViews {
 export function useSavedViews(models: ViewModels, locale: Ref<string>) {
 	const views = shallowRef<SavedViews | null>(null)
 	const schema = shallowRef<ModuleSchema | null>(null)
+	/** How the sheet is laid out with no view chosen: the template's arrangement, or the schema's. */
+	const base = shallowRef<ViewState>(PLAIN_VIEW)
 	/** The view chosen last; null for the sheet as its schema lays it out. */
 	const currentId = ref<string | null>(null)
 
@@ -68,7 +70,7 @@ export function useSavedViews(models: ViewModels, locale: Ref<string>) {
 
 	/** Whether the sheet on screen is no longer the view chosen: a column moved, a filter set. */
 	const modified = computed(() =>
-		schema.value ? !sameView(schema.value, state.value, current.value ?? PLAIN_VIEW) : false
+		schema.value ? !sameView(schema.value, state.value, current.value ?? base.value) : false
 	)
 
 	function keep(next: SavedViews): void {
@@ -94,27 +96,27 @@ export function useSavedViews(models: ViewModels, locale: Ref<string>) {
 	}
 
 	/**
-	 * Reads the views and opens the sheet in the default one. A draft brought its own columns back:
-	 * those stay, and the default view gives the filters and the sort.
+	 * Reads the views and opens the sheet in the default one, or as `layout` lays it out: a template's
+	 * arrangement. A draft brought its own columns back: those stay, and the view gives the filters
+	 * and the sort.
 	 */
-	function open(sheetSchema: ModuleSchema, restoredLayout: boolean): void {
+	function open(sheetSchema: ModuleSchema, restoredLayout: boolean, layout: ViewState = PLAIN_VIEW): void {
 		schema.value = sheetSchema
+		base.value = layout
 		views.value = stored(sheetSchema.module)
 
-		const first = views.value.views.find(view => view.id === views.value?.defaultId)
+		const first = views.value.views.find(view => view.id === views.value?.defaultId) ?? null
 
-		if (first) {
-			currentId.value = first.id
-			put(first, restoredLayout ? "filters" : undefined)
-		}
+		currentId.value = first?.id ?? null
+		put(first ?? layout, restoredLayout ? "filters" : undefined)
 	}
 
-	/** Shows a saved view, or with null the sheet as its schema lays it out. */
+	/** Shows a saved view, or with null the sheet as its template or schema lays it out. */
 	function show(id: string | null): void {
 		const view = views.value?.views.find(item => item.id === id) ?? null
 
 		currentId.value = view?.id ?? null
-		put(view ?? PLAIN_VIEW)
+		put(view ?? base.value)
 	}
 
 	/** Saves the sheet as it stands as a new view, and makes it the one chosen. */

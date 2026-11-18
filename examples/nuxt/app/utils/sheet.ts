@@ -1,5 +1,6 @@
 import {
 	applyFormulas,
+	applyTemplate,
 	arrangeColumns,
 	csvDelimiterFor,
 	decodeText,
@@ -12,6 +13,7 @@ import {
 	openDraft,
 	parseCsv,
 	readDraft,
+	readTemplate,
 	RowStore,
 	rowsWithIssues,
 	RowView,
@@ -20,8 +22,10 @@ import {
 	toCsv,
 	UndoHistory,
 	VALUE_SETTINGS,
+	withDefaults,
 	type ColumnLayout,
 	type Draft,
+	type GridTemplate,
 	type LookupAdapters,
 	type ModuleSchemaInput,
 	type RowInit,
@@ -87,16 +91,35 @@ export interface ImportResult extends Pick<TableImport, "columns" | "missing" | 
  * page around the grid; the grid itself is drawn in the browser, and none of these would outlive the
  * trip there. A draft kept from an earlier visit is opened in place of the server's rows when it
  * still fits the schema. `dispose()` lets them go.
+ *
+ * With a template, the sheet works with the module schema as the template narrows it. A template
+ * that does not apply is left out, and `templateError` says why. `carried` rows, the sheet's own
+ * when the template changes, are taken as they are, in place of a draft.
  */
 export function createSheet(
 	input: ModuleSchemaInput,
 	rows: readonly RowInit[],
 	locale: Ref<ValueLocale>,
-	layout: { readonly columns: Ref<ColumnLayout>; readonly widths: Ref<Readonly<Record<string, number>>> }
+	layout: { readonly columns: Ref<ColumnLayout>; readonly widths: Ref<Readonly<Record<string, number>>> },
+	options: { readonly template?: unknown; readonly carried?: boolean } = {}
 ) {
 	const { columns, widths } = layout
-	const schema = ModuleSchema.from(input)
-	const opening = openKept(schema)
+	const moduleSchema = ModuleSchema.from(input)
+	let template: GridTemplate | null = null
+	let templateError: string | null = null
+	let schema = moduleSchema
+
+	if (options.template) {
+		try {
+			template = readTemplate(options.template, moduleSchema.module)
+			schema = applyTemplate(moduleSchema, template)
+		} catch (error) {
+			template = null
+			templateError = error instanceof Error ? error.message : String(error)
+		}
+	}
+
+	const opening = options.carried ? null : openKept(schema)
 	const opened = opening?.status === "opened" ? opening : null
 	const store = new RowStore({ rows: opened ? opened.rows : applyFormulas(schema, rows) })
 	const formulas = new FormulaEngine({ schema, store })
@@ -155,7 +178,8 @@ export function createSheet(
 		const first = store.size
 
 		if (result.rows.length > 0) {
-			store.transact(() => store.appendRows(result.rows), { origin: "import" })
+			// Columns the file does not have take the schema's defaults, as rows a paste adds do.
+			store.transact(() => store.appendRows(withDefaults(schema, result.rows)), { origin: "import" })
 		}
 
 		return {
@@ -206,6 +230,9 @@ export function createSheet(
 		saver,
 		/** Whether a kept draft was opened, with the columns the user had. */
 		restored: opened !== null,
+		/** The template the sheet works with, and why one asked for could not be. */
+		template,
+		templateError,
 		version,
 		onlyIssueRows,
 		importCsv,

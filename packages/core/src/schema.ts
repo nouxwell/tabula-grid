@@ -1,7 +1,10 @@
 import { compareDecimal, normalizeDecimal } from "./decimal.js"
 import { SchemaError, TabulaError, type SchemaProblem } from "./errors.js"
 import { formulaFields, parseFormula } from "./formula/parse.js"
+import type { CellValue } from "./value.js"
 import { compilePattern } from "./values/date.js"
+import { decimalText } from "./values/number.js"
+import { isFieldValue } from "./values/read.js"
 
 /**
  * The module schema: the developer's definition of a sheet, as the backend sends it.
@@ -66,6 +69,12 @@ interface FieldBase {
 	 * `ROUND([newPrice] - [currentPrice], 2)`. Such a field is never editable.
 	 */
 	readonly formula: string | null
+	/**
+	 * What a new row holds here when nothing else is given, in the form a cell holds it: a number as
+	 * decimal text, a date as ISO text, an option by its value. Null for none. A row the grid or an
+	 * import adds takes it (`withDefaults`); a row already there is never changed by it.
+	 */
+	readonly default: CellValue | null
 }
 
 export interface TextField extends FieldBase {
@@ -150,6 +159,8 @@ export interface FieldInput {
 	example?: string
 	/** Worked out from the row's other fields; see `FieldSchema.formula`. */
 	formula?: string
+	/** A new row's value; see `FieldSchema.default`. Not for a lookup, a formula or a unique field. */
+	default?: string | number | boolean | readonly (string | number)[]
 	/** decimal, quantity, percent and money */
 	decimals?: number
 	/** money */
@@ -176,7 +187,18 @@ export interface ModuleSchemaInput {
 }
 
 const MODULE_PROPERTIES = ["module", "schemaVersion", "title", "customization", "fields"]
-const COMMON_PROPERTIES = ["key", "type", "label", "required", "editable", "submit", "rules", "example", "formula"]
+const COMMON_PROPERTIES = [
+	"key",
+	"type",
+	"label",
+	"required",
+	"editable",
+	"submit",
+	"rules",
+	"example",
+	"formula",
+	"default"
+]
 
 /** Kinds of field a formula can fill: a value worked out, never a record or a choice from a list. */
 const FORMULA_TYPES: readonly FieldType[] = [
@@ -320,6 +342,10 @@ function fieldToJson(field: FieldSchema): FieldInput {
 
 	if (field.formula !== null) {
 		json.formula = field.formula
+	}
+
+	if (field.default !== null) {
+		json.default = field.default as NonNullable<FieldInput["default"]>
 	}
 
 	switch (field.type) {
@@ -604,7 +630,8 @@ function readField(raw: unknown, path: string, problems: Problems): FieldSchema 
 		submit,
 		rules: Object.freeze(rules),
 		example,
-		formula
+		formula,
+		default: null
 	}
 	let field: FieldSchema
 
@@ -647,7 +674,97 @@ function readField(raw: unknown, path: string, problems: Problems): FieldSchema 
 			break
 	}
 
-	return problems.items.length > before ? null : Object.freeze(field)
+	if (problems.items.length > before) {
+		return null
+	}
+
+	const fallback = readDefault(raw, field, path, problems)
+
+	return problems.items.length > before ? null : Object.freeze({ ...field, default: fallback })
+}
+
+/**
+ * A field's default, checked as a value of the field: its type, its options, its limits. A lookup
+ * takes none (a record is an id the backend gives), nor does a formula (its value is worked out),
+ * nor a unique field (every new row would hold the same value).
+ */
+function readDefault(raw: Json, field: FieldSchema, path: string, problems: Problems): CellValue | null {
+	const value = raw.default
+	const where = at(path, "default")
+
+	if (value === undefined || value === null) {
+		return null
+	}
+
+	if (field.type === "lookup" || field.formula !== null || field.rules.some(rule => rule.rule === "unique")) {
+		const why =
+			field.type === "lookup"
+				? "a lookup's value is a record the backend gives"
+				: field.formula !== null
+					? "its value is worked out by its formula"
+					: "every new row would hold the same value, and it is unique"
+
+		problems.add(where, `cannot be given: ${why}`)
+
+		return null
+	}
+
+	// A number is kept as decimal text, as every cell of a numeric field holds one.
+	const given = NUMERIC_TYPES.has(field.type) ? (decimalText(value) ?? value) : value
+
+	if (!isFieldValue(field, given as CellValue)) {
+		problems.add(where, `${describe(value)} is not a value of ${aFieldOf(field.type)}${hint(field)}`)
+
+		return null
+	}
+
+	const broken = brokenRule(field, given as CellValue)
+
+	if (broken !== null) {
+		problems.add(where, `${describe(value)} breaks the field's ${broken} rule`)
+
+		return null
+	}
+
+	return Array.isArray(given) ? (Object.freeze([...(given as unknown[])]) as CellValue) : (given as CellValue)
+}
+
+function hint(field: FieldSchema): string {
+	switch (field.type) {
+		case "options":
+			return `; it takes ${field.multiple ? "a list of " : "one of "}${field.options.map(option => JSON.stringify(option.value)).join(", ")}`
+		case "date":
+			return '; write it as "2026-12-31"'
+		case "datetime":
+			return '; write it as "2026-12-31T09:30:00"'
+		case "bool":
+			return "; it takes true or false"
+		default:
+			return NUMERIC_TYPES.has(field.type) ? '; write it as a number or decimal text, such as "12.5"' : ""
+	}
+}
+
+/** The first of the field's limits the value breaks, or null. */
+function brokenRule(field: FieldSchema, value: CellValue): string | null {
+	for (const rule of field.rules) {
+		if ((rule.rule === "min" || rule.rule === "max") && typeof value === "string") {
+			const order = compareDecimal(normalizeDecimal(value) ?? value, rule.value)
+
+			if (rule.rule === "min" ? order < 0 : order > 0) {
+				return `${rule.rule} ${rule.value}`
+			}
+		}
+
+		if ((rule.rule === "minLength" || rule.rule === "maxLength") && typeof value === "string") {
+			const length = [...value].length
+
+			if (rule.rule === "minLength" ? length < rule.value : length > rule.value) {
+				return `${rule.rule} ${rule.value}`
+			}
+		}
+	}
+
+	return null
 }
 
 function readType(raw: Json, path: string, problems: Problems): FieldType | null {

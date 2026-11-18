@@ -19,6 +19,8 @@ export const PRICE_UPDATE: ModuleSchemaInput = {
 	module: "product.price_update",
 	schemaVersion: 1,
 	title: "Toplu fiyat güncelleme",
+	// A template may narrow the sheet for a task, never loosen it.
+	customization: "controlled",
 	fields: [
 		{
 			key: "productId",
@@ -59,6 +61,32 @@ export const PRICE_UPDATE: ModuleSchemaInput = {
 		{ key: "note", type: "string", label: "Not", rules: [{ rule: "maxLength", value: 60 }] }
 	]
 }
+
+/**
+ * The templates an authorized user prepared for the module, as the backend keeps and sends them. One
+ * here: December's price rise, with its header, its stricter minimum, its date and currency for new
+ * rows, the price with tax worked out, and a note column of its own that is never sent.
+ */
+export const PRICE_TEMPLATES = [
+	{
+		format: "tabula-grid.template",
+		version: 1,
+		module: "product.price_update",
+		id: "december-rise",
+		name: "Aralık zam listesi",
+		fields: {
+			newPrice: { label: "Aralık fiyatı", rules: [{ rule: "min", value: "1" }] },
+			validFrom: { required: true, default: "2026-12-01" },
+			currency: { default: "TRY" },
+			active: { editable: false }
+		},
+		columns: [
+			{ key: "withTax", type: "money", label: "KDV dahil", decimals: 2, formula: "ROUND([newPrice] * 1.2, 2)" },
+			{ key: "internalNote", type: "string", label: "İç not", rules: [{ rule: "maxLength", value: 80 }] }
+		],
+		view: { columns: { hidden: ["sku"], pinned: ["productId"] }, columnWidths: {}, filters: {}, sort: null }
+	}
+] as const
 
 const ROWS = 1_000
 const FIRST_ID = 1000

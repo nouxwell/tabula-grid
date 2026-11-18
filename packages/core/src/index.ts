@@ -85,6 +85,15 @@ export { summarizeCells } from "./summary.js"
 export { compareValues, distinctValues, filterKey, hasRange, rowOrder, rowsMatching } from "./filters.js"
 export { fillValues } from "./fill.js"
 export {
+	applyTemplate,
+	readTemplate,
+	TEMPLATE_FORMAT,
+	TEMPLATE_VERSION,
+	templateProblems,
+	withDefaults
+} from "./templates.js"
+export type { GridTemplate, TemplateFieldChange, TemplateProblem } from "./templates.js"
+export {
 	addView,
 	emptyViews,
 	PLAIN_VIEW,

@@ -17,6 +17,17 @@ The three packages are versioned together.
   column beside goes. Ctrl+D and Ctrl+R copy the selection's first row down or first column across.
   A fill is one step to undo, writes only into the rows shown and passes over columns that cannot
   be edited. Not drawn on a touch screen.
+- **Templates**: the sheet as an authorized user prepares it for a task, on the module schema
+  and under each user's views. A template changes headers, requires fields, closes columns, narrows
+  limits, gives new rows a value, adds columns of its own (a helper, or a formula, never sent) and
+  says how the sheet opens; it never loosens the schema, and a `fixed` module takes none.
+  `readTemplate`, `templateProblems` (each problem where the template wrote it) and
+  `applyTemplate` (error code `invalid_template`), with the types `GridTemplate`,
+  `TemplateFieldChange` and `TemplateProblem`. The example has "Aralık zam listesi" and a template
+  menu; another template makes the sheet again with the same rows.
+- **A field's `default`** in the schema: a new row's value, checked against the field's type,
+  options and limits; not for a lookup, a formula or a unique field. `withDefaults` gives it to the
+  rows a paste adds past the last and the rows an import brings.
 - **Saved views.** A user keeps the sheet as they arranged it (columns, widths, filters, sort)
   under a name, and opens the page in the one they choose. The core has the document and its
   changes: `emptyViews`, `addView`, `updateView`, `renameView`, `removeView`,

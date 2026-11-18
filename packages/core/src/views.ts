@@ -333,6 +333,31 @@ function sameCondition(a: ColumnCondition, b: ColumnCondition): boolean {
 	return keys.size === new Set(b.keys).size && b.keys.every(key => keys.has(key))
 }
 
+/**
+ * An arrangement read from JSON, each problem reported under `path`: what a template carries for
+ * the sheet to open in. Not a saved view: it has no id or name.
+ */
+export function readViewState(
+	input: unknown,
+	path: string,
+	problem: (path: string, message: string) => void
+): ViewState {
+	const view = plain(input)
+
+	if (!view) {
+		problem(path, "must be an object.")
+
+		return PLAIN_VIEW
+	}
+
+	return freezeState({
+		columns: readLayout(view.columns, `${path}.columns`, problem),
+		columnWidths: readWidths(view.columnWidths, `${path}.columnWidths`, problem),
+		filters: readFilters(view.filters, `${path}.filters`, problem),
+		sort: readSort(view.sort, `${path}.sort`, problem)
+	})
+}
+
 function readView(input: unknown, path: string, problem: Problem): SavedView | null {
 	const view = plain(input)
 

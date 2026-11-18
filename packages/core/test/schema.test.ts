@@ -70,7 +70,8 @@ describe("ModuleSchema", () => {
 			submit: true,
 			rules: [{ rule: "maxLength", value: 200 }],
 			example: "Kampanya sonrası fiyat",
-			formula: null
+			formula: null,
+			default: null
 		})
 		expect(schema.field("currentPrice")).toMatchObject({ editable: false, submit: false, currency: null })
 		expect(schema.field("currency")).toMatchObject({
@@ -155,11 +156,50 @@ describe("ModuleSchema", () => {
 
 	it("refuses a property it does not know, rather than dropping it", () => {
 		expect(problemsOf(withField(5, { key: "note", type: "string", requird: true }))).toEqual([
-			"fields[5].requird: is not a field property; a string field takes key, type, label, required, editable, submit, rules, example, formula"
+			"fields[5].requird: is not a field property; a string field takes key, type, label, required, editable, submit, rules, example, formula, default"
 		])
 		expect(problemsOf({ ...priceUpdate, version: 3 })).toEqual([
 			"version: is not a module schema property; expected one of module, schemaVersion, title, customization, fields"
 		])
+	})
+
+	it("takes a default for new rows, in the form a cell holds it", () => {
+		const schema = ModuleSchema.from({
+			...priceUpdate,
+			fields: [
+				priceUpdate.fields[0],
+				{ ...priceUpdate.fields[2], default: 12.5 },
+				{ ...priceUpdate.fields[3], default: "TRY" },
+				{ ...priceUpdate.fields[4], default: "2026-12-01" },
+				{ key: "active", type: "bool", default: true }
+			]
+		})
+
+		// A number is kept as decimal text, as a cell of the field holds it.
+		expect(schema.field("newPrice").default).toBe("12.5")
+		expect(schema.field("currency").default).toBe("TRY")
+		expect(schema.field("validFrom").default).toBe("2026-12-01")
+		expect(schema.field("active").default).toBe(true)
+		expect(schema.field("productId").default).toBeNull()
+		expect(ModuleSchema.from(schema.toJSON()).toJSON()).toEqual(schema.toJSON())
+	})
+
+	it("refuses a default that is not a value of its field or breaks its rules", () => {
+		expect(problemsOf(withField(2, { ...priceUpdate.fields[2], default: "-1" }))).toEqual([
+			'fields[2].default: "-1" breaks the field\'s min 0 rule'
+		])
+		expect(problemsOf(withField(3, { ...priceUpdate.fields[3], default: "EUR" }))).toEqual([
+			'fields[3].default: "EUR" is not a value of an options field; it takes one of "TRY", "USD"'
+		])
+		expect(problemsOf(withField(4, { ...priceUpdate.fields[4], default: "01.12.2026" }))).toEqual([
+			'fields[4].default: "01.12.2026" is not a value of a date field; write it as "2026-12-31"'
+		])
+		expect(problemsOf(withField(0, { ...priceUpdate.fields[0], default: 7 }))).toEqual([
+			"fields[0].default: cannot be given: a lookup's value is a record the backend gives"
+		])
+		expect(
+			problemsOf(withField(5, { key: "note", type: "string", rules: [{ rule: "unique" }], default: "x" }))
+		).toEqual(["fields[5].default: cannot be given: every new row would hold the same value, and it is unique"])
 	})
 
 	it("refuses a property that belongs to another type", () => {

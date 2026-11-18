@@ -596,6 +596,70 @@ const changed = !sameView(schema, state, views.views[0]) // "· değişti" besid
 one shown and "· değişti" once the sheet no longer matches it, and save, save as, rename, delete
 and "open in this view".
 
+## Templates
+
+A template is the sheet as an authorized user prepares it for a task, layered on the developer's
+module schema and under each user's own views: "Aralık zam listesi" on the price update. It only
+narrows what the schema allows, never loosens it:
+
+| A template may                                          | It may not                                     |
+| ------------------------------------------------------- | ---------------------------------------------- |
+| change a column's header (the key stays)                | change a key, a type or what is sent           |
+| require a field the schema leaves optional              | make a required field optional                 |
+| keep a column from being typed into                     | open a column the schema keeps read-only       |
+| narrow a limit: a `min` above the schema's, `unique`    | let through what the schema's limits refuse    |
+| give new rows a value (`default`)                       | give a lookup, a formula or a unique field one |
+| add columns of its own, a helper or a formula           | have them sent for processing                  |
+| say how the sheet opens: columns, widths, filters, sort | override a user's own default view             |
+
+Only a module whose schema says `"customization": "controlled"` takes one; a `fixed` module
+refuses every template. A template is one JSON document the backend keeps and sends:
+
+```json
+{
+  "format": "tabula-grid.template",
+  "version": 1,
+  "module": "product.price_update",
+  "id": "december-rise",
+  "name": "Aralık zam listesi",
+  "fields": {
+    "newPrice": { "label": "Aralık fiyatı", "rules": [{ "rule": "min", "value": "1" }] },
+    "validFrom": { "required": true, "default": "2026-12-01" },
+    "active": { "editable": false }
+  },
+  "columns": [
+    { "key": "withTax", "type": "money", "label": "KDV dahil", "decimals": 2, "formula": "ROUND([newPrice] * 1.2, 2)" },
+    { "key": "internalNote", "type": "string", "label": "İç not" }
+  ],
+  "view": { "columns": { "hidden": ["sku"], "pinned": ["productId"] }, "columnWidths": {}, "filters": {}, "sort": null }
+}
+```
+
+```ts
+import { applyTemplate, readTemplate, templateProblems, withDefaults } from "@nouxwell/tabula-core"
+
+const template = readTemplate(json, moduleSchema.module) // its shape, every problem at once
+const schema = applyTemplate(moduleSchema, template) // the schema the sheet works with
+```
+
+- **Refused whole, never half applied.** `templateProblems` lists everything that keeps a template
+  from applying, each where the template wrote it: `fields.newPrice.rules[0]: min -5 would let
+through what the schema's min 0 refuses`, `columns[0].key: "note" is a field of the module`,
+  `fields.newPrice.rules: min 200000 is above max 100000; no value can satisfy both`.
+  `applyTemplate` throws them (`invalid_template`); an editor shows them.
+- **The sheet works with the result.** Its checks, its formulas and its columns are the schema's as
+  the template left it; the template's columns come last and are never sent, so the backend sees
+  the module's fields only.
+- **Defaults.** A field's `default` (the schema's own, or one a template gives) fills new rows:
+  the rows a paste adds past the last, and the rows an import brings (`withDefaults(schema, rows)`),
+  where they give no value. A row already there is never changed by it.
+- **The backend checks again.** A template's narrower limits are checked in the browser here. A
+  backend that takes templates checks them too before it writes; nouxwell/tabula does not read
+  templates yet.
+
+[examples/nuxt](examples/nuxt/README.md) has a template menu: the template goes in the address
+(`?template=december-rise`), and choosing another makes the sheet again with the same rows.
+
 ## Where the line is drawn
 
 The packages never talk to a database and never choose an HTTP client. The application that embeds

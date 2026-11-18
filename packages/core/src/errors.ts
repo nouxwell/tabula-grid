@@ -10,6 +10,7 @@ export type TabulaErrorCode =
 	| "invalid_response"
 	| "invalid_draft"
 	| "invalid_views"
+	| "invalid_template"
 	| "invalid_formula"
 
 /**

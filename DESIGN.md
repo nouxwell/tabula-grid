@@ -130,6 +130,7 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 18  | Phone layout                                        | application | done                         |
 | 19  | Darker green for words                              | both        | done                         |
 | 20  | Saved views (personal views)                        | both        | done (phase two)             |
+| 21  | Templates (the layer between schema and views)      | both        | done (phase two)             |
 
 A part marked "not chosen" is not built without asking first.
 

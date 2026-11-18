@@ -25,6 +25,7 @@ import {
 	UndoHistory,
 	VALUE_SETTINGS,
 	withColumn,
+	withDefaults,
 	type CellPosition,
 	type CellRange,
 	type ColumnFilters,
@@ -1505,7 +1506,8 @@ function onPaste(event: ClipboardEvent): void {
 			// filtered or not; the view takes them in once the paste is done.
 			const shown = view.value.size
 			const missing = area.top + height - shown
-			const added = missing > 0 ? rows.appendRows(missing) : []
+			// New rows hold the schema's defaults wherever the paste leaves them empty.
+			const added = missing > 0 ? rows.appendRows(withDefaults(schema.value, missing)) : []
 			const rowAt = (position: number): string | undefined =>
 				position < shown ? view.value.rowIdAt(position) : added[position - shown]
 
