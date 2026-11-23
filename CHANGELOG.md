@@ -7,6 +7,12 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-11-23
+
+A template's column formats, for everyone who opens it: the alignment and decimals written into a
+template are drawn under each user's own, and the example's rules drawer takes the user's into the
+template. The packages only add; nothing they did before changes.
+
 ### Added
 
 - **A template's column formats, for everyone who opens it** (canvas items 110, 111, 113 and 114,
@@ -487,7 +493,8 @@ taken to a backend through the application's own adapters, and kept as a draft.
   gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
   which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.
 
-[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/nouxwell/tabula-grid/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/nouxwell/tabula-grid/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/nouxwell/tabula-grid/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/nouxwell/tabula-grid/compare/v0.2.1...v0.3.0
