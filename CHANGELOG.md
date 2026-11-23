@@ -7,6 +7,12 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+### Added
+
+- **Releases are published from GitHub Actions**, with npm's trusted publishing: a pushed `vX.Y.Z`
+  tag publishes the three packages, with provenance, and no npm token is kept anywhere
+  (`.github/workflows/publish.yml`, `scripts/publish-packages.mjs`).
+
 ## [0.4.1] — 2026-11-23
 
 A template's column formats, for everyone who opens it: the alignment and decimals written into a

@@ -1,0 +1,80 @@
+name: Publish
+
+# A pushed release tag, vX.Y.Z, publishes the three packages to npm through npm's trusted
+# publishing: npm trusts this workflow in this repository, GitHub gives the job a short-lived
+# identity (OIDC) in place of a token, and npm adds provenance to what it publishes. No npm token
+# is kept anywhere.
+#
+# Run it by hand ("Run workflow", with the tag) for a tag pushed before this workflow was here, or
+# to finish a publish that stopped half way: a version already on npm is passed over.
+#
+# The job runs in the "npm" environment. Give that environment a required reviewer in the
+# repository's settings, and every publish waits for one to approve it.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release tag to publish, such as v0.4.1"
+        required: true
+
+permissions:
+  contents: read
+
+# One publish at a time, and never one cut short by the next.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    environment: npm
+
+    permissions:
+      contents: read
+      # The identity npm's trusted publishing signs in with.
+      id-token: write
+
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      - uses: pnpm/action-setup@v6
+
+      # No registry-url: setup-node would write an .npmrc that asks for a token, and npm would
+      # look for one in place of signing in through trusted publishing.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      # Trusted publishing needs npm 11.5.1 or later.
+      - name: npm for trusted publishing
+        run: |
+          npm install --global npm@11
+          npm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The CI workflow runs everything on the same tag; this is what has to hold before anything
+      # goes out, whatever CI is doing meanwhile.
+      - name: Build the packages
+        run: pnpm --filter "./packages/**" build
+
+      - name: Test the packages
+        run: pnpm --filter "./packages/**" test
+
+      - name: Pack, install and use
+        run: pnpm check:packages
+
+      - name: Publish
+        run: pnpm publish-packages --tag "$TAG"

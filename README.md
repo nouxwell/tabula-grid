@@ -1040,10 +1040,19 @@ A release, on `main`:
    `packages/core/src/index.ts` (a test holds the two together), and turns the changelog's
    Unreleased into the version's heading, with its link at the bottom.
 2. An annotated tag `vX.Y.Z` on that commit, pushed with it. CI runs on the tag.
-3. With `main` at the tag: `corepack pnpm install --frozen-lockfile`, `corepack pnpm -r build`,
-   `corepack pnpm check:packages`, then `corepack pnpm -r publish`, signed in to npm as an owner of
-   the `@nouxwell` scope. pnpm, not npm: only pnpm turns `workspace:^` into the version. Add
-   `--dry-run` first to see what would go out.
+3. The tag publishes. The Publish workflow (`.github/workflows/publish.yml`) builds and tests the
+   packages, checks them as published, and publishes them, core first: each packed by pnpm, which
+   alone turns `workspace:^` into the version, and sent by npm through
+   [trusted publishing](https://docs.npmjs.com/trusted-publishers). GitHub gives the job a
+   short-lived identity in place of a token, and npm adds provenance. A version already on npm is
+   passed over; for a tag pushed before the workflow was there, run it by hand ("Run workflow")
+   with the tag. `corepack pnpm publish-packages --tag vX.Y.Z --dry-run` shows what would go out
+   and sends nothing.
+
+Once, on npmjs.com, each of the three packages names its trusted publisher under Settings: GitHub
+Actions, the repository `nouxwell/tabula-grid`, the workflow `publish.yml` and the environment
+`npm`. A required reviewer on the repository's `npm` environment makes every publish wait for an
+approval.
 
 ## License
 

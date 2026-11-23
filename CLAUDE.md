@@ -18,8 +18,10 @@ both together.
 - **Every commit and every push needs the user's yes, each time.** Finish the work, run the
   checks, report, then ask: "Commit edip GitHub'a göndereyim mi?". An earlier yes does not carry
   over to the next commit.
-- **npm publishing is the user's.** Prepare a release (versions, changelog, tag on approval); never
-  run `pnpm publish` or `npm publish`.
+- **npm publishing is the user's.** A pushed `vX.Y.Z` tag publishes the packages (the Publish
+  workflow), so pushing a release tag is publishing: say so when asking for the push. Never run
+  `pnpm publish` or `npm publish`, nor the Publish workflow by hand. A dry run sends nothing:
+  `corepack pnpm publish-packages --tag vX.Y.Z --dry-run`.
 - **Other repositories are read only** unless the user says otherwise for that task:
   `crm-frontend` and `crm-backend` (a CRM trial needs the user's approval first), and the PHP
   library `nouxwell/tabula` in WSL (`\\wsl.localhost\ubuntu\home\hbalin\tabula`; write to it only
@@ -42,7 +44,7 @@ three packages versioned together.
 | `playground`    | A Vite app on the packages' sources, and the browser tests.                                            |
 | `examples/nuxt` | Nuxt 4 + Naive UI + Tailwind 4, set up as the CRM, on the packages' builds; its SSR test.              |
 | `conformance`   | Cases both this repository and `nouxwell/tabula` must pass alike.                                      |
-| `scripts`       | `check-packages.mjs`: the packages packed, installed and used as published.                            |
+| `scripts`       | `check-packages.mjs`: the packages packed, installed and used; `publish-packages.mjs`: the publish.    |
 | `spikes`        | Experiments kept for their numbers.                                                                    |
 
 ## Commands
@@ -105,5 +107,6 @@ Done means all of these pass. CI runs them on Node 22, 24 and 26.
 On `main`, one commit: the version in the three `package.json` files and in `version` in
 `packages/core/src/index.ts`, the changelog's Unreleased turned into the version's heading with
 its link at the bottom. Then an annotated tag `vX.Y.Z`, pushed with the commit, on the user's yes.
-Below 1.0 a minor version is where a breaking change lands. Publishing (`corepack pnpm -r
-publish`) is the user's.
+Below 1.0 a minor version is where a breaking change lands. The tag publishes the packages from
+GitHub Actions (`.github/workflows/publish.yml`, npm trusted publishing, no token); the tag's push
+is the user's yes to that.
