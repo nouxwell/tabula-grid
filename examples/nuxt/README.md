@@ -62,7 +62,9 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
 - **How cells look.** The toolbar's format group puts bold, italic, a text colour or a fill on the
   cells selected (Ctrl+B, Ctrl+I), aligns their columns and shows more or fewer decimals; the
   colours are kept with the draft and "Renkli" shows their rows. The rules drawer's Renkler tab
-  writes colour rules into the template. Toplu düzenle or Ctrl+H opens find and replace; under the
+  writes colour rules into the template, and its Biçim tab takes the columns' alignment and
+  decimals the user gave into it, for everyone who opens it ("Tablodaki biçimi al"); once saved,
+  they are the template's, not the user's. Toplu düzenle or Ctrl+H opens find and replace; under the
   rows are their totals, and by the status the row density and the zoom. F1 lists the shortcuts.
 - **One edge, two cards.** The toolbar is a card of two rows: what changes the data on top
   (Dosya, Toplu düzenle, the template with Kurallar, the issues switch), what is seen under it. The

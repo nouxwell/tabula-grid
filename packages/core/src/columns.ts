@@ -111,6 +111,9 @@ export interface ColumnFormat {
 	readonly decimals?: number
 }
 
+/** Each column's format, by field key. */
+export type ColumnFormats = Readonly<Record<string, ColumnFormat>>
+
 /**
  * A user's arrangement of the columns, kept with their view of the sheet. Only how the columns are
  * shown: hiding a required column relaxes nothing, and its issues are still listed.
@@ -125,7 +128,7 @@ export interface ColumnLayout {
 	/** Columns kept in place on the left while the sheet scrolls sideways. They are shown first. */
 	readonly pinned?: readonly string[]
 	/** How each column's values are drawn, by field key. */
-	readonly formats?: Readonly<Record<string, ColumnFormat>>
+	readonly formats?: ColumnFormats
 }
 
 export interface ArrangedColumns<F> {
@@ -231,6 +234,70 @@ export function withColumnFormat(
 	const rest: ColumnLayout = Object.fromEntries(Object.entries(layout).filter(([name]) => name !== "formats"))
 
 	return freezeColumnLayout(Object.keys(formats).length === 0 ? rest : { ...rest, formats })
+}
+
+/**
+ * Each column's format with each layer over the one before, property by property: a template's
+ * formats, then the user's own. What a layer leaves out, a column or one property of it, is the
+ * layer under's.
+ */
+export function mergeColumnFormats(...layers: readonly (ColumnFormats | undefined)[]): ColumnFormats {
+	const merged: Record<string, { align?: ColumnAlign; decimals?: number }> = {}
+
+	for (const layer of layers) {
+		for (const [key, format] of Object.entries(layer ?? {})) {
+			const next = { ...merged[key] }
+
+			if (format.align !== undefined) {
+				next.align = format.align
+			}
+
+			if (format.decimals !== undefined) {
+				next.decimals = format.decimals
+			}
+
+			if (Object.keys(next).length > 0) {
+				merged[key] = next
+			}
+		}
+	}
+
+	return Object.freeze(
+		Object.fromEntries(Object.entries(merged).map(([key, format]) => [key, Object.freeze(format)]))
+	)
+}
+
+/**
+ * The layout without what `under` already draws: each property of a column's format that `under`
+ * gives the same is taken off, and a format left with none goes. What a user keeps of their own once
+ * a template says the same, so that a change to the template later reaches them.
+ */
+export function withoutColumnFormats(layout: ColumnLayout, under: ColumnFormats | undefined): ColumnLayout {
+	let next = layout
+
+	for (const [key, format] of Object.entries(layout.formats ?? {})) {
+		const base = under?.[key]
+
+		if (!base) {
+			continue
+		}
+
+		const change: { align?: undefined; decimals?: undefined } = {}
+
+		if (format.align !== undefined && format.align === base.align) {
+			change.align = undefined
+		}
+
+		if (format.decimals !== undefined && format.decimals === base.decimals) {
+			change.decimals = undefined
+		}
+
+		if (Object.keys(change).length > 0) {
+			next = withColumnFormat(next, key, change)
+		}
+	}
+
+	return next
 }
 
 /**

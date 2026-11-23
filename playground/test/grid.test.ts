@@ -1155,6 +1155,27 @@ describe("TabulaGrid", () => {
 			})
 		})
 
+		it("draws a template's formats under the user's own, and brings them back when the user's go", async () => {
+			await withPage(5, async page => {
+				await setCell(page, 0, "newPrice", "1533.8")
+				await page.evaluate(() =>
+					window.__playground!.setDefaultFormats({ newPrice: { align: "center", decimals: 0 } })
+				)
+
+				await expect.poll(() => cell(page, 0, NEW_PRICE).innerText()).toBe("1.534")
+				await expect(cell(page, 0, NEW_PRICE).getAttribute("class")).resolves.toContain("is-center")
+
+				// The user's own decimals go over the template's; its alignment stays.
+				await page.evaluate(() => window.__playground!.setColumns({ formats: { newPrice: { decimals: 2 } } }))
+				await expect.poll(() => cell(page, 0, NEW_PRICE).innerText()).toBe("1.533,80")
+				await expect(cell(page, 0, NEW_PRICE).getAttribute("class")).resolves.toContain("is-center")
+
+				await page.evaluate(() => window.__playground!.setColumns({}))
+				await expect.poll(() => cell(page, 0, NEW_PRICE).innerText()).toBe("1.534")
+				await expect(page.evaluate(() => window.__playground!.columns())).resolves.toEqual({})
+			})
+		})
+
 		it("puts bold and italic on the cells selected with Ctrl+B and Ctrl+I, and takes them back with Ctrl+Z", async () => {
 			await withPage(
 				5,

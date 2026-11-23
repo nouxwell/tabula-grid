@@ -14,7 +14,7 @@
 	>
 		<AppDrawerContent :title="creating ? 'Kurallar · yeni şablon' : `Kurallar · ${template.name}`">
 			<div class="flex flex-col gap-2.5">
-				<div class="flex gap-2" role="group" aria-label="Kurallar">
+				<div class="flex flex-wrap gap-2" role="group" aria-label="Kurallar">
 					<AppButton
 						:type="tab === 'checks' ? 'primary' : 'default'"
 						:secondary="tab === 'checks'"
@@ -41,6 +41,15 @@
 						@click="tab = 'styles'"
 					>
 						Renkler · {{ styles.length }}
+					</AppButton>
+					<AppButton
+						:type="tab === 'formats' ? 'primary' : 'default'"
+						:secondary="tab === 'formats'"
+						:aria-pressed="tab === 'formats'"
+						:disabled="busy"
+						@click="tab = 'formats'"
+					>
+						Biçim · {{ formatItems.length }}
 					</AppButton>
 				</div>
 
@@ -200,7 +209,7 @@
 				</template>
 
 				<!-- Colour rules -->
-				<template v-else>
+				<template v-else-if="tab === 'styles'">
 					<p class="m-0 text-sm text-muted">
 						Koşula uyan hücreler bu şablonu açan herkeste aynı renkte görünür; değer değişince renk de
 						değişir. Yalnız görünüş: sunucuya giden değer aynı kalır.
@@ -273,6 +282,60 @@
 						<AppButton icon="plus" @click="addStyle">Renk kuralı ekle</AppButton>
 					</span>
 				</template>
+
+				<!-- Column formats -->
+				<template v-else>
+					<p class="m-0 text-sm text-muted">
+						Şablona yazılan hizalama ve ondalık, bu şablonu açan herkesin tablosunda görünür. Kişi kendi
+						biçimini verirse onunki geçerli olur. Değerlere dokunmaz.
+					</p>
+
+					<div
+						v-if="untaken.length > 0"
+						class="flex items-center gap-3 rounded-app border border-primary/45 bg-primary/5 px-3.5 py-3"
+					>
+						<span class="flex min-w-0 flex-1 flex-col gap-0.5">
+							<strong class="text-sm">
+								Tablonuzda şablonda olmayan {{ untaken.length }} sütun biçimi var
+							</strong>
+							<span class="text-sm text-muted">{{ untakenText }}</span>
+						</span>
+						<AppButton type="primary" @click="takeFormats">Tablodaki biçimi al</AppButton>
+					</div>
+
+					<AppCard
+						v-for="item in formatItems"
+						:key="item.key"
+						:class="item.fresh ? 'border-primary/55! shadow-[0_0_0_3px_rgba(0,178,123,0.10)]' : ''"
+						content-class="flex items-center gap-2.5 px-3! py-2.5!"
+					>
+						<strong class="min-w-0 flex-1 truncate text-sm">{{ item.label }}</strong>
+						<AppTag v-if="item.fresh" type="success">{{ item.fresh }}</AppTag>
+						<AppTag v-if="item.align">
+							<template #icon><AppIcon :name="item.align.icon" :size="14" /></template>
+							{{ item.align.word }}
+						</AppTag>
+						<AppTag v-if="item.decimals !== null">{{ item.decimals }} ondalık</AppTag>
+						<AppTooltip>
+							<template #trigger>
+								<AppButton
+									icon="trash"
+									:aria-label="`${item.label} sütununun biçimini kaldır`"
+									@click="removeFormat(item.key)"
+								/>
+							</template>
+							Biçimi kaldır
+						</AppTooltip>
+					</AppCard>
+
+					<p v-if="formatItems.length === 0" class="m-0 text-sm text-muted">
+						Bu şablonda henüz sütun biçimi yok.
+					</p>
+					<p class="m-0 text-sm text-muted">
+						Biçimi araç çubuğundaki hizalama ve ondalık düğmeleriyle verip buradan şablona alırsınız. Biçimi
+						kaldırılan sütun, sizin kendi biçiminiz yoksa alanının biçimine döner.
+					</p>
+				</template>
 			</div>
 
 			<template #footer>
@@ -305,9 +368,9 @@
 
 <script setup lang="ts">
 /**
- * The rules drawer, in three tabs: the template's row checks as sentences with how many rows each
- * catches now, the template's own columns with their formulas, and its colour rules with how many
- * rows each colours, each with an editor. A rule or a
+ * The rules drawer, in four tabs: the template's row checks as sentences with how many rows each
+ * catches now, the template's own columns with their formulas, its colour rules with how many rows
+ * each colours, each with an editor, and its column formats, taken from the user's own. A rule or a
  * formula is written against the sheet as it stands, so its preview follows every keystroke; a
  * column kept shows in the sheet at once, not yet saved. Nothing reaches the template until "Şablonu
  * kaydet", which the page hands to the server; "Vazgeç" and closing put the sheet back as saved.
@@ -318,18 +381,25 @@ import {
 	formatCell,
 	formulaWithLabels,
 	isFormulaError,
+	mergeColumnFormats,
 	ModuleSchema,
 	readTemplate,
 	rowsBreaking,
 	rowsStyled,
+	sameColumnFormats,
 	templateProblems,
 	type CheckInput,
+	type ColumnAlign,
+	type ColumnFormat,
+	type ColumnFormats,
+	type ColumnLayout,
 	type StyleRuleInput,
 	type FieldInput,
 	type ModuleSchemaInput,
 	type RowId,
 	type ValueSettings
 } from "@nouxwell/tabula-core"
+import type { IconName } from "~/components/atoms/AppIcon.vue"
 import { describeCheck, type GridLocale } from "@nouxwell/tabula-vue"
 import {
 	columnDraftOf,
@@ -356,10 +426,14 @@ const props = defineProps<{
 		readonly checks?: readonly CheckInput[]
 		readonly columns?: readonly FieldInput[]
 		readonly styles?: readonly StyleRuleInput[]
+		/** How the sheet opens; its `columns.formats` lie under every user's own. */
+		readonly view?: { readonly columns?: ColumnLayout } | null
 	}
+	/** The formats the user gave the columns themselves: what "Tablodaki biçimi al" takes. */
+	ownFormats: ColumnFormats
 	locale: GridLocale
 	settings: ValueSettings
-	/** Saves the template with its new checks and columns; resolves to whether it was kept. */
+	/** Saves the template with its new checks, columns, colours and formats; resolves to whether it was kept. */
 	save: (template: unknown) => Promise<boolean>
 	/** Each column's letter as the columns stand on screen, by field key: what an address in a formula names. */
 	letters: Readonly<Record<string, string>>
@@ -377,11 +451,12 @@ const emit = defineEmits<{
 const PREVIEW_ROWS = 5
 
 const moduleSchema = computed(() => ModuleSchema.from(props.moduleInput))
-const tab = ref<"checks" | "columns" | "styles">("checks")
+const tab = ref<"checks" | "columns" | "styles" | "formats">("checks")
 /** The template's checks and columns as they are being changed here, before the template is saved. */
 const checks = ref<CheckInput[]>([])
 const columns = ref<FieldInput[]>([])
 const styles = ref<StyleRuleInput[]>([])
+const formats = ref<ColumnFormats>({})
 const editing = ref<{ index: number | null; draft: RuleDraft } | null>(null)
 const columnEditing = ref<{ index: number | null; draft: ColumnDraft } | null>(null)
 const styleEditing = ref<{ index: number | null; draft: StyleDraft } | null>(null)
@@ -396,10 +471,14 @@ function copy<T>(value: T): T {
 	return JSON.parse(JSON.stringify(value)) as T
 }
 
+/** The template's column formats as saved. */
+const savedFormats = computed<ColumnFormats>(() => props.template.view?.columns?.formats ?? {})
+
 function reset(): void {
 	checks.value = copy(toRaw(props.template.checks ?? [])) as CheckInput[]
 	columns.value = copy(toRaw(props.template.columns ?? [])) as FieldInput[]
 	styles.value = copy(toRaw(props.template.styles ?? [])) as StyleRuleInput[]
+	formats.value = copy(toRaw(savedFormats.value))
 	editing.value = null
 	columnEditing.value = null
 	styleEditing.value = null
@@ -420,7 +499,8 @@ const changed = computed(
 	() =>
 		JSON.stringify(checks.value) !== JSON.stringify(props.template.checks ?? []) ||
 		JSON.stringify(columns.value) !== JSON.stringify(props.template.columns ?? []) ||
-		JSON.stringify(styles.value) !== JSON.stringify(props.template.styles ?? [])
+		JSON.stringify(styles.value) !== JSON.stringify(props.template.styles ?? []) ||
+		!sameColumnFormats({ formats: formats.value }, { formats: savedFormats.value })
 )
 
 /** The template as it stands here, to show or to save. */
@@ -431,8 +511,26 @@ function working(withChecks = checks.value, withColumns = columns.value, withSty
 		...toRaw(props.template),
 		checks: copy(withChecks),
 		columns: copy(withColumns),
-		styles: copy(withStyles)
+		styles: copy(withStyles),
+		...viewWith(copy(formats.value))
 	}
+}
+
+/**
+ * The template's view with these column formats in it: the rest of the view as it was. A template
+ * with no view and no formats is left without one.
+ */
+function viewWith(list: ColumnFormats): { view?: unknown } {
+	const view = toRaw(props.template.view) ?? null
+	const empty = Object.keys(list).length === 0
+
+	if (view === null && empty) {
+		return {}
+	}
+
+	const layout = Object.fromEntries(Object.entries(view?.columns ?? {}).filter(([name]) => name !== "formats"))
+
+	return { view: { ...view, columns: empty ? layout : { ...layout, formats: list } } }
 }
 
 /** The schema with the template applied as it would be with these checks and columns; null with its problems. */
@@ -718,6 +816,90 @@ function toggleStyleRows(): void {
 	emit("showRows", showing.value ? (draftStyle.value?.rows ?? []) : null)
 }
 
+// ---------------------------------------------------------------- column formats
+
+const ALIGNS: Readonly<Record<ColumnAlign, { readonly word: string; readonly icon: IconName }>> = {
+	left: { word: "Sola", icon: "alignLeft" },
+	center: { word: "Ortada", icon: "alignCenter" },
+	right: { word: "Sağa", icon: "alignRight" }
+}
+
+/** A column's header as the sheet shows it, or its key when the sheet no longer has it. */
+function labelOf(key: string): string {
+	return props.sheet.schema.has(key) ? props.sheet.schema.field(key).label : key
+}
+
+/** "Sağa · 0 ondalık", or "ortada". */
+function formatWords(format: ColumnFormat): string {
+	const words = [
+		...(format.align ? [ALIGNS[format.align].word.toLocaleLowerCase("tr")] : []),
+		...(format.decimals === undefined ? [] : [`${format.decimals} ondalık`])
+	]
+
+	return words.join(", ")
+}
+
+/** The keys in the order of the sheet's columns, those it does not have after them. */
+function inSheetOrder(keys: readonly string[]): string[] {
+	const place = new Map(props.sheet.schema.fields.map((field, index) => [field.key, index]))
+
+	return [...keys].sort((a, b) => (place.get(a) ?? Infinity) - (place.get(b) ?? Infinity))
+}
+
+const formatItems = computed(() =>
+	inSheetOrder(Object.keys(formats.value)).map(key => {
+		const format = formats.value[key] ?? {}
+		const saved = savedFormats.value[key]
+
+		return {
+			key,
+			label: labelOf(key),
+			align: format.align ? ALIGNS[format.align] : null,
+			decimals: format.decimals ?? null,
+			fresh: !saved
+				? "yeni"
+				: saved.align !== format.align || saved.decimals !== format.decimals
+					? "değişti"
+					: null
+		}
+	})
+)
+
+/**
+ * The columns the user drew their own way that the template does not draw so yet: what taking the
+ * sheet's formats would bring. Columns the sheet no longer has are passed over.
+ */
+const untaken = computed(() =>
+	inSheetOrder(Object.keys(props.ownFormats)).filter(key => {
+		const own = props.ownFormats[key]
+		const written = formats.value[key]
+
+		return (
+			props.sheet.schema.has(key) &&
+			own !== undefined &&
+			((own.align !== undefined && own.align !== written?.align) ||
+				(own.decimals !== undefined && own.decimals !== written?.decimals))
+		)
+	})
+)
+
+const untakenText = computed(() =>
+	untaken.value.map(key => `${labelOf(key)}: ${formatWords(props.ownFormats[key] ?? {})}`).join(" · ")
+)
+
+/** The user's formats written into the template, over what it had; shown in the sheet, not yet saved. */
+function takeFormats(): void {
+	const own = Object.fromEntries(untaken.value.map(key => [key, props.ownFormats[key] ?? {}]))
+
+	formats.value = copy(mergeColumnFormats(formats.value, own))
+	showPreview()
+}
+
+function removeFormat(key: string): void {
+	formats.value = Object.fromEntries(Object.entries(formats.value).filter(([name]) => name !== key))
+	showPreview()
+}
+
 // ---------------------------------------------------------------- columns
 
 /** Every field a formula may name, the template's columns too, by key and by label. */
@@ -855,17 +1037,32 @@ function showPreview(): void {
 	}
 }
 
+/**
+ * A save under way. The template changing under the drawer meanwhile is that save coming back, and
+ * the page makes the sheet again with it: the sheet as saved is not asked for a second time.
+ */
+let saving = false
+
 function stopPreview(): void {
 	if (previewing.value) {
 		previewing.value = false
-		emit("preview", null)
+
+		if (!saving) {
+			emit("preview", null)
+		}
 	}
 }
 
 /** The button spins until the server has answered; kept, the page makes the sheet again with it. */
 async function saveTemplate(): Promise<void> {
-	if (await props.save(working())) {
-		previewing.value = false
+	saving = true
+
+	try {
+		if (await props.save(working())) {
+			previewing.value = false
+		}
+	} finally {
+		saving = false
 	}
 }
 </script>

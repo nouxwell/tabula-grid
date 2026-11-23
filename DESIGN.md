@@ -259,6 +259,12 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 107 | Notes on cells                                      | package     | not chosen         |
 | 108 | Grouping and subtotals                              | package     | not chosen         |
 | 109 | Excel (.xlsx) import and export                     | CRM         | with the CRM       |
+| 110 | A template's formats under each user's own          | package     | done               |
+| 111 | A Biçim tab in the rules drawer (AD)                | application | done               |
+| 112 | "Şablona kaydet" in the format group (AE)           | application | not chosen         |
+| 113 | A user's formats move into the template saved       | application | done               |
+| 114 | Formats saved as a new template                     | application | done               |
+| 115 | The whole layout saved into the template            | application | not chosen         |
 | —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
 | —   | Saved views (personal views)                        | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)      | both        | done (phase two)   |

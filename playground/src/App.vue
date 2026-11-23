@@ -25,6 +25,7 @@ import {
 	UndoHistory,
 	VALUE_SETTINGS,
 	type Draft,
+	type ColumnFormats,
 	type ColumnLayout,
 	type DraftChanges,
 	type DraftOpening,
@@ -231,6 +232,8 @@ if (opened) {
 const widths = ref<Readonly<Record<string, number>>>(opened?.view.columnWidths ?? {})
 // The user's columns: hidden, pinned, moved. Kept in the draft with the widths.
 const columns = ref<ColumnLayout>(opened?.view.columns ?? {})
+/** A template's formats, under the user's own; the tests set them. */
+const defaultFormats = shallowRef<ColumnFormats | undefined>(undefined)
 
 // Saves the sheet a second after the user stops changing it. Not while a draft waits to be reviewed
 // or could not be read: that would write the sample sheet over it.
@@ -668,7 +671,8 @@ onMounted(() => {
 		widths: () => widths.value,
 		columns: () => columns.value,
 		marks,
-		setColumns: layout => (columns.value = layout)
+		setColumns: layout => (columns.value = layout),
+		setDefaultFormats: formats => (defaultFormats.value = formats)
 	}
 	grid.value?.focus()
 })
@@ -841,6 +845,7 @@ onMounted(() => {
 				:fit="formatting"
 				:totals="formatting"
 				:zoom="zoom"
+				:default-formats="defaultFormats"
 				@menu="onMenu"
 				@find="findOpen = true"
 			/>

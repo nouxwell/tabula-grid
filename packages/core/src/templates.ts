@@ -63,7 +63,12 @@ export interface GridTemplate {
 	readonly checks: readonly CheckInput[]
 	/** Colour rules added after the schema's own, written as a schema's; see `StyleRule`. */
 	readonly styles: readonly StyleRuleInput[]
-	/** How the sheet opens: the columns, widths, filters and sort, under each user's own views. */
+	/**
+	 * How the sheet opens: the columns, widths, filters and sort, under each user's own views. Its
+	 * column formats are not only where the sheet starts: they lie under each user's own whatever view
+	 * is open, so every user of the template sees them (`mergeColumnFormats`, the grid's
+	 * `defaultFormats`).
+	 */
 	readonly view: ViewState | null
 }
 

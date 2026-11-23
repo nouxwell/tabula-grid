@@ -1,6 +1,7 @@
 import type {
 	Adjustment,
 	CellMarks,
+	ColumnFormats,
 	ColumnLayout,
 	DraftSaver,
 	FormulaEngine,
@@ -42,6 +43,8 @@ export interface PlaygroundHandle {
 	/** With `?format=1`: the marks the user puts on cells. */
 	readonly marks: CellMarks | null
 	readonly setColumns: (layout: ColumnLayout) => void
+	/** The grid's `defaultFormats`: a template's formats, under the user's own. */
+	readonly setDefaultFormats: (formats: ColumnFormats | undefined) => void
 }
 
 declare global {

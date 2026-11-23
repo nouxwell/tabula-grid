@@ -261,10 +261,19 @@ export {
 	headerDisplayText,
 	mapColumnLayout,
 	MAX_SHOWN_DECIMALS,
+	mergeColumnFormats,
 	readColumnLayout,
 	resolveColumnSizing,
 	sameColumnFormats,
 	withColumn,
-	withColumnFormat
+	withColumnFormat,
+	withoutColumnFormats
 } from "./columns.js"
-export type { ArrangedColumns, ColumnAlign, ColumnFormat, ColumnLayout, ColumnSizing } from "./columns.js"
+export type {
+	ArrangedColumns,
+	ColumnAlign,
+	ColumnFormat,
+	ColumnFormats,
+	ColumnLayout,
+	ColumnSizing
+} from "./columns.js"

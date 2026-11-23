@@ -101,14 +101,27 @@ export function useSavedViews(models: ViewModels, locale: Ref<string>) {
 	 * and the sort.
 	 */
 	function open(sheetSchema: ModuleSchema, restoredLayout: boolean, layout: ViewState = PLAIN_VIEW): void {
-		schema.value = sheetSchema
-		base.value = layout
+		rebase(sheetSchema, layout)
 		views.value = stored(sheetSchema.module)
 
 		const first = views.value.views.find(view => view.id === views.value?.defaultId) ?? null
 
 		currentId.value = first?.id ?? null
-		put(first ?? layout, restoredLayout ? "filters" : undefined)
+		put(first ?? base.value, restoredLayout ? "filters" : undefined)
+	}
+
+	/**
+	 * The sheet made again under a schema, or a template saved, with the views as they are: what the
+	 * sheet is told against from now on, and nothing on screen changes. A template's column formats
+	 * are left out of its arrangement: the grid draws them under the user's own (`default-formats`),
+	 * and copied into the user's they would hide a later change to the template.
+	 */
+	function rebase(sheetSchema: ModuleSchema, layout: ViewState = PLAIN_VIEW): void {
+		schema.value = sheetSchema
+		base.value = {
+			...layout,
+			columns: Object.fromEntries(Object.entries(layout.columns).filter(([name]) => name !== "formats"))
+		}
 	}
 
 	/** Shows a saved view, or with null the sheet as its template or schema lays it out. */
@@ -159,7 +172,7 @@ export function useSavedViews(models: ViewModels, locale: Ref<string>) {
 		}
 	}
 
-	return { views, currentId, current, modified, open, show, saveAs, save, rename, remove, toggleDefault }
+	return { views, currentId, current, modified, open, rebase, show, saveAs, save, rename, remove, toggleDefault }
 }
 
 export type SavedViewsHandle = ReturnType<typeof useSavedViews>

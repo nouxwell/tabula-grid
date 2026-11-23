@@ -533,6 +533,7 @@
 							fit
 							totals
 							:zoom="zoom"
+							:default-formats="templateFormats"
 							@menu="onMenu"
 							@find="findOpen = true"
 						/>
@@ -843,6 +844,7 @@
 			:sheet="sheet"
 			:module-input="input"
 			:template="drawerTemplate"
+			:own-formats="columns.formats ?? {}"
 			:creating="templateId === null"
 			:locale="locale"
 			:settings="valueSettings"
@@ -1032,9 +1034,13 @@ import {
 	viewNameProblem,
 	withColumn,
 	withColumnFormat,
+	withoutColumnFormats,
+	mergeColumnFormats,
 	digitsFor,
 	MAX_SHOWN_DECIMALS,
 	type ColumnAlign,
+	type ColumnFormats,
+	type StyleRuleInput,
 	type FoundCell,
 	type MarkColor,
 	type ColumnFilters,
@@ -1085,6 +1091,8 @@ const { data: templates, refresh: refreshTemplates } = await useFetch<
 		readonly name: string
 		readonly checks?: readonly CheckInput[]
 		readonly columns?: readonly FieldInput[]
+		readonly styles?: readonly StyleRuleInput[]
+		readonly view?: { readonly columns?: ColumnLayout } | null
 	}[]
 >("/api/modules/price-update/templates")
 
@@ -1168,8 +1176,11 @@ function makeSheet(
 	schemaInput: ModuleSchemaInput,
 	rowList: readonly RowInit[],
 	carried?: readonly RowInit[],
-	/** A template to show in place of the saved one, keeping the columns as the user has them. */
-	preview?: { readonly template: unknown },
+	/**
+	 * Made again keeping the columns, filters and sort as the user has them: with a template to show in
+	 * place of the saved one (`template`), or with the template just saved (`template` left out).
+	 */
+	again?: { readonly template?: unknown },
 	/** The kept draft, opened with its fields mapped as the user chose. */
 	draft?: { readonly rename: Readonly<Record<string, string>> }
 ): void {
@@ -1185,7 +1196,8 @@ function makeSheet(
 	}
 
 	const sheetId = tab.sheetId
-	const template = preview ? preview.template : (templates.value?.find(item => item.id === templateId.value) ?? null)
+	const preview = again !== undefined && "template" in again
+	const template = preview ? again.template : (templates.value?.find(item => item.id === templateId.value) ?? null)
 	const made = createSheet(
 		schemaInput,
 		carried ?? rowList,
@@ -1213,8 +1225,10 @@ function makeSheet(
 	sheetKey.value++
 	sheet.value = made
 
-	if (!preview) {
+	if (!again) {
 		savedViews.open(made.schema, made.restored, made.template?.view ?? undefined)
+	} else if (!preview) {
+		savedViews.rebase(made.schema, made.template?.view ?? undefined)
 	}
 
 	if (made.templateError) {
@@ -1236,6 +1250,8 @@ const workbook = shallowRef<Workbook | null>(null)
 const currentTab = computed(() => workbook.value?.sheets.find(each => each.sheetId === workbook.value?.active) ?? null)
 /** A tab is being opened: the template it puts in the address is not a change of the sheet's. */
 let switchingTabs = false
+/** A template just made in the rules drawer: the sheet opens with it as the user has it. */
+let madeTemplate: { readonly id: string; readonly template: unknown } | null = null
 
 function workbookNow(): Workbook {
 	if (!workbook.value) {
@@ -1505,8 +1521,20 @@ watch(templateId, () => {
 
 	const carried = current.store.snapshot()
 	const unsaved = current.saver.dirty
+	// A template the user just made of what they wrote: the sheet stays as they have it, and says so itself.
+	const made = madeTemplate?.id === templateId.value ? madeTemplate : null
 
+	madeTemplate = null
 	current.dispose()
+
+	if (made) {
+		makeSheet(input.value, rows.value, carried, {})
+		dropTemplateFormats(made.template)
+		saveCarried(unsaved)
+
+		return
+	}
+
 	makeSheet(input.value, rows.value, carried)
 	saveCarried(unsaved)
 
@@ -1758,11 +1786,25 @@ async function saveTemplate(template: unknown): Promise<boolean> {
 	const unsaved = sheet.value.saver.dirty
 
 	sheet.value.dispose()
-	makeSheet(input.value, rows.value, carried)
+	makeSheet(input.value, rows.value, carried, {})
+	dropTemplateFormats(template)
 	saveCarried(unsaved)
 	message.success("Şablon kaydedildi; kurallar tabloda.")
 
 	return true
+}
+
+/** The column formats a template as the rules drawer gives it writes for everyone. */
+function formatsOf(template: unknown): ColumnFormats | undefined {
+	return (template as { readonly view?: { readonly columns?: ColumnLayout } | null }).view?.columns?.formats
+}
+
+/**
+ * Takes off the user's own formats that the template just saved now gives, so that a later change to
+ * the template reaches them too; what they drew another way stays theirs.
+ */
+function dropTemplateFormats(template: unknown): void {
+	columns.value = withoutColumnFormats(columns.value, formatsOf(template))
 }
 
 /**
@@ -1792,6 +1834,8 @@ async function createTemplate(template: unknown): Promise<boolean> {
 	}
 
 	await refreshTemplates()
+	// Left for the change of template in the address to find, whenever it comes.
+	madeTemplate = { id: made.id, template }
 	await navigateTo({ query: { ...route.query, template: made.id } }, { replace: true })
 	message.success(`«${name}» şablonu oluşturuldu; kuralları ve sütunları onunla açanlar görür.`)
 
@@ -1858,9 +1902,11 @@ function previewTemplate(template: unknown): void {
 	}
 
 	const carried = current.store.snapshot()
+	const unsaved = current.saver.dirty
 
 	current.dispose()
 	makeSheet(input.value, rows.value, carried, { template: template ?? templateInput.value })
+	saveCarried(unsaved)
 }
 
 /** Narrows the sheet to the rows a rule being written catches, or with null shows them all again. */
@@ -2244,11 +2290,14 @@ function chooseColorKey(key: string | number): void {
 	grid.value?.focus()
 }
 
-/** Where the active cell's column puts its values, when the user chose. */
+/** The column formats the template writes for everyone: drawn under the user's own. */
+const templateFormats = computed(() => sheet.value?.template?.view?.columns.formats)
+
+/** Where the active cell's column puts its values, when the user or the template chose. */
 const activeAlign = computed(() => {
 	const key = grid.value?.cell?.field.key
 
-	return key ? (columns.value.formats?.[key]?.align ?? null) : null
+	return key ? (mergeColumnFormats(templateFormats.value, columns.value.formats)[key]?.align ?? null) : null
 })
 
 /** The columns the selection spans, aligned; the alignment they had taken off when it is pressed again. */
@@ -2289,7 +2338,10 @@ function stepDecimals(by: 1 | -1): void {
 	}
 
 	columns.value = keys.reduce((layout, key) => {
-		const shown = layout.formats?.[key]?.decimals ?? digitsFor(current.schema.field(key), valueSettings.value)
+		const shown =
+			layout.formats?.[key]?.decimals ??
+			templateFormats.value?.[key]?.decimals ??
+			digitsFor(current.schema.field(key), valueSettings.value)
 		const next = Math.min(MAX_SHOWN_DECIMALS, Math.max(0, shown + by))
 
 		return withColumnFormat(layout, key, { decimals: next })

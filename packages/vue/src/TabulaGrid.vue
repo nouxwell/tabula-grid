@@ -12,6 +12,7 @@ import {
 	formulaParts,
 	hasRange,
 	headerDisplayText,
+	mergeColumnFormats,
 	parseTsv,
 	readInput,
 	REDO_ORIGIN,
@@ -45,6 +46,7 @@ import {
 	type Direction,
 	type FillMode,
 	type CellValue,
+	type ColumnFormats,
 	type ColumnLayout,
 	type FieldSchema,
 	type Issue,
@@ -158,7 +160,13 @@ const props = defineProps({
 	 */
 	totals: { type: Boolean, default: false },
 	/** How large the sheet is drawn, 1 as it is: its text, rows and widths together. */
-	zoom: { type: Number, default: 1 }
+	zoom: { type: Number, default: 1 },
+	/**
+	 * How each column is drawn until the user says otherwise, by field key: a template's formats, such
+	 * as its view's `columns.formats`. The user's own, in `columns`, go over them property by property,
+	 * and taking theirs off brings these back. Left out, each column is drawn its field's way.
+	 */
+	defaultFormats: { type: Object as PropType<ColumnFormats>, default: undefined }
 })
 
 const emit = defineEmits<{
@@ -329,8 +337,8 @@ const cellStyles = computed(() =>
 
 const headerHeight = computed(() => HEADER_HEIGHT + (props.columnLetters ? LETTERS_HEIGHT : 0))
 
-/** How each column is drawn over its field's own way, by field key: the user's formats. */
-const formats = computed(() => columns.value.formats ?? {})
+/** How each column is drawn over its field's own way, by field key: the user's formats over the defaults. */
+const formats = computed(() => mergeColumnFormats(props.defaultFormats, columns.value.formats))
 
 const cellClasses = computed(() =>
 	fields.value.map(field => {

@@ -359,6 +359,16 @@ sent to the backend. Where each look is kept is what tells them apart.
   columns.value = withColumnFormat(columns.value, "newPrice", { align: "center", decimals: 0 })
   ```
 
+  A template's formats, in its view's `columns.formats`, are for everyone who opens it: give them
+  to the grid's `defaultFormats`, and each user's own are drawn over them, property by property
+  (`mergeColumnFormats`). Taking one's own off brings the template's back. Once a template is saved
+  with the formats a user gave, `withoutColumnFormats` takes off what it now says from theirs, so a
+  later change to the template reaches them too.
+
+  ```vue
+  <TabulaGrid v-model:columns="columns" :default-formats="template.view?.columns.formats" … />
+  ```
+
 - **What the user colours by hand**, a fill, a text colour, bold, italic, is a `CellMarks`: kept
   with the draft, taken back with Ctrl+Z in its turn with the rows' changes, and `rowsMarked`
   filters a `RowView` to its rows. Give it to the grid's `marks`; Ctrl+B and Ctrl+I put bold and
@@ -922,6 +932,7 @@ narrows what the schema allows, never loosens it:
 | add columns of its own, a helper or a formula           | have them sent for processing                  |
 | add row checks (`checks`), each only refusing more      | take one of the schema's checks away           |
 | say how the sheet opens: columns, widths, filters, sort | override a user's own default view             |
+| draw columns its way: alignment, decimals, for everyone | change a value, or what is sent                |
 
 Only a module whose schema says `"customization": "controlled"` takes one; a `fixed` module
 refuses every template. A template is one JSON document the backend keeps and sends:
@@ -942,7 +953,12 @@ refuses every template. A template is one JSON document the backend keeps and se
     { "key": "withTax", "type": "money", "label": "KDV dahil", "decimals": 2, "formula": "ROUND([newPrice] * 1.2, 2)" },
     { "key": "internalNote", "type": "string", "label": "İç not" }
   ],
-  "view": { "columns": { "hidden": ["sku"], "pinned": ["productId"] }, "columnWidths": {}, "filters": {}, "sort": null }
+  "view": {
+    "columns": { "hidden": ["sku"], "pinned": ["productId"], "formats": { "currency": { "align": "center" } } },
+    "columnWidths": {},
+    "filters": {},
+    "sort": null
+  }
 }
 ```
 
@@ -961,6 +977,10 @@ through what the schema's min 0 refuses`, `columns[0].key: "note" is a field of 
 - **The sheet works with the result.** Its checks, its formulas and its columns are the schema's as
   the template left it; the template's columns come last and are never sent, so the backend sees
   the module's fields only.
+- **The view is where the sheet starts; its formats are always there.** The columns, widths,
+  filters and sort of `view` are where a user starts who has no view of their own, and theirs
+  replace them. Its `columns.formats` lie under every user's own formats whatever view is open (see
+  [How cells look](#how-cells-look)).
 - **Defaults.** A field's `default` (the schema's own, or one a template gives) fills new rows:
   the rows a paste adds past the last, and the rows an import brings (`withDefaults(schema, rows)`),
   where they give no value. A row already there is never changed by it.

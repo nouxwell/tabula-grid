@@ -6,6 +6,7 @@ import {
 	DraftSaver,
 	findCells,
 	formatCell,
+	mergeColumnFormats,
 	ModuleSchema,
 	openDraft,
 	readColumnLayout,
@@ -26,6 +27,7 @@ import {
 	VALUE_SETTINGS,
 	viewFor,
 	withColumnFormat,
+	withoutColumnFormats,
 	type ModuleSchemaInput,
 	type StyleRuleInput
 } from "../src/index"
@@ -91,6 +93,68 @@ describe("column formats", () => {
 
 		expect(() => withColumnFormat({}, "newPrice", { decimals: 7 })).toThrow(TabulaError)
 		expect(() => withColumnFormat({}, "newPrice", { align: "middle" as never })).toThrow(TabulaError)
+	})
+
+	it("lays a user's formats over a template's, property by property", () => {
+		const template = { newPrice: { align: "right", decimals: 0 }, currency: { align: "center" } } as const
+		const own = { newPrice: { decimals: 3 }, name: { align: "center" } } as const
+
+		expect(mergeColumnFormats(template, own)).toEqual({
+			newPrice: { align: "right", decimals: 3 },
+			currency: { align: "center" },
+			name: { align: "center" }
+		})
+		expect(mergeColumnFormats(undefined, own)).toEqual(own)
+		expect(mergeColumnFormats(template, undefined)).toEqual(template)
+		expect(mergeColumnFormats(undefined, undefined)).toEqual({})
+		expect(Object.isFrozen(mergeColumnFormats(template, own).newPrice)).toBe(true)
+	})
+
+	it("takes off what a template already draws, keeping what the user drew another way", () => {
+		const layout = withColumnFormat(
+			withColumnFormat({ hidden: ["name"] }, "newPrice", { align: "right", decimals: 0 }),
+			"currency",
+			{ align: "left" }
+		)
+
+		expect(withoutColumnFormats(layout, { newPrice: { decimals: 0 }, currency: { align: "center" } })).toEqual({
+			hidden: ["name"],
+			formats: { newPrice: { align: "right" }, currency: { align: "left" } }
+		})
+		expect(
+			withoutColumnFormats(layout, { newPrice: { align: "right", decimals: 0 }, currency: { align: "left" } })
+		).toEqual({ hidden: ["name"] })
+		expect(withoutColumnFormats(layout, undefined)).toBe(layout)
+	})
+
+	it("reads a template's column formats in its view", () => {
+		const template = readTemplate(
+			{
+				format: "tabula-grid.template",
+				version: 1,
+				module: "product.price_update",
+				id: "march",
+				name: "Mart kampanyası",
+				view: { columns: { formats: { newPrice: { align: "right", decimals: 0 } } } }
+			},
+			"product.price_update"
+		)
+
+		expect(template.view?.columns.formats).toEqual({ newPrice: { align: "right", decimals: 0 } })
+		expect(templateProblems(schema, template)).toEqual([])
+		expect(() =>
+			readTemplate(
+				{
+					format: "tabula-grid.template",
+					version: 1,
+					module: "product.price_update",
+					id: "march",
+					name: "Mart kampanyası",
+					view: { columns: { formats: { newPrice: { decimals: 9 } } } }
+				},
+				"product.price_update"
+			)
+		).toThrow(/view\.columns\.formats\.newPrice\.decimals/)
 	})
 
 	it("shows a number with the decimals a column asks for, keeping every digit of the value", () => {

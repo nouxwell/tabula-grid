@@ -7,6 +7,23 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+### Added
+
+- **A template's column formats, for everyone who opens it** (canvas items 110, 111, 113 and 114,
+  design AD). The alignment and decimals in a template's view, `view.columns.formats`, lie under
+  each user's own: the grid's `defaultFormats`, and `mergeColumnFormats` in the core, which lays one
+  layer over another property by property. `withoutColumnFormats` takes off a user's what a template
+  now says the same, so a later change to the template reaches them.
+- **The example's** rules drawer has a Biçim tab: the template's formats, each removable, and
+  "Tablodaki biçimi al" to write the user's own into it. Once saved, the user's formats that went
+  into the template are taken off theirs; with no template chosen, they make a new one. The December
+  template centres the currency.
+
+### Changed
+
+- **The example** keeps the sheet as the user has it, its columns, filters and sort, when the
+  rules drawer saves a template or makes a new one; before, it opened again in the default view.
+
 ## [0.4.0] — 2026-11-19
 
 How cells look, and what a spreadsheet user reaches for around them: a column's alignment and
