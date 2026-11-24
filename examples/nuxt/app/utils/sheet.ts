@@ -1,5 +1,6 @@
 import {
 	applyFormulas,
+	applyImport,
 	applyTemplate,
 	arrangeColumns,
 	csvDelimiterFor,
@@ -9,6 +10,7 @@ import {
 	FormulaEngine,
 	importTable,
 	LookupResolver,
+	matchRows,
 	ModuleSchema,
 	openDraft,
 	parseCsv,
@@ -24,7 +26,6 @@ import {
 	toCsv,
 	UndoHistory,
 	VALUE_SETTINGS,
-	withDefaults,
 	type ColumnLayout,
 	type Draft,
 	type DraftChanges,
@@ -32,12 +33,14 @@ import {
 	type LookupAdapters,
 	type ModuleSchemaInput,
 	type RowInit,
+	type Issue,
+	type RowId,
 	type SheetAdapters,
-	type TableImport,
 	CellMarks,
 	rowsMarked,
 	type MarksData
 } from "@nouxwell/tabula-core"
+import { issueText, type GridLocale } from "@nouxwell/tabula-vue"
 
 /** How the sheet reaches the example's server: here $fetch, in an application its own API client. */
 const adapters: SheetAdapters = {
@@ -71,10 +74,25 @@ function openKept(
 
 export type ValueLocale = keyof typeof VALUE_SETTINGS
 
-/** What an import brought: how many rows, and what became of each column of the file. */
-export interface ImportResult extends Pick<TableImport, "columns" | "missing" | "unreadable"> {
+/** How a file's rows go into the sheet, as the user chose in the import window. */
+export interface ImportChoice {
+	/** Which field each column goes to, by its position; null leaves it out. */
+	readonly columns: Readonly<Record<number, string | null>>
+	/** The column whose text finds rows in the sheet by this field, to write into them; null to add every row. */
+	readonly match: { readonly column: number; readonly field: string } | null
+	/** With `match`, what becomes of a row that finds none. */
+	readonly unmatched: "add" | "skip"
+}
+
+/** What an import did. */
+export interface ImportResult {
 	readonly added: number
-	/** The first row added, to go to; null when the file brought none. */
+	readonly updated: number
+	/** Rows of the file left out: finding none, or only rows already processed. */
+	readonly skipped: number
+	/** Cells whose text was not a value of their column: kept as written, and marked. */
+	readonly unreadable: number
+	/** The first row added or written into, to go to; null when there is none. */
 	readonly firstRowId: string | null
 }
 
@@ -230,23 +248,40 @@ export function createSheet(
 		}
 	}
 
-	/** Reads a CSV file as a spreadsheet writes it and adds its rows at the end, as one change. */
-	async function importCsv(file: File): Promise<ImportResult> {
-		const text = decodeText(new Uint8Array(await file.arrayBuffer()))
-		const result = importTable(parseCsv(text), { schema, settings: VALUE_SETTINGS[locale.value] })
-		const first = store.size
+	/** A CSV file's table, read as a spreadsheet writes it, for the import window to show. */
+	async function readCsv(file: File): Promise<string[][]> {
+		return parseCsv(decodeText(new Uint8Array(await file.arrayBuffer())))
+	}
 
-		if (result.rows.length > 0) {
-			// Columns the file does not have take the schema's defaults, as rows a paste adds do.
-			store.transact(() => store.appendRows(withDefaults(schema, result.rows)), { origin: "import" })
-		}
+	/**
+	 * A file's rows into the sheet as the user chose, as one change: written into the rows they find,
+	 * or added at the end with the schema's defaults where the file leaves a column out. Rows the
+	 * backend has processed are not written into.
+	 */
+	function importRows(table: readonly (readonly string[])[], choice: ImportChoice): ImportResult {
+		const settings = VALUE_SETTINGS[locale.value]
+		const imported = importTable(table, {
+			schema,
+			settings,
+			columns: choice.columns,
+			key: choice.match?.column ?? null
+		})
+		const matches = choice.match
+			? matchRows(store, schema.field(choice.match.field), imported.keys, settings)
+			: undefined
+		const applied = applyImport(store, schema, imported, {
+			...(matches ? { matches } : {}),
+			unmatched: choice.unmatched,
+			locked: rowId => session.results.isLocked(rowId)
+		})
+		const firstUpdated = matches?.find(found => found.length > 0)?.[0] ?? null
 
 		return {
-			added: result.rows.length,
-			firstRowId: result.rows.length > 0 ? (store.rowIdAt(first) ?? null) : null,
-			columns: result.columns,
-			missing: result.missing,
-			unreadable: result.unreadable
+			added: applied.added.length,
+			updated: applied.updated,
+			skipped: applied.skipped,
+			unreadable: imported.unreadable,
+			firstRowId: firstUpdated ?? applied.added[0] ?? null
 		}
 	}
 
@@ -256,13 +291,66 @@ export function createSheet(
 		const fields = arrangeColumns(schema.fields, columns.value).fields
 		const rowIds = Array.from({ length: view.size }, (_, index) => view.rowIdAt(index) ?? "")
 		const text = toCsv(exportTable({ store, fields, rowIds, settings }), { delimiter: csvDelimiterFor(settings) })
-		const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }))
-		const link = document.createElement("a")
 
-		link.href = url
-		link.download = `${schema.module}.csv`
-		link.click()
-		setTimeout(() => URL.revokeObjectURL(url), 0)
+		download(text, `${schema.module}.csv`)
+	}
+
+	/** The issues standing on each row, the backend's only or every one. */
+	function issuesByRow(only?: "server"): Map<RowId, Issue[]> {
+		const rows = new Map<RowId, Issue[]>()
+
+		for (const issue of session.issues.issues()) {
+			if (issue.rowId === null || (only === "server" && issue.source === "local")) {
+				continue
+			}
+
+			rows.set(issue.rowId, [...(rows.get(issue.rowId) ?? []), issue])
+		}
+
+		return rows
+	}
+
+	/** How many rows an issues file would hold. */
+	function issueRowCount(only?: "server"): number {
+		return issuesByRow(only).size
+	}
+
+	/**
+	 * The rows with issues, the backend's only or every one, as a file for Excel: each row's number
+	 * first, its columns as the sheet shows them, and its issues last, each with who found it. Fixed
+	 * and imported again, the rows are found by their product and written into; "Satır" and
+	 * "Sorunlar" go nowhere. Returns how many rows it wrote.
+	 */
+	function exportIssueRows(gridLocale: GridLocale, only?: "server"): number {
+		const settings = VALUE_SETTINGS[locale.value]
+		const byRow = issuesByRow(only)
+		const fields = arrangeColumns(schema.fields, columns.value).fields
+		const rowIds = store.rowIds().filter(rowId => byRow.has(rowId))
+		const words = (issue: Issue): string => {
+			const where = issue.field && schema.has(issue.field) ? `${schema.field(issue.field).label}: ` : ""
+			const who = issue.source === "local" ? "tarayıcı" : "sunucu"
+
+			return `${where}${issueText(issue, gridLocale, settings)} (${who}${issue.severity === "warning" ? ", uyarı" : ""})`
+		}
+
+		if (rowIds.length === 0) {
+			return 0
+		}
+
+		const table = exportTable({
+			store,
+			fields,
+			rowIds,
+			settings,
+			extra: [
+				{ header: "Satır", at: "start", text: rowId => String(store.indexOf(rowId) + 1) },
+				{ header: "Sorunlar", text: rowId => (byRow.get(rowId) ?? []).map(words).join(" · ") }
+			]
+		})
+
+		download(toCsv(table, { delimiter: csvDelimiterFor(settings) }), `${schema.module}-hatali-satirlar.csv`)
+
+		return rowIds.length
 	}
 
 	function dispose(): void {
@@ -302,10 +390,24 @@ export function createSheet(
 		onlyChanged,
 		onlyMarked,
 		search,
-		importCsv,
+		readCsv,
+		importRows,
 		exportCsv,
+		issueRowCount,
+		exportIssueRows,
 		dispose
 	}
+}
+
+/** Text saved as a file the browser downloads. */
+function download(text: string, name: string): void {
+	const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }))
+	const link = document.createElement("a")
+
+	link.href = url
+	link.download = name
+	link.click()
+	setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 export type Sheet = ReturnType<typeof createSheet>

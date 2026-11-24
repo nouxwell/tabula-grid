@@ -4,7 +4,7 @@ import { isFormulaError } from "./formula/error.js"
 import { Listeners } from "./listeners.js"
 import type { RowId, RowStore, StoreChange } from "./rows.js"
 import type { FieldRule, FieldSchema, ModuleSchema } from "./schema.js"
-import type { CellValue } from "./value.js"
+import { sameValue, type CellValue } from "./value.js"
 import { decimalText } from "./values/number.js"
 import { formatCell } from "./values/format.js"
 import { canonicalValue, isLookupValue, valueProblem, type ValueProblemCode } from "./values/read.js"
@@ -114,6 +114,28 @@ const MAX_TARGETS = 10
  * The schema's row checks are checked for the row a change touched, and only those that read the
  * field it changed. Their issues land on the cell each check is about, as errors or as warnings.
  */
+/**
+ * Whether a row holds nothing anyone gave it: every field empty or at its default, a formula's
+ * aside. Such a row, a new one nobody typed into or a pasted block's empty line, is neither checked
+ * nor sent; it is still the user's, kept with the draft until they delete it.
+ */
+export function isBlankRow(schema: ModuleSchema, get: (key: string) => CellValue): boolean {
+	return schema.fields.every(field => {
+		if (field.formula !== null) {
+			return true
+		}
+
+		const value = get(field.key)
+
+		return (
+			value === null ||
+			value === "" ||
+			(Array.isArray(value) && value.length === 0) ||
+			(field.default !== null && sameValue(value, field.default))
+		)
+	})
+}
+
 export class SheetValidator implements IssueSet {
 	readonly #schema: ModuleSchema
 	readonly #store: RowStore
@@ -128,6 +150,8 @@ export class SheetValidator implements IssueSet {
 	readonly #checksOf = new Map<string, RowCheck[]>()
 	/** Each row's broken checks, by check id. */
 	readonly #broken = new Map<RowId, Map<string, Issue>>()
+	/** Rows holding nothing anyone gave them (`isBlankRow`): not checked. */
+	readonly #blank = new Set<RowId>()
 	readonly #listeners = new Listeners<SheetValidator>()
 	readonly #unsubscribe: () => void
 	#version = 0
@@ -311,6 +335,7 @@ export class SheetValidator implements IssueSet {
 	#checkAll(): void {
 		this.#cells.clear()
 		this.#broken.clear()
+		this.#blank.clear()
 
 		for (const groups of this.#groups.values()) {
 			groups.clear()
@@ -329,7 +354,15 @@ export class SheetValidator implements IssueSet {
 		for (const operation of change.operations) {
 			switch (operation.kind) {
 				case "set":
-					if (this.#store.has(operation.rowId) && this.#schema.has(operation.field)) {
+					if (!this.#store.has(operation.rowId) || !this.#schema.has(operation.field)) {
+						break
+					}
+
+					// A row that was blank is checked whole once something is in it, and one left blank
+					// says nothing.
+					if (this.#blank.has(operation.rowId) || this.#isBlank(operation.rowId)) {
+						this.#checkRow(operation.rowId)
+					} else {
 						this.#checkCell(operation.rowId, this.#schema.field(operation.field))
 						this.#checkChecks(operation.rowId, this.#checksOf.get(operation.field) ?? [])
 					}
@@ -359,6 +392,15 @@ export class SheetValidator implements IssueSet {
 	}
 
 	#checkRow(rowId: RowId): void {
+		if (this.#isBlank(rowId)) {
+			this.#forget(rowId)
+			this.#blank.add(rowId)
+
+			return
+		}
+
+		this.#blank.delete(rowId)
+
 		for (const field of this.#schema.fields) {
 			this.#checkCell(rowId, field)
 		}
@@ -425,9 +467,14 @@ export class SheetValidator implements IssueSet {
 		}
 	}
 
+	#isBlank(rowId: RowId): boolean {
+		return isBlankRow(this.#schema, key => this.#store.get(rowId, key))
+	}
+
 	#forget(rowId: RowId): void {
 		this.#cells.delete(rowId)
 		this.#broken.delete(rowId)
+		this.#blank.delete(rowId)
 
 		for (const field of this.#groups.keys()) {
 			this.#regroup(rowId, field, null)

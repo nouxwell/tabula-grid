@@ -222,15 +222,17 @@
 							@click="togglePanel"
 						>
 							<template #icon><AppIcon :name="issueCount > 0 ? 'alert' : 'saved'" /></template>
-							<template v-if="issueCount > 0">
-								Sorunlar
-								<span
-									class="ml-1.5 inline-flex min-w-5 justify-center rounded-full bg-error px-1.5 text-xs leading-5 font-bold text-white tabular-nums"
-								>
-									<AppNumberAnimation :to="issueCount" locale="tr-TR" />
+							<Transition name="fade" mode="out-in">
+								<span v-if="issueCount > 0" key="issues" class="inline-flex items-center">
+									Sorunlar
+									<span
+										class="ml-1.5 inline-flex min-w-5 justify-center rounded-full bg-error px-1.5 text-xs leading-5 font-bold text-white tabular-nums"
+									>
+										<AppNumberAnimation :to="issueCount" locale="tr-TR" />
+									</span>
 								</span>
-							</template>
-							<template v-else>Sorun yok</template>
+								<span v-else key="none">Sorun yok</span>
+							</Transition>
 						</AppButton>
 					</span>
 					<input ref="csvInput" type="file" accept=".csv,text/csv" hidden @change="importChosen" />
@@ -282,22 +284,24 @@
 									<AppNumberAnimation :to="changeSummary.rows" locale="tr-TR" />
 								</span>
 							</button>
-							<button
-								v-if="markedRows > 0 || onlyMarked"
-								type="button"
-								class="flex items-center gap-1.5 border-l border-divider px-2.5 py-1"
-								:class="onlyMarked ? 'bg-primary/10 font-semibold text-primary-text' : 'text-muted'"
-								:aria-pressed="onlyMarked"
-								title="Elle renklendirilmiş hücresi olan satırlar"
-								@click="showMarked"
-							>
-								Renkli
-								<span
-									class="rounded-full bg-surface-alt px-1.5 text-xs font-normal text-text tabular-nums"
+							<Transition name="grow">
+								<button
+									v-if="markedRows > 0 || onlyMarked"
+									type="button"
+									class="flex items-center gap-1.5 border-l border-divider px-2.5 py-1"
+									:class="onlyMarked ? 'bg-primary/10 font-semibold text-primary-text' : 'text-muted'"
+									:aria-pressed="onlyMarked"
+									title="Elle renklendirilmiş hücresi olan satırlar"
+									@click="showMarked"
 								>
-									<AppNumberAnimation :to="markedRows" locale="tr-TR" />
-								</span>
-							</button>
+									Renkli
+									<span
+										class="rounded-full bg-surface-alt px-1.5 text-xs font-normal text-text tabular-nums"
+									>
+										<AppNumberAnimation :to="markedRows" locale="tr-TR" />
+									</span>
+								</button>
+							</Transition>
 						</span>
 						<Transition name="fade">
 							<span v-if="changeSummary.missing > 0" class="whitespace-nowrap text-muted">
@@ -478,11 +482,36 @@
 				</div>
 			</AppCard>
 
+			<!-- A run the backend took only part of: what it refused, to fix here or in Excel. -->
+			<Transition name="fade-up">
+				<div
+					v-if="refused"
+					class="flex flex-none flex-wrap items-center gap-3 rounded-app border border-error/30 bg-error/5 px-4 py-2.5"
+					role="status"
+				>
+					<AppIcon name="alert" class="text-error" />
+					<span class="flex min-w-0 flex-1 flex-col">
+						<strong class="text-sm">
+							Sunucu {{ refused.succeeded }} satırı işledi, {{ refused.failed }} satırı reddetti.
+						</strong>
+						<span class="text-sm text-muted">
+							Reddedilenler tabloda kaldı. Burada düzeltip yeniden gönderin ya da dosya olarak indirip
+							Excel'de düzeltin.
+						</span>
+					</span>
+					<AppButton @click="showIssueRows">Yalnız sorunlu satırlar</AppButton>
+					<AppButton type="primary" icon="download" :disabled="issueRows === 0" @click="downloadIssues()">
+						Hatalı satırları indir
+					</AppButton>
+					<AppButton icon="close" aria-label="Kapat" quaternary @click="refused = null" />
+				</div>
+			</Transition>
+
 			<main class="flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
 				<!-- The sheet's card: the formula bar on top, the workbook's tabs and the status under it. -->
 				<AppCard
 					class="min-h-[320px] min-w-0 flex-1 overflow-hidden"
-					content-class="flex min-h-0 flex-col p-0!"
+					content-class="relative flex min-h-0 flex-col p-0!"
 				>
 					<TabulaFormulaBar
 						class="flex-none border-b border-divider px-3 py-2"
@@ -532,6 +561,7 @@
 							:found="found ?? undefined"
 							fit
 							totals
+							new-row
 							:zoom="zoom"
 							:default-formats="templateFormats"
 							@menu="onMenu"
@@ -553,12 +583,45 @@
 							</template>
 						</div>
 					</Transition>
+					<!-- A sheet with no rows yet says how to fill it; the row under the headers adds one. -->
+					<Transition name="fade">
+						<div
+							v-if="sheetEmpty"
+							class="pointer-events-none absolute inset-x-0 top-[150px] bottom-14 flex items-center justify-center p-4"
+						>
+							<div
+								class="pointer-events-auto flex max-w-[520px] flex-col items-center gap-2.5 rounded-xl border border-dashed border-divider bg-surface px-7 py-6 text-center"
+								@click="grid?.focus()"
+							>
+								<AppIcon name="table" :size="34" class="text-primary-text" />
+								<strong class="font-display text-[17px] font-semibold">Bu sayfa boş</strong>
+								<span class="text-sm leading-relaxed text-muted">
+									Sütunlar hazır, satır yok. Excel'den kopyaladığınız satırları buraya yapıştırın, bir
+									dosyadan içe aktarın ya da üstteki "Yeni satır"a tıklayıp yazın.
+								</span>
+								<span
+									class="mt-1 flex flex-wrap items-center justify-center gap-2.5 text-sm text-muted"
+								>
+									<AppButton type="primary" icon="upload" @click.stop="chooseImport">
+										Dosyadan içe aktar
+									</AppButton>
+									<span>ya da</span>
+									<kbd
+										class="rounded-app border border-divider bg-surface-alt px-1.5 py-0.5 font-mono text-xs"
+									>
+										Ctrl+V
+									</kbd>
+								</span>
+							</div>
+						</div>
+					</Transition>
 					<div class="flex flex-none items-stretch border-t border-divider">
 						<TabulaSheetTabs
 							v-if="workbook"
 							v-model:active="openTab"
 							class="min-w-0 flex-1"
 							:tabs="sheetTabs"
+							:add-options="ADD_OPTIONS"
 							:disabled="tabsBusy"
 							:theme="theme"
 							:locale="locale"
@@ -659,7 +722,7 @@
 							@select="issue => grid?.goTo(issue.rowId!, issue.field)"
 							@refresh-rows="sheet.view.refresh()"
 						>
-							<template v-if="narrow || errors > 0" #actions>
+							<template v-if="narrow || errors > 0 || issueRows > 0" #actions>
 								<p
 									v-if="errors > 0"
 									class="m-0 flex w-full items-center gap-2 rounded-app bg-error/10 px-3 py-2.5 text-sm text-error"
@@ -677,6 +740,15 @@
 									@click="check"
 								>
 									Yeniden kontrol et
+								</AppButton>
+								<AppButton
+									v-if="issueRows > 0"
+									icon="download"
+									:size="narrow ? 'large' : undefined"
+									:block="narrow"
+									@click="downloadIssues()"
+								>
+									Hatalı satırları indir ({{ issueRows }})
 								</AppButton>
 							</template>
 						</TabulaIssues>
@@ -798,45 +870,17 @@
 			</AppModalScrollWrapper>
 		</AppModal>
 
-		<AppModal v-model:show="importOpen" title="İçe aktarma" width="560px">
-			<AppModalScrollWrapper>
-				<div v-if="imported" class="flex flex-col gap-4">
-					<p class="m-0">
-						<strong>{{ imported.added }}</strong>
-						satır eklendi
-						<template v-if="imported.unreadable > 0">
-							;
-							<strong>{{ imported.unreadable }}</strong>
-							hücre okunamadı ve işaretlendi
-						</template>
-						.
-					</p>
-					<ul class="m-0 flex list-none flex-col gap-1 p-0">
-						<li
-							v-for="column in imported.columns"
-							:key="column.index"
-							class="flex min-h-9 items-center gap-3 rounded-app px-2 odd:bg-surface-alt"
-						>
-							<span class="flex-1 truncate">{{ column.header || `${column.index + 1}. sütun` }}</span>
-							<span
-								class="text-sm"
-								:class="column.status === 'matched' ? 'text-primary-text' : 'text-muted'"
-							>
-								{{ columnStatus(column) }}
-							</span>
-						</li>
-					</ul>
-					<p v-if="imported.missing.length > 0" class="m-0 text-error">
-						Dosyada olmayan zorunlu alanlar: {{ imported.missing.map(labelOf).join(", ") }}
-					</p>
-				</div>
-			</AppModalScrollWrapper>
-			<template #footer>
-				<div class="flex justify-end">
-					<AppButton type="primary" @click="importOpen = false">Tamam</AppButton>
-				</div>
-			</template>
-		</AppModal>
+		<ImportDialog
+			v-if="sheet && importFile"
+			v-model:show="importOpen"
+			:file-name="importFile.name"
+			:table="importFile.table"
+			:schema="sheet.schema"
+			:store="sheet.store"
+			:settings="valueSettings"
+			:remembered="importMemory"
+			@import="onImport"
+		/>
 
 		<RulesDrawer
 			v-if="sheet && input && drawerTemplate"
@@ -1020,6 +1064,8 @@
 import {
 	addSheet,
 	createDraft,
+	ModuleSchema,
+	RowStore,
 	moveSheet,
 	openSheet,
 	removeSheet,
@@ -1051,7 +1097,6 @@ import {
 	type ModuleSchemaInput,
 	type Adjustment,
 	type Draft,
-	type ModuleSchema,
 	type ProcessPlan,
 	type RowId,
 	type RowInit,
@@ -1070,7 +1115,8 @@ import { h, type VNode } from "vue"
 import AppCard from "~/components/atoms/AppCard.vue"
 import AppIcon, { type IconName } from "~/components/atoms/AppIcon.vue"
 import { localeMenu, type Locale } from "~/utils/locales"
-import type { ImportResult, Sheet } from "~/utils/sheet"
+import type { ImportChoice, Sheet } from "~/utils/sheet"
+import type { ImportMemory } from "~/components/ImportDialog.vue"
 import { loadWorkbook, newId, storeWorkbook } from "~/utils/workbook"
 import { FIT_TOOLTIP_STYLE } from "~/utils/tooltip"
 import { MARK_SWATCHES } from "~/utils/styles"
@@ -1132,7 +1178,8 @@ const csvInput = ref<HTMLInputElement | null>(null)
 const importOpen = ref(false)
 /** A file being read: the İçe aktar button spins until its rows are in. */
 const importing = ref(false)
-const imported = shallowRef<ImportResult | null>(null)
+/** The file being imported: its name and its table, while the import window is open. */
+const importFile = shallowRef<{ readonly name: string; readonly table: string[][] } | null>(null)
 
 /** A phone's width: the issues open as a sheet from the bottom, and buttons are a finger wide. */
 const narrow = ref(false)
@@ -1196,6 +1243,11 @@ function makeSheet(
 	}
 
 	const sheetId = tab.sheetId
+
+	// What a run on the sheet being replaced was refused is not this sheet's to say.
+	if (!again) {
+		refused.value = null
+	}
 	const preview = again !== undefined && "template" in again
 	const template = preview ? again.template : (templates.value?.find(item => item.id === templateId.value) ?? null)
 	const made = createSheet(
@@ -1211,8 +1263,9 @@ function makeSheet(
 			carried: carried !== undefined,
 			// The colours the user put on carried rows go with them.
 			...(carried && sheet.value ? { marks: sheet.value.marks.toJSON() } : {}),
-			// The server's rows: what the user's changes are told against, whichever rows the sheet opens with.
-			baseline: rowList,
+			// The server's rows: what the user's changes are told against, whichever rows the sheet opens with;
+			// a blank sheet's rows are all its own.
+			baseline: tab.meta.blank === true ? [] : rowList,
 			...(draft ? { mapping: draft } : {})
 		}
 	)
@@ -1325,7 +1378,9 @@ async function leaveTab(): Promise<void> {
 	}
 
 	await current.saver.save()
-	keepWorkbook(withSheet(workbookNow(), tab.sheetId, { meta: { errors: errors.value, done: runDone.value } }))
+	keepWorkbook(
+		withSheet(workbookNow(), tab.sheetId, { meta: { ...tab.meta, errors: errors.value, done: runDone.value } })
+	)
 	current.dispose()
 	sheet.value = null
 }
@@ -1362,15 +1417,44 @@ function freeName(base: string): string {
 	return `${base} ${number}`
 }
 
-/** A new sheet after the open one, from the server's rows, with no template. */
-async function addTab(): Promise<void> {
-	if (tabsBusy.value) {
+/** The ways + adds a sheet: as now, from the server's rows, or empty, for rows to paste or import. */
+const ADD_OPTIONS = [
+	{ key: "server", label: "Sunucudaki satırlarla", description: "Var olanları güncellemek için, şimdiki gibi" },
+	{
+		key: "blank",
+		label: "Boş sayfa",
+		description: "Aynı sütunlar, satır yok: yapıştırmak, içe aktarmak, yazmak için"
+	}
+] as const
+
+/**
+ * A new sheet after the open one, with no template: from the server's rows, or empty, its draft
+ * made with no rows so it opens so.
+ */
+async function addTab(key?: string): Promise<void> {
+	if (tabsBusy.value || !input.value) {
 		return
 	}
 
+	const blank = key === "blank"
+	const draft = blank
+		? createDraft({ id: newId(), schema: ModuleSchema.from(input.value), store: new RowStore({ rows: [] }) })
+		: null
+
 	await leaveTab()
-	keepWorkbook(addSheet(workbookNow(), { name: freeName("Sayfa") }, workbookNow().active).workbook)
+	keepWorkbook(
+		addSheet(
+			workbookNow(),
+			// A blank sheet keeps saying so: what it changed is told against no rows, not the server's.
+			{ name: freeName(blank ? "Boş sayfa" : "Sayfa"), ...(draft ? { draft, meta: { blank: true } } : {}) },
+			workbookNow().active
+		).workbook
+	)
 	await enterTab()
+
+	if (blank) {
+		void nextTick(() => grid.value?.focus())
+	}
 }
 
 function renameTab(id: string, name: string): void {
@@ -1407,8 +1491,16 @@ async function duplicateTab(id: string): Promise<void> {
 
 	await leaveTab()
 	keepWorkbook(
-		addSheet(workbookNow(), { name: `${source.name} (kopya)`, template: source.template, draft: copied }, id)
-			.workbook
+		addSheet(
+			workbookNow(),
+			{
+				name: `${source.name} (kopya)`,
+				template: source.template,
+				draft: copied,
+				...(source.meta.blank === true ? { meta: { blank: true } } : {})
+			},
+			id
+		).workbook
 	)
 	await enterTab()
 }
@@ -1634,7 +1726,7 @@ function menuIcon(name: IconName): () => VNode {
 }
 
 /** Reading a file in and writing one out, under one button. */
-const fileOptions: DropdownOption[] = [
+const fileOptions = computed<DropdownOption[]>(() => [
 	{
 		type: "group",
 		label: "İçe aktar",
@@ -1651,22 +1743,37 @@ const fileOptions: DropdownOption[] = [
 		key: "export",
 		children: [
 			{ label: "CSV dosyası", key: "export:csv", icon: menuIcon("download") },
+			{
+				label: `Hatalı satırlar (${issueRows.value})`,
+				key: "export:issues",
+				icon: menuIcon("alert"),
+				disabled: issueRows.value === 0
+			},
+			{
+				label: "Yalnız sunucunun bulduğu sorunlar",
+				key: "export:server-issues",
+				disabled: issueRows.value === 0
+			},
 			{ label: "Excel dosyası (sunucuda yazılır)", key: "export:xlsx", disabled: true }
 		]
 	}
-]
+])
 
 function chooseFile(key: string | number): void {
 	if (key === "import:csv") {
 		chooseImport()
 	} else if (key === "export:csv") {
 		chooseExport()
+	} else if (key === "export:issues") {
+		downloadIssues()
+	} else if (key === "export:server-issues") {
+		downloadIssues("server")
 	}
 }
 
 /** Below a wide screen, what the first row has no room for: the file menu and the rules. */
 const moreOptions = computed<DropdownOption[]>(() => [
-	...fileOptions,
+	...fileOptions.value,
 	{ type: "divider", key: "more-line" },
 	{ label: "Kurallar", key: "rules", icon: menuIcon("rules"), disabled: !drawerTemplate.value }
 ])
@@ -1699,33 +1806,106 @@ async function importChosen(event: Event): Promise<void> {
 
 	importing.value = true
 
-	const result = await sheet.value.importCsv(file).finally(() => (importing.value = false))
+	const table = await sheet.value.readCsv(file).finally(() => (importing.value = false))
+
+	if (table.length < 2) {
+		message.warning("Dosyada başlık satırından sonra satır yok.")
+
+		return
+	}
+
+	importMemory.value = readImportMemory(sheet.value.schema.module)
+	importFile.value = { name: file.name, table }
+	importOpen.value = true
+}
+
+/** Where a module's headers went in the last imports: what the import window suggests first. */
+const IMPORT_KEY = "tabula-grid.example-nuxt.import"
+const importMemory = shallowRef<ImportMemory | null>(null)
+
+function readImportMemory(module: string): ImportMemory | null {
+	try {
+		const kept = JSON.parse(localStorage.getItem(IMPORT_KEY) ?? "{}") as Record<string, ImportMemory>
+
+		return kept[module] ?? null
+	} catch {
+		return null
+	}
+}
+
+function keepImportMemory(module: string, memory: ImportMemory): void {
+	try {
+		const kept = JSON.parse(localStorage.getItem(IMPORT_KEY) ?? "{}") as Record<string, ImportMemory>
+		// A header this file had goes where it went now; the others where they went before.
+		const headers = { ...kept[module]?.headers, ...memory.headers }
+
+		localStorage.setItem(IMPORT_KEY, JSON.stringify({ ...kept, [module]: { ...memory, headers } }))
+	} catch {
+		// Full or switched off: the next import suggests from the headers alone.
+	}
+}
+
+/** The import window's choice put into the sheet as one change, and said in a line. */
+function onImport(choice: ImportChoice, memory: ImportMemory): void {
+	const current = sheet.value
+	const chosen = importFile.value
+
+	if (!current || !chosen) {
+		return
+	}
+
+	keepImportMemory(current.schema.module, memory)
+
+	const result = current.importRows(chosen.table, choice)
+	const done = [
+		result.updated > 0 ? `${result.updated} satır güncellendi` : "",
+		result.added > 0 ? `${result.added} satır eklendi` : "",
+		result.skipped > 0 ? `${result.skipped} satır alınmadı` : ""
+	].filter(Boolean)
 
 	if (result.firstRowId) {
 		grid.value?.goTo(result.firstRowId)
 	}
 
-	imported.value = result
-	importOpen.value = true
+	if (done.length === 0) {
+		message.info("Dosya tabloda bir şey değiştirmedi.")
+
+		return
+	}
+
+	message.success(
+		`${done.join(", ")}.${result.unreadable > 0 ? ` ${result.unreadable} hücre okunamadı ve işaretlendi.` : ""} Ctrl+Z geri alır.`
+	)
 }
 
-const STATUS_TEXT: Readonly<Record<string, string>> = {
-	unknown: "Tanınmadı, alınmadı",
-	duplicate: "Aynı alan iki kez, alınmadı",
-	read_only: "Elle girilmez, alınmadı",
-	skipped: "Alınmadı"
+/** How many rows have issues: what an issues file would hold. */
+const issueRows = computed(() => (version.value >= 0 ? (sheet.value?.session.issues.summary().rows ?? 0) : 0))
+
+/**
+ * The rows with issues as a file for Excel, every one or only those the backend found: to fix there
+ * and import again, where the rows are found by their product and written into.
+ */
+function downloadIssues(only?: "server"): void {
+	const written = sheet.value?.exportIssueRows(locale.value, only) ?? 0
+
+	if (written === 0) {
+		message.info(only ? "Sunucunun bulduğu sorun yok." : "Sorunlu satır yok.")
+	} else {
+		message.success(`${written} sorunlu satır indirildi. Düzeltip Dosya → İçe aktar ile geri yükleyin.`)
+	}
 }
 
-/** What became of a column of the file: the field it went to, or why it was left out. */
-function columnStatus(column: ImportResult["columns"][number]): string {
-	return column.status === "matched" && column.field
-		? `→ ${labelOf(column.field)}`
-		: (STATUS_TEXT[column.status] ?? "")
+/** The last run, when the backend refused some of its rows: said over the sheet until closed. */
+const refused = ref<{ readonly succeeded: number; readonly failed: number } | null>(null)
+
+/** Only the rows with issues, and the issues beside them. */
+function showIssueRows(): void {
+	onlyIssueRows.value = true
+	showIssues()
 }
 
-function labelOf(key: string): string {
-	return input.value?.fields.find(field => field.key === key)?.label ?? key
-}
+/** The sheet has no rows at all, such as an empty one just added: it says how to fill it. */
+const sheetEmpty = computed(() => version.value >= 0 && sheet.value !== null && sheet.value.store.size === 0)
 
 // ---------------------------------------------------------------- templates
 
@@ -2832,6 +3012,7 @@ async function run(): Promise<void> {
 		showIssues()
 	} else if (outcome.status === "succeeded" || outcome.status === "partial" || outcome.status === "failed") {
 		message.info(`${outcome.succeeded} satır uygulandı, ${outcome.failed} satır uygulanamadı.`)
+		refused.value = outcome.failed > 0 ? { succeeded: outcome.succeeded, failed: outcome.failed } : null
 	} else if (outcome.status === "nothing") {
 		message.info("Gönderilecek satır yok.")
 	} else {

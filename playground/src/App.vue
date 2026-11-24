@@ -170,8 +170,19 @@ const menuItems: readonly GridMenuItem[] = [
 // `?letters=1`: the columns' letters over their headers.
 const columnLetters = params.get("letters") === "1"
 
-// `?tabs=1`: the sheet tabs under the sheet, over a list kept here, for their tests.
+// `?tabs=1`: the sheet tabs under the sheet, over a list kept here, for their tests. `&addmenu=1`:
+// + offers the ways to add one.
 const showTabs = params.get("tabs") === "1"
+const ADD_OPTIONS =
+	params.get("addmenu") === "1"
+		? [
+				{ key: "server", label: "Sunucudaki satırlarla" },
+				{ key: "blank", label: "Boş sayfa", description: "Aynı sütunlar, satır yok" }
+			]
+		: []
+
+// `?entry=1`: the row after the last, that adds one.
+const entry = params.get("entry") === "1"
 const sheetTabs = ref<SheetTab[]>([
 	{ id: "a", name: "Fiyat listesi", errors: 2 },
 	{ id: "b", name: "Mart", done: true },
@@ -179,10 +190,11 @@ const sheetTabs = ref<SheetTab[]>([
 ])
 const openTab = ref("a")
 
-function addTab(): void {
+function addTab(key?: string): void {
 	const id = `t${sheetTabs.value.length + 1}`
+	const name = `${key === "blank" ? "Boş" : "Sayfa"} ${sheetTabs.value.length + 1}`
 
-	sheetTabs.value = [...sheetTabs.value, { id, name: `Sayfa ${sheetTabs.value.length + 1}` }]
+	sheetTabs.value = [...sheetTabs.value, { id, name }]
 	openTab.value = id
 }
 
@@ -846,6 +858,7 @@ onMounted(() => {
 				:totals="formatting"
 				:zoom="zoom"
 				:default-formats="defaultFormats"
+				:new-row="entry"
 				@menu="onMenu"
 				@find="findOpen = true"
 			/>
@@ -871,6 +884,7 @@ onMounted(() => {
 			v-model:active="openTab"
 			class="playground-tabs"
 			:tabs="sheetTabs"
+			:add-options="ADD_OPTIONS"
 			:theme="theme"
 			:locale="language"
 			@add="addTab"

@@ -166,7 +166,12 @@ const props = defineProps({
 	 * as its view's `columns.formats`. The user's own, in `columns`, go over them property by property,
 	 * and taking theirs off brings these back. Left out, each column is drawn its field's way.
 	 */
-	defaultFormats: { type: Object as PropType<ColumnFormats>, default: undefined }
+	defaultFormats: { type: Object as PropType<ColumnFormats>, default: undefined },
+	/**
+	 * A faint row after the last: a click there adds a row with the schema's defaults and selects its
+	 * cell, to type or paste into. Not shown where the sheet cannot be typed into.
+	 */
+	newRow: { type: Boolean, default: false }
 })
 
 const emit = defineEmits<{
@@ -329,6 +334,8 @@ const offsets = computed<readonly number[]>(() => {
 const totalWidth = computed(() => offsets.value[offsets.value.length - 1] ?? 0)
 const pinnedWidth = computed(() => offsets.value[pinnedCount.value] ?? 0)
 const totalHeight = computed(() => rowCount.value * rowH.value)
+/** The row after the last that adds one, when there is one. */
+const newRowHeight = computed(() => (props.newRow && !props.readonly && fields.value.length > 0 ? rowH.value : 0))
 const gutterWidth = computed(() => Math.max(44, String(Math.max(rowCount.value, 1)).length * 8 + 20))
 
 const cellStyles = computed(() =>
@@ -819,7 +826,81 @@ function canEdit(rowId: string, key: string): boolean {
 
 type TotalKind = "sum" | "average" | "min" | "max"
 
+const TOTAL_KINDS: readonly TotalKind[] = ["sum", "average", "min", "max"]
+const TOTAL_WORDS = { sum: "totalSum", average: "totalAverage", min: "totalMin", max: "totalMax" } as const
+
 const totalKind = ref<TotalKind>("sum")
+/** The list of what the totals row shows, open above its button, and the item the keys are on. */
+const totalMenu = shallowRef<{ readonly left: number; readonly bottom: number; readonly width: number } | null>(null)
+const totalHover = ref<TotalKind>("sum")
+const totalButton = ref<HTMLButtonElement | null>(null)
+let stopTotalMenu: (() => void) | null = null
+
+function openTotalMenu(): void {
+	const button = totalButton.value?.getBoundingClientRect()
+	const frame = root.value?.getBoundingClientRect()
+
+	if (!button || !frame) {
+		return
+	}
+
+	totalHover.value = totalKind.value
+	totalMenu.value = {
+		left: button.left - frame.left,
+		bottom: frame.bottom - button.top + 4,
+		width: Math.max(button.width, 150)
+	}
+
+	const close = (down: MouseEvent): void => {
+		const target = down.target instanceof Element ? down.target : null
+
+		if (!target?.closest(".tabula-grid-totals-menu") && !target?.closest(".tabula-grid-totals-pick")) {
+			closeTotalMenu()
+		}
+	}
+
+	window.addEventListener("mousedown", close, true)
+	stopTotalMenu = () => window.removeEventListener("mousedown", close, true)
+}
+
+function closeTotalMenu(): void {
+	stopTotalMenu?.()
+	stopTotalMenu = null
+	totalMenu.value = null
+}
+
+function chooseTotal(kind: TotalKind): void {
+	totalKind.value = kind
+	closeTotalMenu()
+	totalButton.value?.focus()
+}
+
+/** The keys on the totals button: arrows open the list and move in it, Enter takes, Escape leaves. */
+function onTotalKeydown(event: KeyboardEvent): void {
+	const at = TOTAL_KINDS.indexOf(totalHover.value)
+
+	event.stopPropagation()
+
+	if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+		if (!totalMenu.value) {
+			openTotalMenu()
+		} else {
+			const step = event.key === "ArrowDown" ? 1 : -1
+
+			totalHover.value = TOTAL_KINDS[(at + step + TOTAL_KINDS.length) % TOTAL_KINDS.length] ?? "sum"
+		}
+	} else if ((event.key === "Enter" || event.key === " ") && totalMenu.value) {
+		chooseTotal(totalHover.value)
+	} else if (event.key === "Escape" && totalMenu.value) {
+		closeTotalMenu()
+	} else {
+		return
+	}
+
+	event.preventDefault()
+}
+
+onBeforeUnmount(closeTotalMenu)
 
 /** Each column's total over the rows shown, as its cells write numbers; null for a column of no numbers. */
 const columnTotals = computed<readonly (string | null)[] | null>(() => {
@@ -1977,7 +2058,7 @@ function onCut(event: ClipboardEvent): void {
  * be edited is passed over, so every other value still lands in its own column.
  */
 function onPaste(event: ClipboardEvent): void {
-	if (editing.value || props.readonly || !selection.range) {
+	if (editing.value || props.readonly || (!selection.range && rowCount.value > 0)) {
 		return
 	}
 
@@ -1987,7 +2068,10 @@ function onPaste(event: ClipboardEvent): void {
 
 /** Pastes text a spreadsheet copied, as `onPaste` does: from the clipboard event, or the menu's Paste. */
 function pasteText(copied: string): void {
-	const area = selection.range
+	// A sheet with no rows yet takes the paste from its first cell.
+	const area =
+		selection.range ??
+		(rowCount.value === 0 && fields.value.length > 0 ? { top: 0, left: 0, bottom: 0, right: 0 } : null)
 	const block = parseTsv(copied)
 
 	if (props.readonly || !area || block.length === 0) {
@@ -3323,6 +3407,38 @@ function removeRows(): number {
 }
 
 /**
+ * The row after the last was pressed: a row is added at the end, with the schema's defaults, as one
+ * step to undo, and the cell pressed in it is selected, or its first that can be typed into. Typing
+ * then writes into it, and a paste goes from it, adding the rows it needs.
+ */
+function onNewRowDown(event: MouseEvent): void {
+	if (event.button !== 0 || props.readonly) {
+		return
+	}
+
+	takeFocus(event)
+
+	const pressed = columnAtClient(event.clientX)
+	const col = isEditable(fields.value[pressed]) ? pressed : fields.value.findIndex(field => isEditable(field))
+	const rowsOf = store.value
+	let added: string[] = []
+
+	rowsOf.transact(
+		() => {
+			added = rowsOf.appendRows(withDefaults(schema.value, 1))
+		},
+		{ origin: "insert" }
+	)
+
+	const row = view.value.indexOf(added[0] ?? "")
+
+	if (row >= 0) {
+		selection.moveTo(row, Math.max(0, col))
+		reveal()
+	}
+}
+
+/**
  * Adds as many empty rows as the selection spans, above it or below it, as one step to undo; they
  * hold the schema's defaults, and are selected. Returns their ids.
  */
@@ -3861,7 +3977,7 @@ defineExpose({
 				class="tabula-grid-sheet"
 				:style="{
 					width: `${gutterWidth + totalWidth + SCROLL_ROOM}px`,
-					height: `${headerHeight + totalHeight + SCROLL_ROOM}px`
+					height: `${headerHeight + totalHeight + newRowHeight + SCROLL_ROOM}px`
 				}"
 			>
 				<div
@@ -3996,7 +4112,7 @@ defineExpose({
 					ref="gutter"
 					class="tabula-grid-gutter"
 					aria-hidden="true"
-					:style="{ width: `${gutterWidth}px`, height: `${totalHeight}px` }"
+					:style="{ width: `${gutterWidth}px`, height: `${totalHeight + newRowHeight}px` }"
 				>
 					<div
 						v-for="r in visibleRows"
@@ -4010,6 +4126,14 @@ defineExpose({
 						{{ sheetRow(r) }}
 						<span v-if="rowMark(r)" class="tabula-grid-rh-mark" :class="rowMark(r)" />
 					</div>
+					<div
+						v-if="newRowHeight > 0"
+						class="tabula-grid-rh is-new"
+						:style="{ transform: `translateY(${totalHeight}px)` }"
+						@mousedown="onNewRowDown"
+					>
+						+
+					</div>
 				</div>
 				<div
 					ref="body"
@@ -4019,7 +4143,7 @@ defineExpose({
 						top: `${headerHeight}px`,
 						left: `${gutterWidth}px`,
 						width: `${totalWidth}px`,
-						height: `${totalHeight}px`
+						height: `${totalHeight + newRowHeight}px`
 					}"
 					@mousedown="onBodyDown"
 					@dblclick="startEdit()"
@@ -4113,6 +4237,21 @@ defineExpose({
 							{{ text(r, c) }}
 						</div>
 					</div>
+					<div
+						v-if="newRowHeight > 0"
+						class="tabula-grid-new-row"
+						role="button"
+						:aria-label="GRID_TEXT[locale].newRow"
+						:style="{ transform: `translateY(${totalHeight}px)`, height: `${newRowHeight}px` }"
+						@mousedown.stop="onNewRowDown"
+						@dblclick.stop
+					>
+						<span
+							class="tabula-grid-new-row-text"
+							:style="{ left: `${gutterWidth}px` }"
+							v-text="GRID_TEXT[locale].newRow"
+						/>
+					</div>
 					<div v-if="rangeParts.free" class="tabula-grid-range" :style="rangeParts.free" />
 					<div v-if="active && !activePinned" class="tabula-grid-active" :style="activeStyle" />
 					<div v-if="fillParts?.free" class="tabula-grid-fill-preview" :style="fillParts.free" />
@@ -4163,19 +4302,51 @@ defineExpose({
 					{{ columnTotals[c] }}
 				</div>
 			</template>
-			<label
+			<div
 				class="tabula-grid-totals-kind"
 				:style="{ width: `${gutterWidth + (columnTotals[0] === null ? (widths[0] ?? 0) : 0)}px` }"
 			>
-				<span class="tabula-grid-sr">{{ GRID_TEXT[locale].totals }}</span>
-				<select v-model="totalKind">
-					<option value="sum">{{ GRID_TEXT[locale].totalSum }}</option>
-					<option value="average">{{ GRID_TEXT[locale].totalAverage }}</option>
-					<option value="min">{{ GRID_TEXT[locale].totalMin }}</option>
-					<option value="max">{{ GRID_TEXT[locale].totalMax }}</option>
-				</select>
-			</label>
+				<button
+					ref="totalButton"
+					type="button"
+					class="tabula-grid-totals-pick"
+					:class="{ 'is-open': totalMenu }"
+					aria-haspopup="listbox"
+					:aria-expanded="totalMenu !== null"
+					:aria-label="GRID_TEXT[locale].totals"
+					:title="GRID_TEXT[locale].totals"
+					@click="totalMenu ? closeTotalMenu() : openTotalMenu()"
+					@keydown="onTotalKeydown"
+				>
+					<span class="tabula-grid-totals-word" v-text="GRID_TEXT[locale][TOTAL_WORDS[totalKind]]" />
+					<svg class="tabula-grid-totals-chevron" viewBox="0 0 24 24" aria-hidden="true">
+						<path d="m6 9 6 6 6-6" />
+					</svg>
+				</button>
+			</div>
 		</div>
+		<ul
+			v-if="totalMenu"
+			class="tabula-grid-totals-menu"
+			role="listbox"
+			:aria-label="GRID_TEXT[locale].totals"
+			:style="{ left: `${totalMenu.left}px`, bottom: `${totalMenu.bottom}px`, minWidth: `${totalMenu.width}px` }"
+		>
+			<li
+				v-for="kind in TOTAL_KINDS"
+				:key="kind"
+				role="option"
+				:aria-selected="kind === totalKind"
+				:class="{ 'is-active': kind === totalHover, 'is-selected': kind === totalKind }"
+				@mouseenter="totalHover = kind"
+				@click="chooseTotal(kind)"
+			>
+				<span v-text="GRID_TEXT[locale][TOTAL_WORDS[kind]]" />
+				<svg v-if="kind === totalKind" class="tabula-grid-totals-tick" viewBox="0 0 24 24" aria-hidden="true">
+					<path d="m5 12 5 5 9-10" />
+				</svg>
+			</li>
+		</ul>
 		<ul
 			v-if="listOpen"
 			:id="listId"
@@ -4576,6 +4747,7 @@ defineExpose({
 }
 
 .tabula-grid-menu {
+	animation: tabula-grid-drop 0.14s ease-out;
 	position: absolute;
 	z-index: 6;
 	display: flex;
@@ -4677,6 +4849,7 @@ defineExpose({
 
 /* A column's filter: its values to tick, or a range of its numbers or dates. */
 .tabula-grid-filter {
+	animation: tabula-grid-drop 0.14s ease-out;
 	position: absolute;
 	z-index: 7;
 	display: flex;
@@ -4834,6 +5007,40 @@ defineExpose({
 	font-size: 0.92em;
 	line-height: calc(var(--tabula-row-height) - 1px);
 	text-align: right;
+}
+
+/* The row after the last, that adds one: faint until the pointer is on it. */
+.tabula-grid-rh.is-new {
+	color: var(--tabula-accent-text);
+	cursor: pointer;
+}
+
+.tabula-grid-new-row {
+	position: absolute;
+	top: 0;
+	right: 0;
+	left: 0;
+	box-sizing: border-box;
+	border-bottom: 1px dashed var(--tabula-line);
+	background: var(--tabula-head-bg);
+	color: var(--tabula-muted);
+	cursor: pointer;
+}
+
+.tabula-grid-new-row:hover {
+	color: var(--tabula-accent-text);
+	background: var(--tabula-range-bg);
+}
+
+/* The words stay in sight while the sheet scrolls sideways. */
+.tabula-grid-new-row-text {
+	position: sticky;
+	left: 0;
+	display: inline-block;
+	padding: 0 9px;
+	font-style: italic;
+	line-height: calc(var(--tabula-row-height) - 1px);
+	white-space: nowrap;
 }
 
 /* Clipped, but not a scroll box of its own: the pinned columns inside stick to the sheet's scrolling. */
@@ -5154,16 +5361,134 @@ defineExpose({
 	background: var(--tabula-head-bg);
 }
 
-.tabula-grid-totals-kind select {
-	max-width: 100%;
-	height: calc(100% - 6px);
-	padding: 0 4px;
+/* What the totals row shows, chosen as a select is: the words, a chevron, a list above. */
+.tabula-grid-totals-pick {
+	display: flex;
+	flex: 1;
+	gap: 6px;
+	align-items: center;
+	justify-content: space-between;
+	box-sizing: border-box;
+	min-width: 0;
+	height: calc(100% - 8px);
+	padding: 0 8px 0 10px;
 	border: 1px solid var(--tabula-head-line);
-	border-radius: var(--tabula-radius-small);
+	border-radius: var(--tabula-radius);
 	background: var(--tabula-bg);
 	color: var(--tabula-fg);
 	font: inherit;
 	font-weight: 600;
+	cursor: pointer;
+	transition:
+		border-color 0.15s ease,
+		box-shadow 0.15s ease;
+}
+
+.tabula-grid-totals-pick:hover,
+.tabula-grid-totals-pick.is-open,
+.tabula-grid-totals-pick:focus-visible {
+	outline: none;
+	border-color: var(--tabula-accent);
+}
+
+.tabula-grid-totals-pick.is-open,
+.tabula-grid-totals-pick:focus-visible {
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--tabula-accent) 20%, transparent);
+}
+
+.tabula-grid-totals-word {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tabula-grid-totals-chevron,
+.tabula-grid-totals-tick {
+	flex: none;
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.tabula-grid-totals-chevron {
+	color: var(--tabula-muted);
+	transition: transform 0.15s ease;
+}
+
+.tabula-grid-totals-pick.is-open .tabula-grid-totals-chevron {
+	transform: rotate(180deg);
+}
+
+.tabula-grid-totals-menu {
+	position: absolute;
+	z-index: 6;
+	box-sizing: border-box;
+	margin: 0;
+	padding: 4px;
+	list-style: none;
+	border: 1px solid var(--tabula-head-line);
+	border-radius: var(--tabula-radius);
+	background: var(--tabula-bg);
+	box-shadow: 0 6px 18px rgb(0 0 0 / 14%);
+	animation: tabula-grid-rise 0.14s ease-out;
+}
+
+.tabula-grid-totals-menu li {
+	display: flex;
+	gap: 16px;
+	align-items: center;
+	justify-content: space-between;
+	padding: 7px 10px;
+	border-radius: var(--tabula-radius-small);
+	cursor: pointer;
+}
+
+.tabula-grid-totals-menu li.is-active {
+	background: var(--tabula-range-bg);
+}
+
+.tabula-grid-totals-menu li.is-selected {
+	color: var(--tabula-accent-text);
+	font-weight: 600;
+}
+
+/* A list opening above what opened it. */
+@keyframes tabula-grid-rise {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* A menu or a list opening under what opened it. */
+@keyframes tabula-grid-drop {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tabula-grid-totals-menu,
+	.tabula-grid-menu,
+	.tabula-grid-filter,
+	.tabula-grid-list {
+		animation: none;
+	}
 }
 
 .tabula-grid-sr {
@@ -5308,6 +5633,7 @@ defineExpose({
 
 /* The list under the editor: options, or a lookup's records. */
 .tabula-grid-list {
+	animation: tabula-grid-drop 0.12s ease-out;
 	position: absolute;
 	z-index: 5;
 	box-sizing: border-box;

@@ -441,7 +441,8 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		totalSum: "Toplam",
 		totalAverage: "Ortalama",
 		totalMin: "En az",
-		totalMax: "En çok"
+		totalMax: "En çok",
+		newRow: "+ Yeni satır: tıklayın, sonra yazın ya da yapıştırın"
 	},
 	en: {
 		cellMenu: "Cell menu",
@@ -461,6 +462,7 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		totalAverage: "Average",
 		totalMin: "Smallest",
 		totalMax: "Largest",
+		newRow: "+ New row: click, then type or paste",
 		succeeded: "Processed",
 		failed: "Failed",
 		skipped: "Not processed",

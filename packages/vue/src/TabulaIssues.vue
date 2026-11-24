@@ -586,8 +586,10 @@ defineExpose({ next: () => step(1), previous: () => step(-1) })
 	color: var(--tabula-issues-muted);
 }
 
+/* What the host puts under the list: a line of its own takes the width, buttons go under it. */
 .tabula-issues-actions {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 8px;
 }
 

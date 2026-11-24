@@ -949,11 +949,97 @@ describe("TabulaGrid", () => {
 		})
 	})
 
+	describe("a new row, and a sheet with none", () => {
+		const NEW_PRICE = 3
+
+		it("adds a row from the row after the last, selects the cell pressed, and takes what is typed", async () => {
+			await withPage(
+				3,
+				async page => {
+					const box = await header(page, NEW_PRICE).boundingBox()
+					const ghost = page.locator(".tabula-grid-new-row")
+					const row = await ghost.boundingBox()
+
+					await ghost.click({ position: { x: box!.x + box!.width / 2 - row!.x, y: 8 } })
+					await expect.poll(() => page.evaluate(() => window.__playground!.store.size)).toBe(4)
+					await page.keyboard.type("250")
+					await press(page, "Enter")
+					await expect.poll(() => valueAt(page, 3, "newPrice")).toBe("250")
+
+					// The typing, then the row, each a step to take back.
+					await press(page, "Control+z", 2)
+					await expect.poll(() => page.evaluate(() => window.__playground!.store.size)).toBe(3)
+				},
+				"&entry=1"
+			)
+		})
+
+		it("pastes into a sheet with no rows from its first cell, adding the rows", async () => {
+			await withPage(
+				0,
+				async page => {
+					await expect.poll(() => page.locator(".tabula-grid-new-row").count()).toBe(1)
+					await clipboard(page, "\t\t\t100\n\t\t\t200")
+					await page.locator(".tabula-grid").first().focus()
+					await press(page, "Control+v")
+
+					await expect.poll(() => page.evaluate(() => window.__playground!.store.size)).toBe(2)
+					await expect(valueAt(page, 1, "newPrice")).resolves.toBe("200")
+				},
+				"&entry=1"
+			)
+		})
+
+		it("leaves a row nothing was typed into unchecked, and checks it whole once something is", async () => {
+			await withPage(
+				0,
+				async page => {
+					await page.locator(".tabula-grid-new-row").click()
+					await expect.poll(() => page.evaluate(() => window.__playground!.store.size)).toBe(1)
+					await expect(page.evaluate(() => window.__playground!.validator.summary().errors)).resolves.toBe(0)
+
+					await page.evaluate(() => {
+						const { store } = window.__playground!
+
+						store.setCell(store.rowIdAt(0)!, "newPrice", "120")
+					})
+					await expect
+						.poll(() => page.evaluate(() => window.__playground!.validator.summary().errors))
+						.toBeGreaterThan(0)
+				},
+				"&entry=1"
+			)
+		})
+	})
+
 	describe("sheet tabs", () => {
 		const tab = (page: Page, name: string): Locator => page.locator(".tabula-tabs-tab", { hasText: name }).first()
 		const names = (page: Page): Promise<string[]> => page.locator(".tabula-tabs-name").allInnerTexts()
 		const open = (page: Page): Promise<string> =>
 			page.locator(".tabula-tabs-tab[aria-selected='true'] .tabula-tabs-name").innerText()
+
+		it("offers the ways to add a sheet when + is pressed, and adds the one chosen", async () => {
+			await withPage(
+				5,
+				async page => {
+					await page.locator(".tabula-tabs-add").click()
+					await expect(page.locator(".tabula-tabs-menu.is-add button").allInnerTexts()).resolves.toEqual([
+						"Sunucudaki satırlarla",
+						"Boş sayfa\nAynı sütunlar, satır yok"
+					])
+
+					// Escape closes it, with nothing added.
+					await press(page, "Escape")
+					await expect.poll(() => page.locator(".tabula-tabs-menu.is-add").count()).toBe(0)
+					await expect(names(page)).resolves.toHaveLength(3)
+
+					await page.locator(".tabula-tabs-add").click()
+					await page.locator(".tabula-tabs-menu.is-add button", { hasText: "Boş sayfa" }).click()
+					await expect.poll(() => open(page)).toBe("Boş 4")
+				},
+				"&tabs=1&addmenu=1"
+			)
+		})
 
 		it("shows each sheet with its errors or a tick, and opens one with a click or the keys", async () => {
 			await withPage(
@@ -1266,14 +1352,26 @@ describe("TabulaGrid", () => {
 
 					await expect.poll(totals).toContain("30,50")
 
-					const kind = page.locator(".tabula-grid-totals-kind select")
+					const kind = page.locator(".tabula-grid-totals-pick")
+					const choose = async (words: string): Promise<void> => {
+						await kind.click()
+						await page.locator(".tabula-grid-totals-menu li", { hasText: words }).click()
+					}
 
-					await kind.selectOption("average")
+					await expect(kind.innerText()).resolves.toBe("Toplam")
+					await choose("Ortalama")
 					await expect.poll(totals).toContain("15,25")
-					await kind.selectOption("min")
+					await expect(kind.innerText()).resolves.toBe("Ortalama")
+					await choose("En az")
 					await expect.poll(totals).toContain("10,00")
-					await kind.selectOption("max")
+
+					// The keys: an arrow opens the list and moves in it, Enter takes the one reached.
+					await kind.focus()
+					await press(page, "ArrowDown")
+					await press(page, "ArrowDown")
+					await press(page, "Enter")
 					await expect.poll(totals).toContain("20,50")
+					await expect.poll(() => page.locator(".tabula-grid-totals-menu").count()).toBe(0)
 				},
 				"&format=1"
 			)

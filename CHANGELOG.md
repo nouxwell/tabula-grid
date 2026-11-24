@@ -9,9 +9,41 @@ The three packages are versioned together.
 
 ### Added
 
+- **Importing a file the user looks over first** (canvas items 116–120 and 128, design AF).
+  `suggestColumns` says where each column would go and why, `suggestMatch` finds the column that
+  names the sheet's rows, `matchRows` the rows each value names, and `applyImport` writes into
+  them, adding or leaving out the rest, as one change. `importTable` takes a `key` column and gives
+  each column's first values and its unreadable cells; `headerKey` is how a header is remembered.
+- **A row after the last, and a sheet with no rows** (items 122–125, design AG). The grid's
+  `new-row` adds a row when pressed, and a sheet with no rows takes a paste from its first cell.
+  `TabulaSheetTabs` takes `addOptions`: + then offers ways to add a sheet, and `add` says which.
+- **The rows with issues, as a file** (items 126–128, design AH). `exportTable` takes `extra`
+  columns before or after the fields'.
+- **The example** imports through a window that shows each column's values and the field it goes
+  to, remembers where headers went, and updates the rows it finds by SKU. + adds a blank sheet,
+  which says how to fill it. "Hatalı satırları indir" writes the rows with issues, each with who
+  found it, from the Dosya menu, the issues panel, and a strip over the sheet after a run the
+  backend took only part of.
 - **Releases are published from GitHub Actions**, with npm's trusted publishing: a pushed `vX.Y.Z`
   tag publishes the three packages, with provenance, and no npm token is kept anywhere
   (`.github/workflows/publish.yml`, `scripts/publish-packages.mjs`).
+
+### Changed
+
+- **A row holding nothing anyone gave it is neither checked nor sent** (`isBlankRow`): every
+  field empty or at its default, a formula's aside. Before, such a row showed its required fields'
+  errors and a run sent it. It is checked whole once something is typed into it.
+- `ColumnMatch` gives `samples` and `unreadable`, `TableImport` gives `keys`, and
+  `ColumnStatus` has `key`.
+- The issues panel lets what the host puts under it go onto lines of their own.
+- **The totals row chooses as a select does**: its words and a chevron, and a list above with a tick
+  on the one shown, opened and moved in with the arrow keys, in place of the browser's own select.
+- **What opens comes in softly**: the grid's menus, filter and suggestion lists, the tabs' menus and
+  the find strip, unless the system asks for less motion. Every button the components draw shows
+  the hand.
+- **The example** shows the hand on everything pressed, such as the row density and the zoom, and
+  what comes and goes with the sheet's state animates: "Renkli", the issues switch's words, the
+  strip of a partly refused run, a blank sheet's box.
 
 ## [0.4.1] — 2026-11-23
 

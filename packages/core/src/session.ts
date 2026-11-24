@@ -22,7 +22,14 @@ import { randomPart, sequence } from "./ids.js"
 import { Listeners } from "./listeners.js"
 import type { RowId, RowStore, StoreChange } from "./rows.js"
 import type { ModuleSchema } from "./schema.js"
-import { SheetValidator, type Issue, type IssueScope, type IssueSet, type IssueSummary } from "./validation.js"
+import {
+	isBlankRow,
+	SheetValidator,
+	type Issue,
+	type IssueScope,
+	type IssueSet,
+	type IssueSummary
+} from "./validation.js"
 import type { CellValue } from "./value.js"
 import { canonicalValue, isLookupValue } from "./values/read.js"
 import type { ValueSettings } from "./values/settings.js"
@@ -838,9 +845,15 @@ export class SheetSession {
 		return Object.freeze(values)
 	}
 
-	/** Nothing to send: a row holding only columns shown for reference is empty too. */
+	/**
+	 * Nothing to send: a row holding only columns shown for reference is empty too, and so is one
+	 * holding nothing anyone gave it (`isBlankRow`).
+	 */
 	#isEmpty(rowId: RowId): boolean {
-		return this.schema.fields.every(field => !field.submit || this.store.get(rowId, field.key) === null)
+		return (
+			this.schema.fields.every(field => !field.submit || this.store.get(rowId, field.key) === null) ||
+			isBlankRow(this.schema, key => this.store.get(rowId, key))
+		)
 	}
 
 	/** An answer that names a request must name this one. */

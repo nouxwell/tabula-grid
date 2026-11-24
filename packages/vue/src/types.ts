@@ -47,6 +47,14 @@ export interface SheetTab {
 	readonly done?: boolean
 }
 
+/** A way to add a sheet, offered when + is pressed: `add` is emitted with its key. */
+export interface SheetAddOption {
+	readonly key: string
+	readonly label: string
+	/** A line under the label: what the new sheet holds. */
+	readonly description?: string
+}
+
 /** An item the host adds to the menu a right click opens on a cell or a row's number. */
 export interface GridMenuItem {
 	/** What `menu` is emitted with when it is chosen. */

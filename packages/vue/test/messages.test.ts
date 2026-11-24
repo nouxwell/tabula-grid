@@ -129,7 +129,8 @@ describe("issueText", () => {
 
 	it("words an issue in Turkish, with limits written the sheet's way", () => {
 		const [low] = issuesFor({ price: "0.1" })
-		const [missing] = issuesFor({})
+		// A row with something in it: one holding nothing is not checked.
+		const [missing] = issuesFor({ day: "2026-12-01" })
 
 		expect(issueText(low as Issue, "tr", VALUE_SETTINGS.tr)).toBe("En az 0,5 olmalı.")
 		expect(issueText(missing as Issue, "tr", VALUE_SETTINGS.tr)).toBe("Bu alan zorunlu.")

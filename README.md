@@ -636,11 +636,18 @@ CSV is read and written in the browser; an xlsx file goes to the application's b
 reads it with nouxwell/tabula and answers with rows in the module's own values, ready for the store.
 
 ```ts
-const text = decodeText(new Uint8Array(await file.arrayBuffer()))
-const result = importTable(parseCsv(text), { schema, settings })
+const table = parseCsv(decodeText(new Uint8Array(await file.arrayBuffer())))
 
-store.transact(() => store.appendRows(result.rows), { origin: "import" })
-// result.columns: what each column became; result.missing: required fields no column brought
+// Where each column would go, and the column that finds the sheet's rows: for the user to look over.
+const suggested = suggestColumns(table, { schema, settings, remembered })
+const found = suggestMatch(table, store, { schema, settings }) // { column: 0, field: "sku" } or null
+
+const columns = Object.fromEntries(suggested.map((item, index) => [index, item.field]))
+const imported = importTable(table, { schema, settings, columns, key: found?.column ?? null })
+const matches = found ? matchRows(store, schema.field(found.field), imported.keys, settings) : undefined
+
+applyImport(store, schema, imported, { matches, unmatched: "add" }) // one Ctrl+Z takes it back
+// imported.columns: each column's fate, its first values, how many of them could not be read
 
 const csv = toCsv(exportTable({ store, fields, rowIds, settings }), { delimiter: csvDelimiterFor(settings) })
 ```
@@ -649,15 +656,32 @@ const csv = toCsv(exportTable({ store, fields, rowIds, settings }), { delimiter:
   delimiter is told from the first line: a Turkish Excel writes `;`, since its decimal mark is the
   comma. A file that is not UTF-8 is read as Windows-1254, which is what Excel saves a Turkish
   "CSV" in.
-- **Columns by name.** A header names its field by label or by key, in any case; `columns` maps
-  them by position instead. A column of a read-only or computed field is passed over, and the
-  result says which columns matched, which did not, and which required fields are missing.
+- **Columns by name, or as suggested.** A header names its field by label or by key, in any case;
+  `columns` maps them by position instead. A column of a read-only or computed field is passed
+  over, and the result says which columns matched, which did not, which required fields are
+  missing, each column's first values and how many of them could not be read. `suggestColumns`
+  says where a file's columns would go and why: where the host remembers the header went
+  (`headerKey`), the header as a field's name, a word the two share ("Fiyat" and "Yeni fiyat"), or
+  values only one field reads ("TRY" and "USD" as a currency's options). Only fields typed into
+  are suggested, each once.
+- **Into the rows they find.** `suggestMatch` finds the column whose values name the sheet's rows,
+  such as a product code, and `matchRows` the rows each value names, without regard to case and
+  "1.001" the same number as 1001. `applyImport` writes a row of the file into the rows it found,
+  an empty cell emptying its cell, and adds the others with the schema's defaults or leaves them
+  out; rows the host locks, such as those processed, are not written into.
 - **Cells as typed.** Each cell is read as a paste reads it: text that is no value of its field
   stays as written, marked; product names are matched to products by the lookup, in one request.
   Appended in one change, an import goes back with one Ctrl+Z.
 - **Out as the sheet writes it.** Every digit with the sheet's decimal mark, dates in its pattern,
   a BOM so Excel reads UTF-8. Text that Excel would run as a formula when the file is opened,
   starting with `=`, `+`, `-` or `@`, is written with a `'` before it; a number is never touched.
+  `extra` adds the host's own columns before or after the fields', such as each row's number and
+  its issues: the example writes the rows with issues so, to fix in Excel and import again.
+
+A row holding nothing anyone gave it, every field empty or at its default (`isBlankRow`), is
+neither checked nor sent: a new row nobody typed into, or a pasted block's empty line, says nothing
+until something is in it, and then it is checked whole. The grid's `new-row` draws a row after the
+last that adds one when pressed, and a sheet with no rows takes a paste from its first cell.
 
 ## Formulas
 

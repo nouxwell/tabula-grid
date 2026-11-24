@@ -153,10 +153,33 @@ export { parseTsv, toTsv } from "./clipboard.js"
 
 export { decodeText, detectDelimiter, parseCsv, toCsv } from "./csv.js"
 export type { CsvDelimiter, CsvReadOptions, CsvWriteOptions } from "./csv.js"
-export { csvDelimiterFor, exportTable, importTable } from "./table.js"
-export type { ColumnMatch, ColumnStatus, TableExportOptions, TableImport, TableImportOptions } from "./table.js"
+export {
+	applyImport,
+	csvDelimiterFor,
+	exportTable,
+	headerKey,
+	IMPORT_ORIGIN,
+	importTable,
+	matchRows,
+	suggestColumns,
+	suggestMatch
+} from "./table.js"
+export type {
+	ColumnMatch,
+	ColumnStatus,
+	ColumnSuggestion,
+	ExtraColumn,
+	ImportApplied,
+	ImportApplyOptions,
+	MatchSuggestion,
+	SuggestionReason,
+	SuggestOptions,
+	TableExportOptions,
+	TableImport,
+	TableImportOptions
+} from "./table.js"
 
-export { checkValue, SheetValidator } from "./validation.js"
+export { checkValue, isBlankRow, SheetValidator } from "./validation.js"
 export type {
 	Issue,
 	IssueScope,

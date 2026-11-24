@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, type PropType } from "vue"
 import { TABS_TEXT, type GridLocale } from "./messages.js"
-import type { GridTheme, SheetTab } from "./types.js"
+import type { GridTheme, SheetAddOption, SheetTab } from "./types.js"
 
 /**
  * A workbook's sheets as tabs under the sheet, as a spreadsheet has them: one open, each with its
- * errors counted or a tick once processed, and + to add one. A double click or F2 renames a tab in
+ * errors counted or a tick once processed, and + to add one, or to choose how from `addOptions`. A
+ * double click or F2 renames a tab in
  * place; a right click opens its menu: rename, duplicate, move left or right, delete. A tab is
  * dragged to another place, or moved with Ctrl+Shift and an arrow. Arrows move between the tabs,
  * Enter or Space opens one.
@@ -17,11 +18,17 @@ const props = defineProps({
 	/** No tab is opened, added or changed meanwhile, such as while a run is under way. */
 	disabled: { type: Boolean, default: false },
 	locale: { type: String as PropType<GridLocale>, default: "tr" },
-	theme: { type: String as PropType<GridTheme>, default: "light" }
+	theme: { type: String as PropType<GridTheme>, default: "light" },
+	/**
+	 * Ways to add a sheet, such as from the server's rows or empty: + then opens a menu of them, and
+	 * `add` is emitted with the key chosen. Left empty, + emits `add` at once.
+	 */
+	addOptions: { type: Array as PropType<readonly SheetAddOption[]>, default: () => [] }
 })
 
 const emit = defineEmits<{
-	add: []
+	/** + was pressed, or one of `addOptions` chosen, by its key. */
+	add: [key?: string]
 	rename: [id: string, name: string]
 	duplicate: [id: string]
 	remove: [id: string]
@@ -38,6 +45,9 @@ const list = ref<HTMLElement | null>(null)
 const renaming = ref<string | null>(null)
 const draftName = ref("")
 const menu = ref<{ readonly id: string; readonly left: number; readonly top: number } | null>(null)
+/** The menu + opens when there are `addOptions`, placed above it. */
+const addMenu = ref<{ readonly left: number; readonly top: number } | null>(null)
+const addButton = ref<HTMLButtonElement | null>(null)
 let stopMenu: (() => void) | null = null
 
 function open(id: string): void {
@@ -193,6 +203,7 @@ function onPointerDown(event: PointerEvent, id: string): void {
 }
 
 onBeforeUnmount(endDrag)
+onBeforeUnmount(closeMenu)
 
 function endDrag(): void {
 	stopDrag?.()
@@ -282,6 +293,76 @@ function closeMenu(): void {
 	stopMenu?.()
 	stopMenu = null
 	menu.value = null
+	addMenu.value = null
+}
+
+/** + pressed: a sheet added at once, or the ways to add one offered above the button. */
+function onAdd(): void {
+	if (props.disabled) {
+		return
+	}
+
+	if (props.addOptions.length === 0) {
+		emit("add")
+
+		return
+	}
+
+	if (addMenu.value) {
+		closeMenu()
+
+		return
+	}
+
+	const button = addButton.value?.getBoundingClientRect()
+
+	closeMenu()
+	addMenu.value = { left: button?.left ?? 0, top: button?.top ?? 0 }
+
+	const close = (down: MouseEvent): void => {
+		const target = down.target instanceof Element ? down.target : null
+
+		if (!target?.closest(".tabula-tabs-menu") && !target?.closest(".tabula-tabs-add")) {
+			closeMenu()
+		}
+	}
+
+	window.addEventListener("mousedown", close, true)
+	stopMenu = () => window.removeEventListener("mousedown", close, true)
+	void nextTick(() => {
+		const element = list.value?.parentElement?.querySelector<HTMLElement>(".tabula-tabs-menu.is-add")
+
+		if (!element || !addMenu.value) {
+			return
+		}
+
+		const left = Math.max(8, Math.min(addMenu.value.left, window.innerWidth - element.offsetWidth - 8))
+		const top = Math.max(8, addMenu.value.top - element.offsetHeight - 4)
+
+		addMenu.value = { left, top }
+		element.querySelector<HTMLElement>("button")?.focus()
+	})
+}
+
+function chooseAdd(key: string): void {
+	closeMenu()
+	emit("add", key)
+}
+
+function onAddMenuKeydown(event: KeyboardEvent): void {
+	const items = [...(event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>("button")]
+	const at = items.indexOf(document.activeElement as HTMLButtonElement)
+
+	if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+		items[(at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus()
+	} else if (event.key === "Escape" || event.key === "Tab") {
+		closeMenu()
+		addButton.value?.focus()
+	} else {
+		return
+	}
+
+	event.preventDefault()
 }
 
 function choose(action: "rename" | "duplicate" | "remove" | "left" | "right"): void {
@@ -389,15 +470,40 @@ function errorsText(count: number): string {
 			</div>
 		</div>
 		<button
+			ref="addButton"
 			type="button"
 			class="tabula-tabs-add"
 			:aria-label="text.add"
 			:title="text.add"
+			:aria-haspopup="addOptions.length > 0 ? 'menu' : undefined"
+			:aria-expanded="addOptions.length > 0 ? addMenu !== null : undefined"
 			:disabled="disabled"
-			@click="emit('add')"
+			@click="onAdd"
 		>
 			+
 		</button>
+		<div
+			v-if="addMenu"
+			class="tabula-tabs-menu is-add"
+			role="menu"
+			:aria-label="text.add"
+			:style="{ left: `${addMenu.left}px`, top: `${addMenu.top}px` }"
+			@keydown="onAddMenuKeydown"
+			@contextmenu.prevent
+		>
+			<button
+				v-for="option in addOptions"
+				:key="option.key"
+				type="button"
+				role="menuitem"
+				@click="chooseAdd(option.key)"
+			>
+				<span class="tabula-tabs-option">
+					<span v-text="option.label" />
+					<span v-if="option.description" class="tabula-tabs-key" v-text="option.description" />
+				</span>
+			</button>
+		</div>
 		<div
 			v-if="menu"
 			class="tabula-tabs-menu"
@@ -562,6 +668,7 @@ function errorsText(count: number): string {
 }
 
 .tabula-tabs-menu {
+	animation: tabula-tabs-rise 0.14s ease-out;
 	position: fixed;
 	z-index: 1000;
 	display: flex;
@@ -602,9 +709,42 @@ function errorsText(count: number): string {
 	color: var(--tabula-required);
 }
 
+/* The tabs sit at the bottom: their menus rise into place. */
+@keyframes tabula-tabs-rise {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tabula-tabs-menu {
+		animation: none;
+	}
+}
+
 .tabula-tabs-key {
 	color: var(--tabula-muted);
 	font-size: 0.9em;
+}
+
+.tabula-tabs-menu.is-add {
+	max-width: 320px;
+}
+
+.tabula-tabs-menu.is-add button {
+	padding: 8px 12px;
+}
+
+.tabula-tabs-option {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
 }
 
 .tabula-tabs-line {

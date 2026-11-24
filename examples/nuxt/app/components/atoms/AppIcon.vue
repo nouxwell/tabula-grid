@@ -88,7 +88,14 @@ const ICONS = {
 		"M7 14h10"
 	],
 	format: ["M4 7V5h16v2", "M9 19h6", "M12 5v14"],
-	refresh: ["M20 11a8 8 0 0 0-14.9-3.5L4 9", "M4 4v5h5", "M4 13a8 8 0 0 0 14.9 3.5L20 15", "M20 20v-5h-5"]
+	refresh: ["M20 11a8 8 0 0 0-14.9-3.5L4 9", "M4 4v5h5", "M4 13a8 8 0 0 0 14.9 3.5L20 15", "M20 20v-5h-5"],
+	table: [
+		"M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z",
+		"M3 9h18",
+		"M9 9v11",
+		"M15 13v4",
+		"M13 15h4"
+	]
 } as const
 
 export type IconName = keyof typeof ICONS

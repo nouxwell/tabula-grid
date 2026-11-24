@@ -215,9 +215,13 @@ assert.equal(version, ${JSON.stringify(version)})
 const schema = ModuleSchema.from({
 	module: "consumer",
 	schemaVersion: 1,
-	fields: [{ key: "price", type: "money", required: true, rules: [{ rule: "max", value: "1000" }] }]
+	fields: [
+		{ key: "price", type: "money", required: true, rules: [{ rule: "max", value: "1000" }] },
+		{ key: "note", type: "string" }
+	]
 })
-const store = new RowStore({ rows: [{ values: { price: "1234.5" } }, { values: {} }] })
+// A row holding nothing is not checked: the second holds a note, and lacks its price.
+const store = new RowStore({ rows: [{ values: { price: "1234.5" } }, { values: { note: "x" } }] })
 const codes = new SheetValidator(schema, store, VALUE_SETTINGS.tr).issues().map(issue => issue.code)
 
 assert.deepEqual(codes, ["max_value", "required"])

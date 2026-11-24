@@ -251,7 +251,7 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 99  | Borders and merged cells                            | package     | not chosen         |
 | 100 | Columns stretched to the sheet (AB)                 | package     | done               |
 | 101 | Grey K, L, M… columns                               | package     | not chosen         |
-| 102 | A row for a new product at the bottom (AB)          | package     | not chosen         |
+| 102 | A row for a new product at the bottom (AB)          | package     | done as 124        |
 | 103 | A totals row (AB)                                   | package     | done               |
 | 104 | Find and replace, Ctrl+H (AC)                       | package     | done               |
 | 105 | A column fitted to its contents                     | package     | done (before)      |
@@ -265,6 +265,20 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 113 | A user's formats move into the template saved       | application | done               |
 | 114 | Formats saved as a new template                     | application | done               |
 | 115 | The whole layout saved into the template            | application | not chosen         |
+| 116 | The import window before anything goes in (AF)      | both        | done               |
+| 117 | Columns suggested by name, word and values          | package     | done               |
+| 118 | Where a header went, remembered                     | application | done               |
+| 119 | Each column's first values and unreadable cells     | package     | done               |
+| 120 | Rows of a file written into the rows they find      | package     | done               |
+| 121 | A fixed value for a field the file lacks            | application | not chosen         |
+| 122 | "Boş sayfa" from + (AG)                             | both        | done               |
+| 123 | An empty sheet says how to fill it                  | application | done               |
+| 124 | A row after the last that adds one (102)            | package     | done               |
+| 125 | A row nobody filled is not checked or sent          | package     | done               |
+| 126 | The rows with issues as a file (AH)                 | both        | done               |
+| 127 | Warnings too, with who found each                   | application | done               |
+| 128 | The issues file imported again, by SKU              | both        | done               |
+| 129 | The rows with issues moved to a sheet of their own  | application | not chosen         |
 | —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
 | —   | Saved views (personal views)                        | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)      | both        | done (phase two)   |

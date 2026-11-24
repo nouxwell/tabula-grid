@@ -350,10 +350,30 @@ onBeforeUnmount(() => {
 	</div>
 </template>
 
-<style src="./theme.css"></style>
+<style src="./theme.css">
+/* The strip opens down over the sheet. */
+@keyframes tabula-find-in {
+	from {
+		opacity: 0;
+		transform: translateY(-6px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tabula-find {
+		animation: none;
+	}
+}
+</style>
 
 <style>
 .tabula-find {
+	animation: tabula-find-in 0.18s ease-out;
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;

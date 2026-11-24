@@ -219,3 +219,8 @@
 		color-scheme: dark;
 	}
 }
+
+/* Whatever a component draws to be pressed shows the hand, whatever the page's own styles say. */
+.tabula-theme button:not(:disabled) {
+	cursor: pointer;
+}

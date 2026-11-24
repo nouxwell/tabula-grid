@@ -21,4 +21,12 @@ export {
 	TABS_TEXT
 } from "./messages.js"
 export type { FunctionHelp, GridLocale } from "./messages.js"
-export type { ActiveCell, GridMenuItem, GridPosition, GridTheme, SelectedCells, SheetTab } from "./types.js"
+export type {
+	ActiveCell,
+	GridMenuItem,
+	GridPosition,
+	GridTheme,
+	SelectedCells,
+	SheetAddOption,
+	SheetTab
+} from "./types.js"

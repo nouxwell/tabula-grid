@@ -59,6 +59,12 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
   the schema lost, mapped to a new one (the likely one suggested) or dropped, with its first
   values and what would be lost. "Taslağı aç" opens the draft so mapped and saves it under the new
   schema; "Taslağı sil, sunucudan aç" lets it go. Nothing is saved while the window is open.
+- **Files in and out.** Dosya → İçe aktar reads a CSV and shows it first: each column's first
+  values and the field it goes to, suggested and remembered from the last import, and whether the
+  rows are added or written into the rows they find by SKU, counted. + adds a sheet from the
+  server's rows or a blank one, which says how to fill it; the row under the last adds a row.
+  "Hatalı satırları indir" writes the rows with issues with a "Sorunlar" column, to fix in Excel
+  and import again, from the Dosya menu, the issues panel and the strip a partly refused run shows.
 - **How cells look.** The toolbar's format group puts bold, italic, a text colour or a fill on the
   cells selected (Ctrl+B, Ctrl+I), aligns their columns and shows more or fewer decimals; the
   colours are kept with the draft and "Renkli" shows their rows. The rules drawer's Renkler tab
