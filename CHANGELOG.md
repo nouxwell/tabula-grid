@@ -7,6 +7,17 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-24
+
+Files in and out the way a person works with them: an import shown before anything goes in, with
+each column's values and where it goes, written into the rows it finds; a sheet that starts empty,
+with a row that adds one; and the rows with issues written out to fix in Excel and import again.
+Releases are published from GitHub Actions from now on.
+
+**What changes:** a row holding nothing anyone gave it is no longer checked or sent, so a new,
+untouched row shows no required errors. `ColumnMatch` and `TableImport` give more, and the totals
+row's choice is no longer a `<select>`.
+
 ### Added
 
 - **Importing a file the user looks over first** (canvas items 116–120 and 128, design AF).
@@ -531,7 +542,8 @@ taken to a backend through the application's own adapters, and kept as a draft.
   gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
   which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.
 
-[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/nouxwell/tabula-grid/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/nouxwell/tabula-grid/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/nouxwell/tabula-grid/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/nouxwell/tabula-grid/compare/v0.3.0...v0.3.1

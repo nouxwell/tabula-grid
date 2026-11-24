@@ -4,7 +4,7 @@
  * It repeats what `package.json` says, and a test holds the two together: a release that bumps
  * one and forgets the other fails before it is tagged.
  */
-export const version = "0.4.1"
+export const version = "0.5.0"
 
 export { SchemaError, TabulaError } from "./errors.js"
 export type { SchemaProblem, TabulaErrorCode } from "./errors.js"
