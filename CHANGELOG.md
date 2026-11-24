@@ -7,6 +7,8 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-11-25
+
 A new look (canvas items 138–160, designs AK–AP): colour only where it says something, the sheet
 given more room, and a phone that shows the sheet edge to edge. The packages' default colours and
 several parts change; an application that set its own `--tabula-*` colours keeps them.
@@ -618,7 +620,8 @@ taken to a backend through the application's own adapters, and kept as a draft.
   gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
   which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.
 
-[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/nouxwell/tabula-grid/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/nouxwell/tabula-grid/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/nouxwell/tabula-grid/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/nouxwell/tabula-grid/compare/v0.4.0...v0.4.1
