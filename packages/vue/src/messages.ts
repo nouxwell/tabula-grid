@@ -116,20 +116,24 @@ export const PANEL_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, str
 		stale: "yeniden kontrol",
 		rows: "satır",
 		none: "Sorun yok.",
-		previous: "Önceki",
-		next: "Sonraki",
+		previous: "Önceki sorun",
+		next: "Sonraki sorun",
 		row: "Satır",
 		sheet: "Sayfa",
 		recheck: "Değişti, yeniden kontrol edilmeli",
 		more: "sorun daha",
-		onlyIssueRows: "Yalnız sorunlu satırlar",
+		onlyIssueRows: "Yalnız sorunlu satırları göster",
 		refresh: "Yenile",
 		refreshHint: "Süzgeci tablonun şimdiki hâline yeniden uygula",
 		local: "Tarayıcı",
 		server: "Sunucu",
-		goToCell: "Hücreye git",
 		open: "Sorunları göster",
-		close: "Kapat"
+		close: "Kapat",
+		show: "Gösterilen sorunlar",
+		all: "Tümü",
+		error: "Hata",
+		warning: "Uyarı",
+		noneOfKind: "Bu türde sorun yok."
 	},
 	en: {
 		title: "Issues",
@@ -138,20 +142,24 @@ export const PANEL_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, str
 		stale: "to check again",
 		rows: "rows",
 		none: "No issues.",
-		previous: "Previous",
-		next: "Next",
+		previous: "Previous issue",
+		next: "Next issue",
 		row: "Row",
 		sheet: "Sheet",
 		recheck: "Changed, to be checked again",
 		more: "more issues",
-		onlyIssueRows: "Only rows with issues",
+		onlyIssueRows: "Show only rows with issues",
 		refresh: "Refresh",
 		refreshHint: "Apply the filter again to the sheet as it is now",
 		local: "Browser",
 		server: "Server",
-		goToCell: "Go to cell",
 		open: "Show issues",
-		close: "Close"
+		close: "Close",
+		show: "Issues shown",
+		all: "All",
+		error: "Errors",
+		warning: "Warnings",
+		noneOfKind: "No issues of this kind."
 	}
 }
 
@@ -445,7 +453,8 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		totalMax: "En çok",
 		newRow: "+ Yeni satır: tıklayın, sonra yazın ya da yapıştırın",
 		filledFrom: "{record} kaydından geldi; yazılamaz",
-		filledFromEditable: "{record} kaydından geldi; değiştirebilirsiniz"
+		filledFromEditable: "{record} kaydından geldi; değiştirebilirsiniz",
+		filledColumn: "{lookup} seçilince dolar"
 	},
 	en: {
 		cellMenu: "Cell menu",
@@ -468,6 +477,7 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		newRow: "+ New row: click, then type or paste",
 		filledFrom: "From {record}; not typed into",
 		filledFromEditable: "From {record}; yours to change",
+		filledColumn: "Filled from the {lookup} picked",
 		succeeded: "Processed",
 		failed: "Failed",
 		skipped: "Not processed",

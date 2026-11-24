@@ -7,6 +7,56 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+A new look (canvas items 138–160, designs AK–AP): colour only where it says something, the sheet
+given more room, and a phone that shows the sheet edge to edge. The packages' default colours and
+several parts change; an application that set its own `--tabula-*` colours keeps them.
+
+### Changed
+
+- **The default colours.** Neutral greys for the sheet, one green (`--tabula-accent` `#00a06c`)
+  for the selection and the main action, one red (`--tabula-error` `#c4183c`), a dark orange for
+  warnings, and a blue for changed cells; the dark theme is layered greys (`#16191e` cells,
+  `#1a1e24` headers) with a lighter green and red. Lines are lighter, and on dark an issue's tint
+  is stronger. To keep the earlier look, set `--tabula-accent: rgb(0 178 123)`,
+  `--tabula-bg-alt: #fafbfc`, `--tabula-fg: #000000`, `--tabula-muted: #495465`,
+  `--tabula-error: #ff0156`, `--tabula-warning: #ffb600` and `--tabula-info: #6267ff`.
+- **Column letters share the header's row.** With `column-letters` the letter stands before the
+  label, smaller and softer, and turns green in a selected column; the header no longer grows by a
+  strip of letters, so the sheet shows a row more.
+- **A read-only cell, and one its row's record filled, is a neutral grey.** The lavender tint and
+  the dot in a filled cell are gone (and `--tabula-filled-mark` with them); a link after the label
+  of a column a record fills, and the header's tooltip ("Ürün seçilince dolar"), say where it comes
+  from. `--tabula-readonly-fg` is new.
+- **The worst issue on a row colours its number.** The dot beside the number
+  (`.tabula-grid-rh-mark`) is gone; the number carries `is-error`, `is-warning` or `is-stale`.
+- **The totals row's choice is the row's own words** with a chevron, not a field.
+- **The issues are a plain list.** Rows instead of cards, each pressed as a whole to go to its cell
+  ("Hücreye git" is gone); arrows for the previous and the next issue ("Önceki sorun", "Sonraki
+  sorun"); filters for all, the errors or the warnings, each with its count; and the issue-rows
+  filter is a switch, "Yalnız sorunlu satırları göster".
+- **The formula bar is a strip**: its address and value show their edge only under the pointer or
+  while typed into. Nothing is drawn in a monospace: addresses take the page's font.
+- **The open sheet tab** has the accent along its top edge, where it meets the sheet, and no box.
+
+### Added
+
+- **`TabulaIssues`' `bar` and `modal`** for the `sheet` variant: `:bar="false"` leaves out the bar
+  with the counts, for a host that shows them by its own buttons; `:modal="false"` takes the lower
+  part of the screen only (`--tabula-issues-sheet-height`), with nothing over the rest, and stays
+  open while the chosen issue's cell shows above it. The sheet rises and the scrim fades.
+- **The example** in the new look: the page's title, the draft's state, the check's state, Kontrol
+  et and Değişiklikleri uygula in one bar; the tools in one row without edges, the formula bar,
+  the sheet with its issues beside it and the tabs in one card; the row density and the zoom in one
+  menu ("Normal · %100"); the language as a globe with "TR". Kaydet is in Dosya and on Ctrl+S, and
+  F8 and Shift+F8 walk the issues. On a phone: the title with ⋯, one row of tools, the sheet edge to
+  edge with 12 rows, the tools as tiles in a short sheet, and the issues over the lower half of the
+  screen. Its tooltips are smaller on a phone.
+
+### Fixed
+
+- **The totals list opened with the keys keeps the keys' item** when the pointer rests where the
+  list opens: only a real move of the pointer takes the highlight.
+
 ## [0.5.1] — 2026-11-24
 
 A record fills its row: a product picked, or matched by its name or its code, brings its code, its

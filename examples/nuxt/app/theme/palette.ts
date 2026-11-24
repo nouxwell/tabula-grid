@@ -1,9 +1,11 @@
 import type { GlobalThemeOverrides } from "naive-ui"
 
 /**
- * IONSIS's palette, as the CRM's design tokens give it (figma-tokens.json). It is the one place the
- * colours are written: Naive UI's theme, the CSS variables Tailwind's colours read, and Tabula
- * Grid's own colours are all made from it, so changing one value here changes all three.
+ * The example's palette: neutral greys for the page and the sheet, one green for the main action,
+ * the selection and the open tab, one red for errors, a dark orange for warnings; the dark theme in
+ * layered greys. It is the one place the colours are written: Naive UI's theme, the CSS variables
+ * Tailwind's colours read, and Tabula Grid's own colours are all made from it, so changing one
+ * value here changes all three. Every colour that carries words reads at 4.5:1 or more.
  */
 export type ColorMode = "light" | "dark"
 
@@ -18,8 +20,8 @@ export interface Palette {
 	readonly muted: string
 	readonly primary: string
 	/**
-	 * The primary colour where it carries text: buttons and links. The CRM's green reads at 2.9:1 on
-	 * white, under the 4.5:1 text needs, so light mode takes a darker step of it. Borders, the
+	 * The primary colour where it carries text: buttons and links. A green that fills well reads under
+	 * the 4.5:1 text needs on white, so light mode takes a darker step of it. Borders, the
 	 * selection and fills keep `primary`.
 	 */
 	readonly primaryText: string
@@ -31,47 +33,47 @@ export interface Palette {
 	readonly error: string
 	readonly divider: string
 	readonly hover: string
-	/** The scroll bars' thumb, and under the pointer: the CRM's stronger dividers. */
+	/** The scroll bars' thumb, and under the pointer: the text colour at 20% and 30%. */
 	readonly scrollbar: string
 	readonly scrollbarHover: string
 }
 
 export const PALETTE: Readonly<Record<ColorMode, Palette>> = {
 	light: {
-		body: "#f5f7f9",
+		body: "#f4f5f7",
 		surface: "#ffffff",
-		surfaceAlt: "#fafbfc",
-		text: "#000000",
-		muted: "#495465",
-		primary: "#00b27b",
-		primaryText: "#00835a",
+		surfaceAlt: "#f9fafb",
+		text: "#101318",
+		muted: "#5b6573",
+		primary: "#00a06c",
+		primaryText: "#007a54",
 		onPrimary: "#ffffff",
-		info: "#6267ff",
-		success: "#00b27b",
-		warning: "#ffb600",
-		error: "#ff0156",
-		divider: "rgba(0, 0, 0, 0.1)",
-		hover: "rgba(0, 0, 0, 0.05)",
-		scrollbar: "rgba(0, 0, 0, 0.2)",
-		scrollbarHover: "rgba(0, 0, 0, 0.3)"
+		info: "#3b6fd8",
+		success: "#00a06c",
+		warning: "#d98a00",
+		error: "#c4183c",
+		divider: "#dde1e6",
+		hover: "rgba(16, 19, 24, 0.05)",
+		scrollbar: "rgba(16, 19, 24, 0.2)",
+		scrollbarHover: "rgba(16, 19, 24, 0.3)"
 	},
 	dark: {
-		body: "#14161a",
-		surface: "#26282d",
-		surfaceAlt: "#1d1f25",
-		text: "#ffffff",
-		muted: "#acb5be",
-		primary: "#00e19b",
-		primaryText: "#00e19b",
-		onPrimary: "#04140e",
-		info: "#6267ff",
-		success: "#00e19b",
-		warning: "#ffb600",
-		error: "#ff0156",
-		divider: "rgba(255, 255, 255, 0.1)",
-		hover: "rgba(255, 255, 255, 0.05)",
-		scrollbar: "rgba(255, 255, 255, 0.2)",
-		scrollbarHover: "rgba(255, 255, 255, 0.3)"
+		body: "#0e1013",
+		surface: "#16191e",
+		surfaceAlt: "#1a1e24",
+		text: "#e7e9ec",
+		muted: "#9aa3af",
+		primary: "#22b57f",
+		primaryText: "#3fcf95",
+		onPrimary: "#04140d",
+		info: "#6ea0ff",
+		success: "#22b57f",
+		warning: "#f0b44c",
+		error: "#ff6b81",
+		divider: "#2e333b",
+		hover: "rgba(231, 233, 236, 0.06)",
+		scrollbar: "rgba(231, 233, 236, 0.2)",
+		scrollbarHover: "rgba(231, 233, 236, 0.3)"
 	}
 }
 
@@ -139,7 +141,7 @@ export function naiveOverrides(mode: ColorMode): GlobalThemeOverrides {
 			dividerColor: colors.divider,
 			borderColor: colors.divider,
 			hoverColor: colors.hover,
-			// Scroll bars as the grid's: 5px, the CRM's stronger dividers.
+			// Scroll bars as the grid's: 5px, the text colour at 20%.
 			scrollbarColor: colors.scrollbar,
 			scrollbarColorHover: colors.scrollbarHover,
 			scrollbarWidth: "5px",

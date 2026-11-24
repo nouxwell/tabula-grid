@@ -127,7 +127,8 @@ const numbers = computed(() => {
 
 .tabula-status-address {
 	color: var(--tabula-fg);
-	font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
 }
 
 .tabula-status-sep {

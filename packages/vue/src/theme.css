@@ -5,21 +5,23 @@
  * follows: the lines, the selection, the tints of a cell with an issue. Any of the rest can still
  * be set on its own. Dark values go on .tabula-theme[data-tabula-theme="dark"].
  *
- * The defaults are IONSIS's palette, the one its CRM is drawn in.
+ * The defaults keep colour for what it says: neutral greys for the sheet, one green for the main
+ * action, the selection and the open tab, one red for errors, a dark orange for warnings. The dark
+ * theme is layered greys, not one near-black.
  */
 
 .tabula-theme {
 	/* What a host sets. */
-	--tabula-accent: rgb(0 178 123);
+	--tabula-accent: #00a06c;
 	--tabula-bg: #ffffff;
-	--tabula-bg-alt: #fafbfc;
-	--tabula-fg: #000000;
-	--tabula-muted: #495465;
-	--tabula-error: #ff0156;
-	--tabula-warning: #ffb600;
-	--tabula-success: #00b27b;
-	/* A new record in a preview of a run: neither good nor bad, only new. */
-	--tabula-info: #6267ff;
+	--tabula-bg-alt: #f9fafb;
+	--tabula-fg: #101318;
+	--tabula-muted: #5b6573;
+	--tabula-error: #c4183c;
+	--tabula-warning: #d98a00;
+	--tabula-success: #00a06c;
+	/* A new record in a preview of a run, and a cell changed since loading: neither good nor bad. */
+	--tabula-info: #3b6fd8;
 	--tabula-radius: 6px;
 	--tabula-radius-small: 3px;
 	--tabula-font-size: 13px;
@@ -30,27 +32,31 @@
 	 * towards the text colour, so amber and red stay readable on either background.
 	 */
 	/*
-	 * The accent as text, buttons' and links' words: the palette's green on white reads at 2.9:1, under
-	 * the 4.5:1 text needs, so text takes it a step towards the text colour (darker on light, lighter
-	 * on dark). Borders, the selection and fills keep the accent itself.
+	 * The accent as text, buttons' and links' words: a green that fills well reads under the 4.5:1
+	 * text needs, so text takes it a step towards the text colour (darker on light, lighter on dark).
+	 * Borders, the selection and fills keep the accent itself.
 	 */
-	--tabula-accent-text: color-mix(in srgb, var(--tabula-accent) 72%, var(--tabula-fg));
+	--tabula-accent-text: color-mix(in srgb, var(--tabula-accent) 76%, var(--tabula-fg));
 	/* A number's sign, in a column whose schema asks for it (`tone: "sign"`). */
 	--tabula-positive: var(--tabula-accent-text);
 	--tabula-negative: var(--tabula-required);
-	--tabula-line: color-mix(in srgb, var(--tabula-fg) 10%, var(--tabula-bg));
+	--tabula-line: color-mix(in srgb, var(--tabula-fg) 8%, var(--tabula-bg));
 	--tabula-head-bg: var(--tabula-bg-alt);
-	--tabula-head-line: color-mix(in srgb, var(--tabula-fg) 20%, var(--tabula-bg));
-	--tabula-head-selected-bg: color-mix(in srgb, var(--tabula-accent) 15%, var(--tabula-bg-alt));
-	--tabula-readonly-bg: var(--tabula-bg-alt);
-	/* A cell its row's record filled: a faint tint of the info colour, darker words, a dot. */
-	--tabula-filled-bg: color-mix(in srgb, var(--tabula-info) 7%, var(--tabula-bg));
-	--tabula-filled-fg: color-mix(in srgb, var(--tabula-info) 40%, var(--tabula-fg));
-	--tabula-filled-mark: color-mix(in srgb, var(--tabula-info) 55%, var(--tabula-bg));
+	--tabula-head-line: color-mix(in srgb, var(--tabula-fg) 14%, var(--tabula-bg));
+	--tabula-head-selected-bg: color-mix(in srgb, var(--tabula-accent) 10%, var(--tabula-bg-alt));
+	/* A cell no one types into: a neutral grey, its words a step softer than the rest. */
+	--tabula-readonly-bg: color-mix(in srgb, var(--tabula-fg) 4%, var(--tabula-bg));
+	--tabula-readonly-fg: color-mix(in srgb, var(--tabula-muted) 75%, var(--tabula-fg));
+	/*
+	 * A cell its row's record filled: drawn as a read-only one. Where it came from is told by the
+	 * link in its column's header, its tooltip and the formula bar, not by a colour of its own.
+	 */
+	--tabula-filled-bg: var(--tabula-readonly-bg);
+	--tabula-filled-fg: var(--tabula-readonly-fg);
 	--tabula-range-bg: color-mix(in srgb, var(--tabula-accent) 10%, transparent);
 	--tabula-hover-bg: color-mix(in srgb, var(--tabula-fg) 5%, var(--tabula-bg));
 	--tabula-required: color-mix(in srgb, var(--tabula-error) 85%, var(--tabula-fg));
-	--tabula-error-bg: color-mix(in srgb, var(--tabula-error) 8%, var(--tabula-bg));
+	--tabula-error-bg: color-mix(in srgb, var(--tabula-error) 6%, var(--tabula-bg));
 	--tabula-error-mark: var(--tabula-error);
 	--tabula-warning-bg: color-mix(in srgb, var(--tabula-warning) 12%, var(--tabula-bg));
 	--tabula-warning-mark: color-mix(in srgb, var(--tabula-warning) 70%, var(--tabula-fg));
@@ -87,7 +93,7 @@
 	--tabula-issues-muted: var(--tabula-muted);
 	--tabula-issues-line: var(--tabula-head-line);
 	--tabula-issues-hover: var(--tabula-hover-bg);
-	--tabula-issues-current: color-mix(in srgb, var(--tabula-accent) 15%, var(--tabula-bg));
+	--tabula-issues-current: color-mix(in srgb, var(--tabula-fg) 7%, var(--tabula-bg));
 	--tabula-issues-error: var(--tabula-required);
 	--tabula-issues-warning: color-mix(in srgb, var(--tabula-warning) 60%, var(--tabula-fg));
 	--tabula-issues-error-bg: color-mix(in srgb, var(--tabula-error) 5%, var(--tabula-bg));
@@ -104,15 +110,18 @@
 }
 
 .tabula-theme[data-tabula-theme="dark"] {
-	--tabula-accent: rgb(0 225 155);
-	--tabula-bg: #26282d;
-	--tabula-bg-alt: #1d1f25;
-	--tabula-fg: #ffffff;
-	--tabula-muted: #acb5be;
-	--tabula-error: #ff0156;
-	--tabula-warning: #ffb600;
-	--tabula-success: #00e19b;
-	--tabula-info: #6267ff;
+	--tabula-accent: #22b57f;
+	--tabula-bg: #16191e;
+	--tabula-bg-alt: #1a1e24;
+	--tabula-fg: #e7e9ec;
+	--tabula-muted: #9aa3af;
+	--tabula-error: #ff6b81;
+	--tabula-warning: #f0b44c;
+	--tabula-success: #22b57f;
+	--tabula-info: #6ea0ff;
+	/* On a dark ground a tint needs more of its colour to be seen. */
+	--tabula-error-bg: color-mix(in srgb, var(--tabula-error) 14%, var(--tabula-bg));
+	--tabula-warning-bg: color-mix(in srgb, var(--tabula-warning) 14%, var(--tabula-bg));
 	--tabula-ref-1: #6ea0ff;
 	--tabula-ref-2: #f0a040;
 	--tabula-ref-3: #b48cff;
@@ -204,15 +213,17 @@
 
 @media (prefers-color-scheme: dark) {
 	.tabula-theme[data-tabula-theme="auto"] {
-		--tabula-accent: rgb(0 225 155);
-		--tabula-bg: #26282d;
-		--tabula-bg-alt: #1d1f25;
-		--tabula-fg: #ffffff;
-		--tabula-muted: #acb5be;
-		--tabula-error: #ff0156;
-		--tabula-warning: #ffb600;
-		--tabula-success: #00e19b;
-		--tabula-info: #6267ff;
+		--tabula-accent: #22b57f;
+		--tabula-bg: #16191e;
+		--tabula-bg-alt: #1a1e24;
+		--tabula-fg: #e7e9ec;
+		--tabula-muted: #9aa3af;
+		--tabula-error: #ff6b81;
+		--tabula-warning: #f0b44c;
+		--tabula-success: #22b57f;
+		--tabula-info: #6ea0ff;
+		--tabula-error-bg: color-mix(in srgb, var(--tabula-error) 14%, var(--tabula-bg));
+		--tabula-warning-bg: color-mix(in srgb, var(--tabula-warning) 14%, var(--tabula-bg));
 		--tabula-ref-1: #6ea0ff;
 		--tabula-ref-2: #f0a040;
 		--tabula-ref-3: #b48cff;

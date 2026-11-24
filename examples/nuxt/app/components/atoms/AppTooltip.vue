@@ -2,7 +2,7 @@
 	<n-tooltip
 		ref="tooltipRef"
 		:show="show"
-		:style="shiftStyle"
+		:style="popoverStyle"
 		:content-style="mergedContentStyle"
 		:content-class="mergedContentClass"
 		@update:show="onUpdateShow"
@@ -23,6 +23,10 @@
  * the screen less 32px; running over an edge, it slides sideways until it is 16px from each, and
  * the arrow keeps pointing at the trigger. A call therefore never carries phone code of its own:
  * no width by screen, no placement for phones. `content-style` passed in wins over the defaults.
+ *
+ * On a phone the box is drawn smaller: 13px words, tighter lines and padding, so a hint covers
+ * less of a small screen. Its width is capped to the screen less the gaps and its padding from the
+ * first frame, so it does not open wide and then jump narrower.
  */
 import { NTooltip } from "naive-ui"
 
@@ -37,8 +41,26 @@ const props = withDefaults(
 
 const VIEWPORT_GAP = 16
 const MIN_CONTENT_WIDTH = 120
-const DEFAULT_MAX_WIDTH = "calc(100vw - 2rem)"
+/** The screen less the gaps at both edges and the box's own padding, Naive UI's 14px or a phone's 10px. */
+const DEFAULT_MAX_WIDTH = "calc(100vw - 2 * 16px - 28px)"
 const FONT_SIZE_CLASS = /(^|\s)!?text-(xs|sm|base|lg|\d*xl|\[)/
+/** A phone's tooltip: smaller words and padding, as the CRM's on a phone. */
+const PHONE_TEXT = "text-[13px] leading-snug"
+const PHONE_PADDING = "6px 10px"
+
+const phone = ref(false)
+let stopPhone: (() => void) | null = null
+
+onMounted(() => {
+	const media = window.matchMedia("(max-width: 767px)")
+	const follow = () => (phone.value = media.matches)
+
+	follow()
+	media.addEventListener("change", follow)
+	stopPhone = () => media.removeEventListener("change", follow)
+})
+
+onBeforeUnmount(() => stopPhone?.())
 
 // One class per tooltip, to find its box once it is open; the same on the server and in the browser.
 const fitClass = `app-tooltip-fit-${useId().replace(/[^\w-]/g, "")}`
@@ -47,11 +69,15 @@ const fitMaxWidth = ref<number | null>(null)
 // The slide goes on Naive UI's positioning box as `margin-left`; `--v-offset-left` takes it back
 // from a start or end arrow, so the arrow stays on the trigger.
 const arrowShift = ref(0)
-const shiftStyle = computed(() => (arrowShift.value ? { "--v-offset-left": `${arrowShift.value}px` } : undefined))
+const popoverStyle = computed(() => ({
+	...(arrowShift.value ? { "--v-offset-left": `${arrowShift.value}px` } : {}),
+	...(phone.value ? { padding: PHONE_PADDING } : {})
+}))
 
 const mergedContentClass = computed(() => {
 	const incoming = props.contentClass?.trim()
-	const base = !incoming ? "text-sm" : FONT_SIZE_CLASS.test(incoming) ? incoming : `text-sm ${incoming}`
+	const size = phone.value ? PHONE_TEXT : "text-sm"
+	const base = !incoming ? size : FONT_SIZE_CLASS.test(incoming) ? incoming : `${size} ${incoming}`
 
 	return `${base} ${fitClass}`
 })

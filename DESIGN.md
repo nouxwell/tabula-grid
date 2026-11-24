@@ -6,11 +6,12 @@
 > Tasarım işlerinin ana kaynağı bu dosyadır. Her arayüz isteğinde önce buraya bakılır; burada
 > yazanı tekrar sormaya gerek yoktur.
 
-The look was chosen on 2026-11-18 on the design canvas
-[Tabula Grid tasarım önerileri](https://claude.ai/artifact/HiDLYFc6Q3kVq5QmzYT4Dp): layout A on a
-desktop, C and D on a phone, the parts sheet for every state. Colours, type and the component
-rules follow the IONSIS CRM (`crm-frontend/DESIGN.md`), so a screen made with the grid looks like
-the rest of the CRM.
+The look is drawn on the design canvas
+[Tabula Grid tasarım önerileri](https://claude.ai/artifact/HiDLYFc6Q3kVq5QmzYT4Dp). It was chosen on
+2026-11-18 (layout A on a desktop, C and D on a phone) and redrawn on 2026-11-24 (items 138–160,
+boards AK–AP): one bar, one workspace, colour only where it says something. The component rules
+follow the IONSIS CRM (`crm-frontend/DESIGN.md`); a host such as the CRM sets its own colours
+through the `--tabula-*` variables.
 
 ---
 
@@ -49,61 +50,63 @@ They are installed into any application, so they bring nothing of their own tast
 
 ## Colours
 
-The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same values.
+Chosen on 2026-11-24 (canvas items 152 and 153, board AP): colour is kept for what it says. Neutral
+greys for the page and the sheet; one green for the main action, the selection and the open tab;
+one red for errors; a dark orange for warnings. No lavender, no pink. The dark theme is layered
+greys (page, surface, raised surface), not one near-black. The grid's defaults and the example's
+palette (`examples/nuxt/app/theme/palette.ts`) are the same values.
 
-| Token            | Light                | Dark                       | Grid variable                |
-| ---------------- | -------------------- | -------------------------- | ---------------------------- |
-| Page             | `#f5f7f9`            | `#14161a`                  | —                            |
-| Surface          | `#ffffff`            | `#26282d`                  | `--tabula-bg`                |
-| Second surface   | `#fafbfc`            | `#1d1f25`                  | `--tabula-bg-alt`            |
-| Text             | `#000000`            | `#ffffff`                  | `--tabula-fg`                |
-| Second text      | `#495465`            | `#acb5be`                  | `--tabula-muted`             |
-| Primary (accent) | `#00b27b`            | `#00e19b`                  | `--tabula-accent`            |
-| Primary as text  | `#00835a`            | `#00e19b`                  | `--tabula-accent-text`       |
-| Error            | `#ff0156`            | `#ff0156`                  | `--tabula-error`             |
-| Warning          | `#ffb600`            | `#ffb600`                  | `--tabula-warning`           |
-| Success          | `#00b27b`            | `#00e19b`                  | `--tabula-success`           |
-| Info             | `#6267ff`            | `#6267ff`                  | `--tabula-info`              |
-| Divider          | `rgba(0, 0, 0, 0.1)` | `rgba(255, 255, 255, 0.1)` | `--tabula-line` (worked out) |
+| Token            | Light     | Dark      | Grid variable                          |
+| ---------------- | --------- | --------- | -------------------------------------- |
+| Page             | `#f4f5f7` | `#0e1013` | —                                      |
+| Surface          | `#ffffff` | `#16191e` | `--tabula-bg`                          |
+| Second surface   | `#f9fafb` | `#1a1e24` | `--tabula-bg-alt`                      |
+| Text             | `#101318` | `#e7e9ec` | `--tabula-fg`                          |
+| Second text      | `#5b6573` | `#9aa3af` | `--tabula-muted`                       |
+| Primary (accent) | `#00a06c` | `#22b57f` | `--tabula-accent`                      |
+| Primary as text  | `#007a54` | `#3fcf95` | `--tabula-accent-text`                 |
+| Error            | `#c4183c` | `#ff6b81` | `--tabula-error`                       |
+| Warning          | `#d98a00` | `#f0b44c` | `--tabula-warning`                     |
+| Info (changed)   | `#3b6fd8` | `#6ea0ff` | `--tabula-info`                        |
+| Divider          | `#dde1e6` | `#2e333b` | `--tabula-head-line` (worked out)      |
+| Read-only cell   | text 4%   | text 4%   | `--tabula-readonly-bg`, `-readonly-fg` |
 
-- **The green that carries words is a step darker on light.** `#00b27b` on white reads at 2.9:1,
-  under the 4.5:1 text needs, so buttons' and links' words use `#00835a` (4.8:1). Borders, the
-  selection, fills and the logo keep `#00b27b`. On dark, a green button's words are dark
-  (`#04140e`): white on that green does not read.
+- **The green that carries words is a step darker on light, lighter on dark.** Borders, the
+  selection, fills and the logo keep the accent; buttons' and links' words take
+  `--tabula-accent-text`. A primary button on dark has dark words (`#04140d`).
+- **A cell no one types into is a neutral grey**, a record's filled cell too; a link in its
+  column's header says a record fills it. **An error is one red**: a light tint, a corner and the
+  row's number in red.
 - **Signal colours as text** are mixed towards the text colour (`--tabula-issues-error`,
   `--tabula-issues-warning`): amber and red stay readable on either background.
 - **A number coloured by its sign** (`"tone": "sign"` in the schema): a rise in
   `--tabula-positive` with its plus, a fall in `--tabula-negative`.
-- **Radius** 6px (`--tabula-radius`), 3px for small parts (`--tabula-radius-small`).
+- **Radius** 6px (`--tabula-radius`), 3px for small parts (`--tabula-radius-small`); cards 8–10px.
 - **Type**: the page's font (`"Helvetica Neue", "Segoe UI", system-ui, sans-serif`); Lexend for
-  page titles; a monospace for cell addresses. 15px body, 13px in the grid. The CRM's token says
-  `'Helvatica Neue'`, a typo that matches no font; use `Helvetica Neue`.
+  page titles. **No monospace anywhere**: cell addresses, column letters, keys and formulas take
+  the page's font, with `tabular-nums` where digits line up. 15px body, 13px in the grid.
 
 ---
 
 ## The layout chosen
 
-### Desktop (768px and wider) — design A
+Redrawn on 2026-11-24 (canvas items 138–160, boards AK–AO): one bar, one workspace, more rows.
 
-1. **Top bar**: logo, where the page is (Ürünler / Toplu işlemler), theme switch, language select
-   with flags.
-   Everything keeps to one edge (designs X and Y): the title row, the toolbar's card and the sheet's
-   card start and end at the page's padding, 24px, and inside a card the controls start 12px in, each
-   row 48px with 32px controls.
+### Desktop (768px and wider) — designs AK and AL
 
-2. **Page header**: title, "Taslak" tag (its tooltip says nothing is written before the changes
-   are applied), the row count (counting up), the save status with a small **Kaydet** beside it
-   (the draft saves itself), then Kontrol et · **Değişiklikleri uygula** (primary). While an error stands it is held back, its tooltip and the
-   foot of the issues saying "Uygulamadan önce N hatayı düzeltin."
-3. **Toolbar** (design T), two rows in a card. On top what changes the data: undo and redo (icon
-   buttons with tooltips), **Dosya ▾** (import and export), **Toplu düzenle ▾** (on what is
-   selected: Yüzde uygula and Tutar ekle, each a small window with the amount, Yuvarla ▸ to 0,05,
-   whole, whole up or down, or tens, and Satırları sil, Ctrl+−), the template ▾ joined with
-   **Kurallar** (with no template chosen, what is written there is saved as a new template, named
-   in a small window), and on the right the issues switch: green "Sorun yok", or red "Sorunlar"
-   with their count. Under it what is seen: "Tüm satırlar" and "Değişenler" with their counts, and
-   on the right Sütunlar, the view ▾ and the search. Nothing scrolls sideways: under 1024px Dosya
-   and Kurallar go under ⋯, and the second row's buttons show their icons only.
+1. **App bar** (56px), one row: logo, "Ürünler ›", the page's title, "Taslak" (its tooltip says
+   nothing is written before the changes are applied, and that Ctrl+S saves the draft now), the save
+   status; on the right the check's state as a chip (green "Sorun yok" or red "3 sorun", which opens
+   and closes the issues), Kontrol et, **Değişiklikleri uygula** (primary; "Uygula" under 1280px),
+   then the shortcuts, the theme and the language (a globe with "TR"). While an error stands Uygula
+   is held back, its tooltip and the foot of the issues saying "Uygulamadan önce N hatayı
+   düzeltin." Kaydet is in Dosya and on Ctrl+S: the draft saves itself.
+2. **One card** under it, 16px from the page's edges, holding everything about the sheet:
+   - **The tools in one row (46px), without edges**: undo, redo | Dosya ▾, Toplu düzenle ▾ |
+     the format (bold, italic, text and fill colour, alignment, decimals, clear; under one Biçim ▾
+     below 1400px) | the template ▾ and Kurallar; on the right the rows shown (Tümü, Değişenler,
+     Renkli, with their counts), the search, Sütunlar and the views ▾. Groups are parted by a thin
+     line. Below 1280px Dosya, Toplu düzenle and Kurallar go under ⋯; nothing scrolls sideways.
    - **The rules drawer** (design E, 560px, on the right) has no mask: the sheet stays in view and in
      reach while a rule is written. Each rule is a card with its sentence and how many rows it
      catches now; one at a time opens as a form (field, what it must be, against what, Ne zaman,
@@ -116,34 +119,43 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
      the one being written in bold and what the function does. Under it, the values on the first
      rows and how many rows fail, as it is typed. A column kept shows in the sheet at once, marked
      as not saved in the footer; Vazgeç and closing the drawer put the sheet back as saved.
-4. **Formula bar** (`TabulaFormulaBar`), the top of the sheet's card: address and value of the
-   active cell; a formula by the fields' names, each in the colour its column takes in the sheet
-   while the cell is active.
-5. **The sheet** (`TabulaGrid`, with column letters, and the user's changed cells marked in the top
-   left corner in the info colour), the whole width while there are no issues. **The issues**
-   (`TabulaIssues`, 340px, each with the cell's address, "D8", and the product) come in on its
-   right with the first issue, typed or found by a check, and go with the last; their close button
-   or the switch closes them until the next check. A right click opens the grid's menu: cut,
-   copy, paste, clear, fill, add and take out rows, the page's Yüzde uygula, Tutar ekle and
-   Yuvarla ▸, filter by the value and sort, each with its keys on the right.
-6. **Sheet tabs** (`TabulaSheetTabs`, design R) at the foot of the sheet's card, on the left: the open one white
-   with the accent under it, each with its errors in red or a tick, + to add one; a double click
-   renames, a right click opens rename, duplicate, move left or right and delete; a tab is dragged
-   to another place, an accent line showing where it lands. Then the **status bar**
-   (`TabulaStatusBar`): rows and issues, the selection, its sum and average.
+   - **The formula bar** (`TabulaFormulaBar`, 36px), a strip: the active cell's address and value;
+     a formula by the fields' names, each in the colour its column takes in the sheet.
+   - **The sheet** (`TabulaGrid`): each column's letter before its label in the header's one row,
+     green in a selected column; a link after the label of a column a record fills; changed cells
+     marked in the top left corner in the info colour; the totals row's choice as its own words
+     ("Toplam ▾"). The sheet shows 21 rows at 1440×900. A right click opens the grid's menu: cut,
+     copy, paste, clear, fill, add and take out rows, the page's Yüzde uygula, Tutar ekle and
+     Yuvarla ▸, filter by the value and sort, each with its keys on the right.
+   - **The issues** (`TabulaIssues`, 320px, 360px from 1280px) inside the card, beside the sheet,
+     with the first issue and gone with the last; the chip or their × closes them until the next
+     check. A plain list: a dot, "Satır 9 · Ürün", the cell's address, who found it, the product
+     and the message, the whole row pressed to go to the cell; ↑ ↓ (F8, Shift+F8), filters for all,
+     the errors and the warnings, and the switch "Yalnız sorunlu satırları göster". Under the list
+     the reason Uygula waits, and "Hatalı satırları indir".
+   - **The foot** (40px): the sheet tabs (`TabulaSheetTabs`, design R) on the left, the open one
+     with the accent along its top; on the right rows and issues, the selection, its sum and average
+     (`TabulaStatusBar`), and one menu for the row density and the zoom: "Normal · %100 ▾".
 
-### Phone (under 768px) — designs C and D
+### Phone (under 768px) — designs AM, AN and AO
 
-1. **App bar**: logo, theme switch, ⋯ (language, with flags).
-2. Title, "Taslak", save status.
-3. **Toolbar**: undo, redo and **Araçlar**, which opens the tools as a sheet from the bottom
-   (design W): Dosya, Seçili hücreler and Sayfa, each tool named, 48px a row.
-4. Formula bar.
-5. The sheet, rows 40px high.
-6. **Issues bar** (`TabulaIssues variant="sheet"`): the counts; it opens the issues as a sheet
-   from the bottom, with "Yeniden kontrol et"; choosing an issue closes it and goes to the cell.
-7. **Action bar** at the bottom: Kontrol et · Uygula, Uygula disabled while an error stands; the
-   draft's Kaydet is beside its save status. The search takes the whole width under the row filter.
+1. **App bar**: logo, the page's title with "Taslak · Kaydedildi 19:40" under it, and ⋯ (the
+   theme, the language, Kaydet).
+2. **One row of tools** (52px): undo, redo, Tümü / Değişenler, the search (opened under the row by
+   the magnifier) and **Araçlar**.
+3. **The sheet edge to edge**, no card: the formula bar as a strip, the sheet with 40px rows (12
+   on the first screen; a column cut at the right says it scrolls), the totals, then the tabs with
+   the row count just above the bottom bar.
+4. **The bottom bar**: the check's state as a 48px button (a green tick, or the issues' count in
+   red, which opens them), Kontrol et · Uygula; Uygula held back while an error stands.
+5. **Araçlar** opens a short sheet from the bottom (AN): the selection ("D3:D9 · 7 hücre"), the
+   format as eight tiles, the selected cells' work and the file's as large buttons two by two, and
+   the sheet's settings as a list with their values (Sütunlar 9 / 10, Görünüm, Şablon, Kurallar,
+   Bul ve değiştir).
+6. **The issues** take the lower half of the screen (AO, `TabulaIssues variant="sheet"` with
+   `:bar="false"` and `:modal="false"`): the page makes room above them, so a chosen issue's cell
+   shows there while the list stays open; at their foot "Hatalıları indir" and "Yeniden kontrol".
+7. No "Sorun yok" bar: the state is the bottom bar's button.
 
 ### The parts, as decided
 
@@ -287,6 +299,31 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 | 135 | A column of codes sent to the lookup in an import    | both        | done               |
 | 136 | The SKU column typed into on new rows (AJ)           | package     | not chosen         |
 | 137 | A server row's product kept as it is                 | package     | not chosen         |
+| 138 | Title, draft and the run in one app bar (AK)         | application | done               |
+| 139 | Tools, formula bar, sheet and tabs in one card       | application | done               |
+| 140 | One toolbar row without edges                        | application | done               |
+| 141 | The check's state as a chip by Uygula                | application | done               |
+| 142 | A plainer foot: tabs, status, one size menu          | both        | done               |
+| 143 | The language as a globe with "TR"                    | application | done               |
+| 144 | Column letters in the header's row                   | package     | done               |
+| 145 | Read-only and filled cells a neutral grey            | package     | done               |
+| 146 | One red for an error; the row's number in red        | package     | done               |
+| 147 | The totals row's choice as its own words             | package     | done               |
+| 148 | The issues as a plain list (AL)                      | package     | done               |
+| 149 | Arrows and Tümü / Hata / Uyarı filters               | package     | done               |
+| 150 | No pink strip; the reason under the list             | application | done               |
+| 151 | The issues inside the card, by the sheet             | application | done               |
+| 152 | One palette (AP)                                     | both        | done               |
+| 153 | A dark theme in layered greys                        | both        | done               |
+| 154 | A phone's title bar with ⋯ (AM)                      | application | done               |
+| 155 | A phone's one row of tools                           | application | done               |
+| 156 | A phone's sheet edge to edge, 12 rows                | both        | done               |
+| 157 | No "Sorun yok" bar on a phone                        | application | done               |
+| 158 | A phone's tabs above the bottom bar                  | application | done               |
+| 159 | A phone's short tools sheet (AN)                     | application | done               |
+| 160 | A phone's issues over the lower half (AO)            | application | done               |
+| 161 | The formula bar only while editing                   | both        | not chosen         |
+| 162 | Column letters hidden                                | package     | not chosen         |
 | —   | Multi-select cells, ticked in a list                 | package     | done (phase two)   |
 | —   | Saved views (personal views)                         | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)       | both        | done (phase two)   |
@@ -419,6 +456,7 @@ and touch scroll the area as the browser scrolls it.
 - [ ] Packages: no UI kit, no Tailwind, colours only from `theme.css`, classes `tabula-*`.
 - [ ] Applications: every Naive UI component through an `App*` atom; a missing one wrapped first.
 - [ ] No hex in a component; colours from the palette or `--tabula-*`.
+- [ ] No monospace font, in a package or an application.
 - [ ] Words in the accent colour use the darker step; text at 4.5:1 in light and dark.
 - [ ] Checked at 375px and 1440px, light and dark; 44px targets on a phone; no sideways page scroll.
 - [ ] Every hint is an `AppTooltip`; every modal the `AppModal` shape; every drawer

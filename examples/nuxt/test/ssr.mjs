@@ -38,8 +38,8 @@ try {
 	assert.match(html, /Kontrol et/, "the toolbar's AppButtons, drawn on the server")
 	assert.match(html, /Standart düzen/, "the view menu's button, before the browser reads the saved views")
 	assert.match(html, /<style[^>]*cssr-id/, "Naive UI's styles, collected on the server")
-	assert.match(html, /--app-primary: #00b27b/, "the palette's variables, light")
-	assert.match(html, /--tabula-accent: #00b27b/, "the grid's colours from the palette")
+	assert.match(html, /--app-primary: #00a06c/, "the palette's variables, light")
+	assert.match(html, /--tabula-accent: #00a06c/, "the grid's colours from the palette")
 	assert.match(html, /Tablo hazırlanıyor/, "the place the grid takes in the browser")
 	assert.doesNotMatch(html, /class="tabula-grid/, "no grid on the server: it is drawn in the browser only")
 	assert.doesNotMatch(html, /SKU-000001/, "no rows in the page: the browser fetches them for the grid")
@@ -56,7 +56,7 @@ try {
 	const darkHtml = await (await fetch(origin, { headers: { cookie: "color-mode=dark" } })).text()
 
 	assert.match(darkHtml, /<html[^>]*class="dark"/)
-	assert.match(darkHtml, /--app-primary: #00e19b/)
+	assert.match(darkHtml, /--app-primary: #22b57f/)
 
 	// The API, in the grid's own contract.
 	const schema = ModuleSchema.from(await (await fetch(`${origin}/api/modules/price-update`)).json())

@@ -58,7 +58,10 @@ const params = new URLSearchParams(location.search)
 const rowCount = Number(params.get("rows") ?? 10_000)
 const initialTheme = params.get("theme")
 // `?issues=sheet`: the issues as a phone shows them, a bar that opens a sheet from the bottom.
-const issueVariant = params.get("issues") === "sheet" ? "sheet" : "panel"
+// `?issues=half`: no bar; a button opens them over the lower part of the screen, the sheet above.
+const issueVariant = params.get("issues") === "sheet" || params.get("issues") === "half" ? "sheet" : "panel"
+const issuesHalf = params.get("issues") === "half"
+const issuesOpen = ref(false)
 // `?closable=1`: the panel has a close button, and goes when it is pressed.
 const issuesClosable = params.get("closable") === "1"
 const issuesShown = ref(true)
@@ -379,6 +382,7 @@ const WORDS = {
 		undo: "Geri al",
 		redo: "Yinele",
 		check: "Kontrol et",
+		issues: "Sorunlar",
 		process: "İşle",
 		preview: "Önizle",
 		stop: "Durdur",
@@ -436,6 +440,7 @@ const WORDS = {
 		undo: "Undo",
 		redo: "Redo",
 		check: "Check",
+		issues: "Issues",
 		process: "Process",
 		preview: "Preview",
 		stop: "Stop",
@@ -744,6 +749,9 @@ onMounted(() => {
 				>
 					{{ words.check }}
 				</button>
+				<button v-if="issuesHalf" type="button" class="playground-open-issues" @click="issuesOpen = true">
+					{{ words.issues }}
+				</button>
 				<button type="button" class="playground-process" :disabled="state.phase !== 'idle'" @click="process">
 					{{ words.process }}
 				</button>
@@ -875,6 +883,7 @@ onMounted(() => {
 			<TabulaIssues
 				v-if="issuesShown"
 				v-model:only-issue-rows="onlyIssueRows"
+				v-model:open="issuesOpen"
 				class="playground-issues"
 				:closable="issuesClosable"
 				:issues="session.issues"
@@ -884,6 +893,8 @@ onMounted(() => {
 				:locale="language"
 				:value-settings="valueSettings"
 				:variant="issueVariant"
+				:bar="!issuesHalf"
+				:modal="!issuesHalf"
 				@select="goTo"
 				@refresh-rows="view.refresh()"
 				@close="issuesShown = false"

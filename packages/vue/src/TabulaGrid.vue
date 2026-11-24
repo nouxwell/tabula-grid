@@ -204,8 +204,10 @@ const filters = defineModel<ColumnFilters>("filters", { default: () => ({}) })
 const sort = defineModel<ColumnSort | null>("sort", { default: null })
 
 const HEADER_HEIGHT = 32
-/** The strip of column letters over the headers, when there is one. */
-const LETTERS_HEIGHT = 20
+/** The room a column's letter takes before its label, past the letter's own width. */
+const LETTER_GAP = 6
+/** The link drawn in the header of a column a record fills, with its gap. */
+const LINK_ROOM = 18
 const OVERSCAN_ROWS = 6
 const OVERSCAN_COLS = 2
 /** Room kept free at a header's right edge for the handle that resizes the column. */
@@ -345,7 +347,8 @@ const cellStyles = computed(() =>
 	widths.value.map((width, index) => `left:${offsets.value[index] ?? 0}px;width:${width}px`)
 )
 
-const headerHeight = computed(() => HEADER_HEIGHT + (props.columnLetters ? LETTERS_HEIGHT : 0))
+/** The letters share the header's row with the labels: no strip of their own. */
+const headerHeight = computed(() => HEADER_HEIGHT)
 
 /** How each column is drawn over its field's own way, by field key: the user's formats over the defaults. */
 const formats = computed(() => mergeColumnFormats(props.defaultFormats, columns.value.formats))
@@ -396,11 +399,40 @@ function isEditable(field: FieldSchema | undefined): field is FieldSchema {
 	return field !== undefined && field.editable && !props.readonly
 }
 
-/** The header's tooltip: the whole label, and the formula of a column worked out from the others. */
-function headerTitle(col: number): string | undefined {
+/** The lookup that fills the column, by its label: the header's link says so. Null for any other column. */
+function fillingLookup(col: number): string | null {
 	const field = fields.value[col]
 
-	return field?.formula ? `${field.label}\n= ${field.formula}` : field?.label
+	return field ? (filledBy.value.get(field.key)?.label ?? null) : null
+}
+
+/**
+ * The header's tooltip: the whole label, the formula of a column worked out from the others, and
+ * the lookup that fills a column.
+ */
+function headerTitle(col: number): string | undefined {
+	const field = fields.value[col]
+	const lookup = fillingLookup(col)
+
+	if (!field) {
+		return undefined
+	}
+
+	return [
+		field.label,
+		field.formula ? `= ${field.formula}` : "",
+		lookup ? (GRID_TEXT[props.locale].filledColumn ?? "").replace("{lookup}", lookup) : ""
+	]
+		.filter(Boolean)
+		.join("\n")
+}
+
+/** What a header holds past its label's words: the letter before it and a link after it. */
+function headerExtra(col: number, measure: (text: string) => number): number {
+	return (
+		(props.columnLetters ? measure(columnName(col)) + LETTER_GAP : 0) +
+		(fillingLookup(col) === null ? 0 : LINK_ROOM)
+	)
 }
 
 function headerText(col: number): string {
@@ -449,7 +481,12 @@ function measureHeaders(): void {
 
 	autoWidths.value = fields.value.map((field, index) => {
 		const sizing = sizings.value[index] ?? resolveColumnSizing()
-		const content = measure(headerText(index)) + padding + (field.required ? mark : 0) + RESIZE_HANDLE
+		const content =
+			measure(headerText(index)) +
+			padding +
+			(field.required ? mark : 0) +
+			headerExtra(index, measure) +
+			RESIZE_HANDLE
 
 		return autoColumnWidth(content, sizing)
 	})
@@ -471,6 +508,7 @@ function autoFit(col: number): void {
 		measureHeader(headerText(col)) +
 		horizontalPadding(headerProbe.value) +
 		(field.required ? measureHeader(" *") : 0) +
+		headerExtra(col, measureHeader) +
 		RESIZE_HANDLE
 
 	const rows = view.value
@@ -872,6 +910,17 @@ const totalHover = ref<TotalKind>("sum")
 const totalButton = ref<HTMLButtonElement | null>(null)
 let stopTotalMenu: (() => void) | null = null
 
+/**
+ * The pointer moving onto an item of the totals list takes the highlight. Only a real move: a
+ * browser also says the pointer entered an item when the list opens under a pointer at rest, and
+ * that would take the highlight from the keys that opened it.
+ */
+function hoverTotal(kind: TotalKind, event: MouseEvent): void {
+	if (event.movementX !== 0 || event.movementY !== 0) {
+		totalHover.value = kind
+	}
+}
+
 function openTotalMenu(): void {
 	const button = totalButton.value?.getBoundingClientRect()
 	const frame = root.value?.getBoundingClientRect()
@@ -1079,10 +1128,12 @@ function rowStatus(rowId: string): "sending" | "succeeded" | "failed" | "skipped
 	return result?.outcome ?? null
 }
 
-/** The row number's classes: where the row stands with the backend, and any issue about the row as a whole. */
+/**
+ * The row number's classes: where the row stands with the backend, and the worst issue anywhere on
+ * the row, which colours the number itself.
+ */
 function rowClass(row: number): string[] {
 	void resultVersion.value
-	void issueVersion.value
 
 	const rowId = view.value.rowIdAt(row)
 
@@ -1091,14 +1142,13 @@ function rowClass(row: number): string[] {
 	}
 
 	const status = rowStatus(rowId)
-	const severity = severityClass(issueSet.value.rowIssues(rowId))
 
-	return [status ? `is-${status}` : "", severity ?? ""].filter(Boolean)
+	return [status ? `is-${status}` : "", rowMark(row) ?? ""].filter(Boolean)
 }
 
 /**
- * The worst issue standing anywhere on the row, its hidden columns too, as a mark by its number:
- * a row with something to fix is found by its number as the sheet scrolls past.
+ * The worst issue standing anywhere on the row, its hidden columns too, in its number's colour: a
+ * row with something to fix is found by its number as the sheet scrolls past.
  */
 function rowMark(row: number): string | undefined {
 	void issueVersion.value
@@ -4100,6 +4150,15 @@ defineExpose({
 							<span v-if="fields[c]?.formula" class="tabula-grid-fx" aria-hidden="true">ƒx</span>
 							<span class="tabula-grid-th-text">{{ headerText(c) }}</span>
 							<span v-if="fields[c]?.required" class="tabula-grid-required" aria-hidden="true">*</span>
+							<svg
+								v-if="fillingLookup(c) !== null"
+								class="tabula-grid-th-link"
+								viewBox="0 0 24 24"
+								aria-hidden="true"
+							>
+								<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+								<path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+							</svg>
 							<span v-if="sortOf(c)" class="tabula-grid-sort" aria-hidden="true">
 								{{ sortOf(c) === "asc" ? "↑" : "↓" }}
 							</span>
@@ -4158,6 +4217,15 @@ defineExpose({
 						<span v-if="fields[c]?.formula" class="tabula-grid-fx" aria-hidden="true">ƒx</span>
 						<span class="tabula-grid-th-text">{{ headerText(c) }}</span>
 						<span v-if="fields[c]?.required" class="tabula-grid-required" aria-hidden="true">*</span>
+						<svg
+							v-if="fillingLookup(c) !== null"
+							class="tabula-grid-th-link"
+							viewBox="0 0 24 24"
+							aria-hidden="true"
+						>
+							<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+							<path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+						</svg>
 						<span v-if="sortOf(c)" class="tabula-grid-sort" aria-hidden="true">
 							{{ sortOf(c) === "asc" ? "↑" : "↓" }}
 						</span>
@@ -4204,7 +4272,6 @@ defineExpose({
 						@mousedown="onGutterDown($event, r)"
 					>
 						{{ sheetRow(r) }}
-						<span v-if="rowMark(r)" class="tabula-grid-rh-mark" :class="rowMark(r)" />
 					</div>
 					<div
 						v-if="newRowHeight > 0"
@@ -4420,7 +4487,7 @@ defineExpose({
 				role="option"
 				:aria-selected="kind === totalKind"
 				:class="{ 'is-active': kind === totalHover, 'is-selected': kind === totalKind }"
-				@mouseenter="totalHover = kind"
+				@mousemove="hoverTotal(kind, $event)"
 				@click="chooseTotal(kind)"
 			>
 				<span v-text="GRID_TEXT[locale][TOTAL_WORDS[kind]]" />
@@ -4748,28 +4815,16 @@ defineExpose({
 	white-space: nowrap;
 }
 
-/* The column's letter, on a strip of its own over the label. */
-.tabula-grid.has-letters .tabula-grid-th {
-	padding-top: 20px;
-}
-
+/*
+ * The column's letter, before its label in the same row, softer and smaller: a formula's A1 still
+ * reads, and the sheet keeps a row a strip of letters would take.
+ */
 .tabula-grid-th-letter {
-	position: absolute;
-	top: 0;
-	right: 0;
-	left: 0;
-	box-sizing: border-box;
-	height: 20px;
-	border-bottom: 1px solid var(--tabula-line);
+	flex: none;
+	margin-right: 6px;
 	color: var(--tabula-muted);
-	font-size: 0.9em;
-	font-weight: 400;
-	line-height: 19px;
-	text-align: center;
-}
-
-.tabula-grid.has-letters .tabula-grid-corner {
-	background: linear-gradient(var(--tabula-head-bg) 19px, var(--tabula-line) 19px 20px, var(--tabula-head-bg) 20px);
+	font-size: 0.85em;
+	font-weight: 500;
 }
 
 .tabula-grid-th.is-right {
@@ -4780,10 +4835,33 @@ defineExpose({
 	justify-content: center;
 }
 
-.tabula-grid-th.is-selected,
+/* A selected column: a line under its header and its letter in green. A selected row: its number. */
+.tabula-grid-th.is-selected {
+	background: var(--tabula-head-selected-bg);
+	box-shadow: inset 0 -2px 0 var(--tabula-accent);
+}
+
+.tabula-grid-th.is-selected .tabula-grid-th-letter {
+	color: var(--tabula-accent-text);
+}
+
 .tabula-grid-rh.is-selected {
 	background: var(--tabula-head-selected-bg);
-	color: var(--tabula-fg);
+	color: var(--tabula-accent-text);
+	font-weight: 600;
+}
+
+/* A column a record fills, such as a product's code: a link after its label; the tooltip says which. */
+.tabula-grid-th-link {
+	flex: none;
+	width: 13px;
+	height: 13px;
+	margin-left: 5px;
+	fill: none;
+	stroke: var(--tabula-muted);
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
 }
 
 .tabula-grid-th-text {
@@ -5308,7 +5386,7 @@ defineExpose({
 	color: var(--tabula-accent);
 }
 
-/* An issue about the row as a whole is on its number. */
+/* The worst issue anywhere on the row colours its number: no mark of its own beside it. */
 .tabula-grid-rh.is-error {
 	color: var(--tabula-error-mark);
 	font-weight: 600;
@@ -5319,26 +5397,24 @@ defineExpose({
 	font-weight: 600;
 }
 
-.tabula-grid-cell.is-readonly {
-	background: var(--tabula-readonly-bg);
-	color: var(--tabula-muted);
+/* A server's word on a row changed since: waits to be checked again. */
+.tabula-grid-rh.is-stale {
+	text-decoration: underline dotted;
+	text-underline-offset: 3px;
 }
 
-/* A cell its row's record filled, such as a product's code: tinted, with a dot in its corner. */
+.tabula-grid-cell.is-readonly {
+	background: var(--tabula-readonly-bg);
+	color: var(--tabula-readonly-fg);
+}
+
+/*
+ * A cell its row's record filled, such as a product's code: drawn as a read-only one; the link in
+ * its header and its tooltip say where it came from.
+ */
 .tabula-grid-cell.is-filled {
 	background: var(--tabula-filled-bg);
 	color: var(--tabula-filled-fg);
-}
-
-.tabula-grid-cell.is-filled::after {
-	position: absolute;
-	top: 4px;
-	right: 4px;
-	width: 5px;
-	height: 5px;
-	border-radius: 50%;
-	background: var(--tabula-filled-mark);
-	content: "";
 }
 
 /* A column coloured by its numbers' sign: a rise and a fall, read or not. */
@@ -5450,9 +5526,9 @@ defineExpose({
 	position: relative;
 	flex: none;
 	overflow: hidden;
-	border-top: 2px solid var(--tabula-head-line);
+	border-top: 1px solid var(--tabula-head-line);
 	background: var(--tabula-head-bg);
-	font-weight: 700;
+	font-weight: 600;
 }
 
 .tabula-grid-totals-cell {
@@ -5464,7 +5540,7 @@ defineExpose({
 	overflow: hidden;
 	border-right: 1px solid var(--tabula-line);
 	background: var(--tabula-head-bg);
-	line-height: calc(var(--tabula-row-height) - 2px);
+	line-height: calc(var(--tabula-row-height) - 1px);
 	text-align: right;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -5488,39 +5564,38 @@ defineExpose({
 	background: var(--tabula-head-bg);
 }
 
-/* What the totals row shows, chosen as a select is: the words, a chevron, a list above. */
+/*
+ * What the totals row shows: the row's own words and a chevron, not a field; a press opens the list
+ * above. Only the pointer or the focus draws its edge.
+ */
 .tabula-grid-totals-pick {
 	display: flex;
-	flex: 1;
-	gap: 6px;
+	flex: none;
+	gap: 4px;
 	align-items: center;
-	justify-content: space-between;
 	box-sizing: border-box;
 	min-width: 0;
+	max-width: 100%;
 	height: calc(100% - 8px);
-	padding: 0 8px 0 10px;
-	border: 1px solid var(--tabula-head-line);
+	padding: 0 6px;
+	border: 0;
 	border-radius: var(--tabula-radius);
-	background: var(--tabula-bg);
+	background: transparent;
 	color: var(--tabula-fg);
 	font: inherit;
 	font-weight: 600;
 	cursor: pointer;
-	transition:
-		border-color 0.15s ease,
-		box-shadow 0.15s ease;
+	transition: background-color 0.15s ease;
 }
 
 .tabula-grid-totals-pick:hover,
-.tabula-grid-totals-pick.is-open,
-.tabula-grid-totals-pick:focus-visible {
-	outline: none;
-	border-color: var(--tabula-accent);
+.tabula-grid-totals-pick.is-open {
+	background: var(--tabula-hover-bg);
 }
 
-.tabula-grid-totals-pick.is-open,
 .tabula-grid-totals-pick:focus-visible {
-	box-shadow: 0 0 0 2px color-mix(in srgb, var(--tabula-accent) 20%, transparent);
+	outline: 2px solid var(--tabula-accent);
+	outline-offset: -2px;
 }
 
 .tabula-grid-totals-word {
@@ -5628,31 +5703,14 @@ defineExpose({
 }
 
 /* The worst issue on any of the row's cells, by its number. */
-.tabula-grid-rh-mark {
-	position: absolute;
-	top: 50%;
-	left: 6px;
-	width: 6px;
-	height: 6px;
-	margin-top: -3px;
-	border-radius: 50%;
-	background: var(--tabula-error-mark);
-}
-
-.tabula-grid-rh-mark.is-warning {
-	background: var(--tabula-warning-mark);
-}
-
-.tabula-grid-rh-mark.is-stale {
-	background: var(--tabula-stale-mark);
-}
-
 /* A cell no one types into can still be wrong, such as a formula that cannot be worked out. */
-.tabula-grid-cell.is-readonly.is-error {
+.tabula-grid-cell.is-readonly.is-error,
+.tabula-grid-cell.is-filled.is-error {
 	background: var(--tabula-error-bg);
 }
 
-.tabula-grid-cell.is-readonly.is-warning {
+.tabula-grid-cell.is-readonly.is-warning,
+.tabula-grid-cell.is-filled.is-warning {
 	background: var(--tabula-warning-bg);
 }
 

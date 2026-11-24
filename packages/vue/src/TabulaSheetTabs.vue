@@ -569,12 +569,12 @@ function errorsText(count: number): string {
 	gap: 8px;
 	align-items: center;
 	padding: 0 14px;
-	border: 1px solid transparent;
-	border-top: 0;
-	border-radius: 0 0 var(--tabula-radius) var(--tabula-radius);
 	cursor: pointer;
 	white-space: nowrap;
 	user-select: none;
+	transition:
+		background-color 0.15s ease,
+		color 0.15s ease;
 }
 
 /* A tab being dragged, and the line where it would land. */
@@ -595,10 +595,10 @@ function errorsText(count: number): string {
 	color: var(--tabula-fg);
 }
 
+/* The open sheet: its words in full, and the accent along the edge it shares with the sheet. */
 .tabula-tabs-tab.is-active {
-	border-color: var(--tabula-head-line);
-	background: var(--tabula-bg);
-	box-shadow: inset 0 -2px 0 var(--tabula-accent);
+	background: transparent;
+	box-shadow: inset 0 2px 0 var(--tabula-accent);
 	color: var(--tabula-fg);
 	font-weight: 600;
 }
@@ -725,6 +725,10 @@ function errorsText(count: number): string {
 @media (prefers-reduced-motion: reduce) {
 	.tabula-tabs-menu {
 		animation: none;
+	}
+
+	.tabula-tabs-tab {
+		transition: none;
 	}
 }
 

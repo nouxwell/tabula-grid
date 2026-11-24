@@ -153,14 +153,14 @@
 						/>
 						<AppCard v-else content-class="flex items-center gap-2.5 px-3! py-2.5!">
 							<span
-								class="w-5 flex-none text-center font-mono text-sm"
+								class="w-5 flex-none text-center text-sm"
 								:class="item.formula ? 'text-primary-text' : 'text-muted'"
 							>
 								{{ item.formula ? "ƒ" : "Aa" }}
 							</span>
 							<span class="flex min-w-0 flex-1 flex-col">
 								<strong class="text-sm">{{ item.label }}</strong>
-								<span class="truncate font-mono text-xs text-muted">
+								<span class="truncate text-xs text-muted">
 									{{ item.formula ? `= ${item.formula}` : "yardımcı sütun, elle doldurulur" }}
 								</span>
 							</span>

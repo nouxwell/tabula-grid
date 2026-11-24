@@ -6,7 +6,7 @@
 			class="flex flex-col gap-0.5 rounded-app border border-divider bg-surface-alt px-2.5 py-1.5 text-xs"
 			aria-live="polite"
 		>
-			<span class="font-mono">
+			<span>
 				<span
 					v-for="(part, index) in hint.parts"
 					:key="index"
@@ -20,7 +20,6 @@
 		<AppInput
 			:value="text"
 			size="small"
-			class="font-mono"
 			:placeholder="placeholder"
 			:input-props="{
 				id: inputId,
@@ -74,7 +73,7 @@
 				>
 					{{ item.letter }}
 				</span>
-				<span :class="item.mono ? 'font-mono font-medium' : 'font-semibold'">{{ item.label }}</span>
+				<span :class="item.mono ? 'font-medium tabular-nums' : 'font-semibold'">{{ item.label }}</span>
 				<span class="text-xs text-muted">{{ item.detail }}</span>
 				<span v-if="item.kind" class="ml-auto text-xs text-muted">{{ item.kind }}</span>
 			</li>

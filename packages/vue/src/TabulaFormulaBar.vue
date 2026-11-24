@@ -180,23 +180,37 @@ function selectAll(event: FocusEvent): void {
 	font-size: var(--tabula-font-size);
 }
 
+/*
+ * A strip, not two boxed fields: the address and the value lie flat, and show their edge only under
+ * the pointer or while typed into.
+ */
 .tabula-formula-address,
 .tabula-formula-value {
 	box-sizing: border-box;
 	height: 32px;
 	padding: 0 10px;
-	border: 1px solid var(--tabula-head-line);
+	border: 1px solid transparent;
 	border-radius: var(--tabula-radius);
 	outline: none;
-	background: var(--tabula-bg);
+	background: transparent;
 	color: var(--tabula-fg);
-	font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+	font-family: inherit;
 	font-size: inherit;
+	font-variant-numeric: tabular-nums;
+	transition:
+		border-color 0.15s ease,
+		box-shadow 0.15s ease;
 }
 
 .tabula-formula-address {
 	flex: none;
-	width: 96px;
+	width: 80px;
+	font-weight: 600;
+}
+
+.tabula-formula-address:hover,
+.tabula-formula-value:not([readonly], .is-formula):hover {
+	border-color: var(--tabula-head-line);
 }
 
 .tabula-formula-address.is-wrong {
@@ -214,7 +228,6 @@ function selectAll(event: FocusEvent): void {
 	overflow: hidden;
 	line-height: 30px;
 	text-overflow: ellipsis;
-	background: var(--tabula-readonly-bg);
 	white-space: pre;
 }
 
@@ -224,8 +237,7 @@ function selectAll(event: FocusEvent): void {
 }
 
 .tabula-formula-value[readonly] {
-	background: var(--tabula-readonly-bg);
-	color: var(--tabula-muted);
+	color: var(--tabula-readonly-fg);
 }
 
 .tabula-formula-address:focus,
@@ -239,5 +251,12 @@ function selectAll(event: FocusEvent): void {
 	color: var(--tabula-muted);
 	font-family: Georgia, "Times New Roman", serif;
 	font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tabula-formula-address,
+	.tabula-formula-value {
+		transition: none;
+	}
 }
 </style>

@@ -504,9 +504,35 @@ describe("TabulaGrid", () => {
 				await expect(cell(page, 2, 3).getAttribute("aria-invalid")).resolves.toBe("true")
 				await expect(items(page).count()).resolves.toBe(1)
 				await expect(items(page).first().innerText()).resolves.toBe(
-					"Satır 3 · Yeni fiyat\nTarayıcı\nBu alan zorunlu.\nHücreye git"
+					"Satır 3 · Yeni fiyat\nTarayıcı\nBu alan zorunlu."
 				)
-				await expect(panel(page).locator(".tabula-issues-count.is-error").innerText()).resolves.toBe("1 hata")
+				await expect(
+					panel(page).locator(".tabula-issues-count.is-error .tabula-issues-count-n").innerText()
+				).resolves.toBe("1")
+			})
+		})
+
+		it("lists the errors or the warnings only, and says when a kind has none", async () => {
+			await withPage(20, async page => {
+				await cell(page, 2, 3).click()
+				await press(page, "Delete")
+				await expect.poll(() => items(page).count()).toBe(1)
+
+				await panel(page)
+					.getByRole("button", { name: /^Uyarı/ })
+					.click()
+
+				await expect.poll(() => items(page).count()).toBe(0)
+				await expect(panel(page).locator(".tabula-issues-none").innerText()).resolves.toBe(
+					"Bu türde sorun yok."
+				)
+
+				await panel(page).getByRole("button", { name: /^Hata/ }).click()
+
+				await expect.poll(() => items(page).count()).toBe(1)
+				await expect(
+					panel(page).getByRole("button", { name: /^Hata/ }).getAttribute("aria-pressed")
+				).resolves.toBe("true")
 			})
 		})
 
@@ -606,7 +632,7 @@ describe("TabulaGrid", () => {
 
 					await expect.poll(() => cell(page, 0, 3).getAttribute("title")).toBe("This field is required.")
 					await expect(items(page).first().innerText()).resolves.toBe(
-						"Row 1 · Yeni fiyat\nBrowser\nThis field is required.\nGo to cell"
+						"Row 1 · Yeni fiyat\nBrowser\nThis field is required."
 					)
 				},
 				"&values=en"
@@ -1572,7 +1598,7 @@ describe("TabulaGrid", () => {
 				await expect(cell(page, 8, 0).getAttribute("title")).resolves.toBe("Ürün pasif; fiyatı güncellenemez.")
 				await expect(items(page).count()).resolves.toBe(2)
 				await expect(items(page).first().innerText()).resolves.toBe(
-					"Satır 9 · Ürün\nSunucu\nÜrün pasif; fiyatı güncellenemez.\nHücreye git"
+					"Satır 9 · Ürün\nSunucu\nÜrün pasif; fiyatı güncellenemez."
 				)
 			})
 		})
@@ -1592,7 +1618,9 @@ describe("TabulaGrid", () => {
 				await expect(page.locator(".tabula-issues-count.is-stale").innerText()).resolves.toBe(
 					"1 yeniden kontrol"
 				)
-				await expect(page.locator(".tabula-issues-count.is-error").innerText()).resolves.toBe("1 hata")
+				await expect(
+					page.locator(".tabula-issues-count.is-error .tabula-issues-count-n").innerText()
+				).resolves.toBe("1")
 
 				// Checked again: the product it holds now is active.
 				await page.locator(".playground-check").click()
@@ -2432,7 +2460,7 @@ describe("TabulaGrid", () => {
 
 					await expect(grid.getAttribute("data-tabula-theme")).resolves.toBe("dark")
 					await expect(grid.evaluate(element => getComputedStyle(element).backgroundColor)).resolves.toBe(
-						"rgb(38, 40, 45)"
+						"rgb(22, 25, 30)"
 					)
 				},
 				"&theme=dark"
@@ -2551,17 +2579,15 @@ describe("the bars around the sheet", () => {
 		})
 	})
 
-	it("marks a row with an issue by its number, and colours a change by its sign", async () => {
+	it("colours a row's number by its issue, and a change by its sign", async () => {
 		await withPage(20, async page => {
 			await cell(page, 2, 3).click()
 			await press(page, "Delete")
 
-			const mark = page.locator(".tabula-grid-rh").nth(2).locator(".tabula-grid-rh-mark")
+			const number = (row: number): Locator => page.locator(".tabula-grid-rh").nth(row)
 
-			await expect.poll(() => mark.getAttribute("class")).toContain("is-error")
-			await expect(page.locator(".tabula-grid-rh").nth(3).locator(".tabula-grid-rh-mark").count()).resolves.toBe(
-				0
-			)
+			await expect.poll(() => number(2).getAttribute("class")).toContain("is-error")
+			await expect(number(3).getAttribute("class")).resolves.not.toContain("is-error")
 
 			await cell(page, 0, 4).click()
 			await page.keyboard.type("12,5")
@@ -2593,6 +2619,32 @@ describe("the bars around the sheet", () => {
 
 			await expect.poll(() => source("Satır 9").innerText()).toBe("Sunucu")
 		})
+	})
+
+	it("keeps a half sheet of issues open over the lower part of a phone's screen when one is chosen", async () => {
+		await withPage(
+			20,
+			async page => {
+				const sheet = page.locator('.tabula-issues-body[role="dialog"]')
+
+				await expect(page.locator(".tabula-issues-bar").count()).resolves.toBe(0)
+
+				await cell(page, 2, 3).click()
+				await press(page, "Delete")
+				await cell(page, 0, 0).click()
+				await page.locator(".playground-open-issues").click()
+
+				await expect.poll(() => sheet.count()).toBe(1)
+				await expect(sheet.getAttribute("aria-modal")).resolves.toBe("false")
+				await expect(page.locator(".tabula-issues-scrim").count()).resolves.toBe(0)
+
+				await sheet.locator(".tabula-issues-item").click()
+
+				await expect.poll(async () => (await selected(page)).active).toEqual({ row: 2, col: 3 })
+				await expect(sheet.count()).resolves.toBe(1)
+			},
+			"&issues=half"
+		)
 	})
 
 	it("lists the issues in a sheet from the bottom on a phone, and steps aside for the cell chosen", async () => {

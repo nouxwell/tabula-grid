@@ -198,8 +198,8 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
   `adjustValue(field, value, adjustment)` works out one value.
 - **What the user changed.** Give the grid a `SheetChanges` as `changes`, and every cell the user
   changed since the sheet was loaded has a mark in its top left corner (see below).
-- **Column letters.** `column-letters` puts A, B, C over the headers, as the columns stand on
-  screen: the addresses the formula bar shows.
+- **Column letters.** `column-letters` puts A, B, C before each header's label, in the same row,
+  as the columns stand on screen: the addresses the formula bar shows.
 - **A right-click menu.** On a cell: Kes, Kopyala, Yapıştır; İçeriği temizle; Aşağı and Sağa
   doldur; rows added above or below the selection (as many as it spans) and taken out; then
   "Bu değere göre süz" and the sorts. On a row's number the same without the cell's own; on a
@@ -309,7 +309,9 @@ A row whose key changes is another row: an added one, while the one it was goes 
 
 ### Colours
 
-The grid and the issue panel are drawn in IONSIS's palette, the one its CRM uses, light and dark.
+The grid and the issue panel keep colour for what it says: neutral greys for the sheet, one green
+for the selection and the main action, one red for errors, a dark orange for warnings, and a dark
+theme in layered greys.
 An application changes a few colours and the rest follow: lines, the selection, the tints of a cell
 with an issue are worked out from them. Both components carry the class `tabula-theme`:
 
@@ -340,8 +342,10 @@ scroll as before. `--tabula-scrollbar`, `--tabula-scrollbar-hover` and `--tabula
 (5px) change them.
 
 Where the accent carries words, on a link or a button, the grid takes it a step towards the text
-colour, `--tabula-accent-text`: IONSIS's green reads at 2.9:1 on white, under the 4.5:1 text
-needs. A rise and a fall in a column coloured by sign are `--tabula-positive` and
+colour, `--tabula-accent-text`: a green that fills well reads under the 4.5:1 text needs on
+white. A cell no one types into, and one its row's record filled, is a neutral grey
+(`--tabula-readonly-bg`, `--tabula-readonly-fg`); the link in a filled column's header and its
+tooltip say where it came from. A rise and a fall in a column coloured by sign are `--tabula-positive` and
 `--tabula-negative`.
 
 Every other `--tabula-*` variable, such as `--tabula-range-bg` or `--tabula-error-bg`, can still be
@@ -425,11 +429,15 @@ checks only the cells the change touched.
 
 Each issue is bound to a row by its id and to a field by its key, never to a row number or a
 header, and carries a code and params rather than only a sentence. `TabulaIssues` lists them as
-cards, with counts, Previous and Next: where each is, what it says, and whether the browser or the
-server found it, so the user knows which they can fix themselves. Give it and the grid the same
+rows of a plain list, with arrows to the previous and the next, and filters for all of them, the
+errors or the warnings with their counts: where each is, what it says, and whether the browser or
+the server found it, so the user knows which they can fix themselves. A row is pressed as a whole
+to go to its cell. Give it and the grid the same
 issues, and send its `select` to the grid's `goTo`. On a phone, `variant="sheet"` makes it a bar
 with the counts that opens the list from the bottom of the screen; choosing an issue closes it,
-`v-model:open` opens it from elsewhere, and its `actions` slot takes a button such as "Check
+`v-model:open` opens it from elsewhere, `:bar="false"` leaves the bar out for a host that shows
+the state by its own buttons, `:modal="false"` takes the lower part of the screen only
+(`--tabula-issues-sheet-height`) and stays open while the chosen cell shows above it, and its `actions` slot takes a button such as "Check
 again". `closable` gives the panel a close button too, which emits `close`, for a host that
 shows it only while there are issues:
 

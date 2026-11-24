@@ -48,8 +48,8 @@ const validator = new SheetValidator(schema, store, VALUE_SETTINGS.tr)
 - **`TabulaPreview`** shows what a run would do before it is sent: new records, updates from the
   old value to the new, and the rows that would not change, as the backend's check said.
 
-IONSIS's palette, light, dark and following the system; a few `--tabula-*` CSS variables change it
-and the rest follow. Turkish and English text. Vue 3.5 or later.
+Neutral greys with one green and one red, light, dark (layered greys) and following the system; a
+few `--tabula-*` CSS variables change it and the rest follow. Turkish and English text. Vue 3.5 or later.
 
 Everything is explained in the [repository's README](https://github.com/nouxwell/tabula-grid#readme);
 what each version changed is in its [changelog](https://github.com/nouxwell/tabula-grid/blob/main/CHANGELOG.md).
