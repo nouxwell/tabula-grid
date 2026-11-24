@@ -7,6 +7,13 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-11-24
+
+A record fills its row: a product picked, or matched by its name or its code, brings its code, its
+price and its currency with it, and a column of codes in an import goes to the product. The
+packages add, and a lookup with no `fills` works as before; what changes is the words a lookup
+matching none or several shows, and the header's menu button, which no longer covers the header.
+
 ### Added
 
 - **A record fills its row** (canvas items 130–135, design AI). A lookup's `fills` names the
@@ -561,7 +568,8 @@ taken to a backend through the application's own adapters, and kept as a draft.
   gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
   which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.
 
-[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/nouxwell/tabula-grid/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/nouxwell/tabula-grid/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/nouxwell/tabula-grid/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/nouxwell/tabula-grid/compare/v0.3.1...v0.4.0
