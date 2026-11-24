@@ -237,9 +237,10 @@ export function importTable(table: readonly (readonly string[])[], options: Tabl
  * Why a column is suggested for a field. `remembered`: the host said this header went there before.
  * `name`: the header is the field's label or key. `similar`: the header shares a word with the
  * label, "Fiyat" with "Yeni fiyat". `values`: the column's values read as that field's and as no
- * other's, "TRY" and "USD" as a currency's options.
+ * other's, "TRY" and "USD" as a currency's options. `lookup`: the header names a field a lookup
+ * fills, such as "SKU": the lookup takes the code and finds the record, which fills the rest.
  */
-export type SuggestionReason = "remembered" | "name" | "similar" | "values"
+export type SuggestionReason = "remembered" | "name" | "lookup" | "similar" | "values"
 
 export interface ColumnSuggestion {
 	/** The field the column would go to; null to leave it out. */
@@ -303,9 +304,16 @@ export function suggestColumns(table: readonly (readonly string[])[], options: S
 
 	header.forEach((name, index) => {
 		const field = result[index] ? null : fieldNamed(schema, name.trim())
+		// A field no one types into that a lookup fills: the lookup finds the record by it.
+		const finder =
+			field && !field.editable
+				? open.find(each => each.type === "lookup" && each.fills.includes(field.key))
+				: undefined
 
 		if (field?.editable && free(field)) {
 			choose(index, field.key, "name")
+		} else if (finder && free(finder)) {
+			choose(index, finder.key, "lookup")
 		}
 	})
 

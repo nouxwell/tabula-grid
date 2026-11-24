@@ -879,6 +879,7 @@
 			:store="sheet.store"
 			:settings="valueSettings"
 			:remembered="importMemory"
+			:lookups="sheet.lookups"
 			@import="onImport"
 		/>
 

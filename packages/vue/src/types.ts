@@ -16,6 +16,8 @@ export interface ActiveCell {
 	readonly text: string
 	/** Whether it can be typed into now: an editable column, in a row no run has locked. */
 	readonly editable: boolean
+	/** The record its row's lookup holds, by its label, when that record fills this cell; else null. */
+	readonly filledFrom: string | null
 	/** A column worked out by a formula: the formula in pieces, its fields written with their labels. */
 	readonly formula: readonly FormulaPart[] | null
 	/**

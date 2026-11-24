@@ -7,6 +7,25 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+### Added
+
+- **A record fills its row** (canvas items 130–135, design AI). A lookup's `fills` names the
+  fields its record fills, and a record's `values` what it says of them: written with the record,
+  picked or matched by a name or a code, in the same step, and emptied when the cell holds no
+  record (`lookupFills`). `LookupResolver.match()` says what names would be matched to, writing
+  nothing. The grid tints a filled cell and names its record in the tooltip and the formula bar,
+  and marks what is typed in the list's entries. `suggestColumns` sends a header naming a field a
+  lookup fills, such as "SKU", to the lookup (`lookup`); `isLookupValue` is exported.
+- **The example** fills a product's code, current price and currency from the catalogue, lists
+  each product with its code and price, and in an import sends a column of codes to "Ürün".
+
+### Changed
+
+- **A lookup matching none or several says so in words a person acts on**: "“SKU-999999” ile
+  eşleşen tek bir kayıt yok; düzeltin ya da listeden seçin."
+- **The header's menu button no longer covers the header**: while it shows, the words draw back
+  from it.
+
 ## [0.5.0] — 2026-11-24
 
 Files in and out the way a person works with them: an import shown before anything goes in, with

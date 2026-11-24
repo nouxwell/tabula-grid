@@ -147,141 +147,149 @@ The CRM's design tokens (`figma-tokens.json`). The grid's defaults are the same 
 
 ### The parts, as decided
 
-| #   | Part                                                | Where       | State              |
-| --- | --------------------------------------------------- | ----------- | ------------------ |
-| 1   | Issues in a side panel                              | package     | done               |
-| 2   | Issues in a bottom panel with tabs, and run history | package     | not chosen         |
-| 3   | Issues as a sheet on a phone                        | package     | done               |
-| 4   | Formula bar                                         | package     | done               |
-| 5   | Column letters over the headers                     | package     | not chosen         |
-| 6   | Colour by sign                                      | package     | done               |
-| 7   | A mark by a row's number                            | package     | done               |
-| 8   | Who found an issue (browser or server)              | package     | done               |
-| 9   | Search in the sheet                                 | package     | not chosen         |
-| 10  | Filter and sort in the header                       | package     | done (phase two)   |
-| 11  | Fill handle                                         | package     | done (phase two)   |
-| 12  | Status bar with sum and average                     | package     | done               |
-| 13  | Sheet tabs                                          | package     | not chosen (large) |
-| 14  | Zoom                                                | package     | not chosen         |
-| 15  | Save status                                         | application | done               |
-| 16  | Top bar                                             | application | done               |
-| 17  | Toolbar with import and export menus                | application | done               |
-| 18  | Phone layout                                        | application | done               |
-| 19  | Darker green for words                              | both        | done               |
-| 20  | Rules in a drawer beside the sheet (E)              | application | done (phase two)   |
-| 21  | Rules in a centred modal (F)                        | application | not chosen         |
-| 22  | Live count of the rows a rule catches               | application | done (phase two)   |
-| 23  | A rule's own words, Turkish and English             | both        | done (phase two)   |
-| 24  | Field limits tab in the rules drawer                | application | not chosen (later) |
-| 25  | Comparison with a worked-out value                  | package     | not chosen         |
-| 26  | Computed columns tab in the rules drawer (G)        | application | done (phase two)   |
-| 27  | Formula completion: fields and functions            | both        | done (phase two)   |
-| 28  | A function's help and its arguments, as written     | both        | done (phase two)   |
-| 29  | Live preview of a formula                           | application | done (phase two)   |
-| 30  | A formula typed into one cell with "="              | package     | not chosen         |
-| 31  | A preview before a run, in a window (H)             | both        | done (phase two)   |
-| 32  | The old values in the sheet's own cells (I)         | package     | not chosen         |
-| 33  | The check says what each row would do (`plan`)      | package     | done (phase two)   |
-| 34  | Choosing a row in the preview goes to it            | both        | done (phase two)   |
-| 35  | Rows that would not change are not sent             | package     | not chosen         |
-| 36  | Changed cells marked, and a "Değişenler" filter     | both        | done (phase two)   |
-| 37  | Bulk percentage, amount and rounding                | both        | done (phase two)   |
-| 38  | Searching the sheet                                 | both        | done (phase two)   |
-| 39  | Column letters over the headers                     | package     | done (phase two)   |
-| 40  | Selecting and taking rows out                       | both        | done (phase two)   |
-| 41  | The cell's address and the row's name in issues     | package     | done (phase two)   |
-| 42  | The run held back while errors stand, with why      | application | done (phase two)   |
-| 43  | "Değişiklikleri uygula" in place of "İşle"          | application | done (phase two)   |
-| 44  | The issue panel opened and closed from the bar      | application | not chosen         |
-| 45  | Fixing a cell in the issue panel                    | package     | not chosen         |
-| 46  | The issues as a table in a bottom panel, with tabs  | package     | not chosen         |
-| 47  | Workflow steps over the sheet                       | application | not chosen         |
-| 48  | Type marks in cells (⌄, calendar, switch)           | package     | not chosen         |
-| 49  | A window mapping an older draft's fields (J)        | both        | done (phase two)   |
-| 50  | A warning strip, the mapping in a drawer (K)        | application | not chosen         |
-| 51  | Renames suggested by type and name                  | package     | done (phase two)   |
-| 52  | Each field's first values                           | package     | done (phase two)   |
-| 53  | Values lost, and values the new type cannot read    | package     | done (phase two)   |
-| 54  | Field labels kept in drafts                         | package     | done (phase two)   |
-| 55  | The draft kept untouched until the user decides     | application | done (phase two)   |
-| 56  | Renames declared by the schema (`renamedFrom`)      | package     | not chosen         |
-| 57  | Addresses typed in a formula read as fields (L)     | both        | done (phase two)   |
-| 58  | Column letters in the formula completion            | application | done (phase two)   |
-| 59  | The formula bar shows formulas by the fields' names | package     | done (phase two)   |
-| 60  | The columns a formula reads, coloured (Q)           | package     | done (phase two)   |
-| 61  | References to one cell (`$D$8`)                     | package     | not chosen         |
-| 62  | References to a column's total                      | package     | not chosen         |
-| —   | A right-click menu, with the host's own items       | both        | done (phase two)   |
-| 63  | Sheet tabs under the sheet, as in Excel (R)         | both        | done               |
-| 64  | Sheet tabs at the top, as a browser's (S)           | application | not chosen         |
-| 65  | Each tab a sheet of the same module                 | both        | done               |
-| 66  | A tab of another module                             | both        | asked about        |
-| 67  | Every tab in one draft (a workbook)                 | package     | done               |
-| 68  | Checks and runs about the open sheet                | application | done               |
-| 69  | "Apply all"                                         | application | asked about        |
-| 70  | A tab's errors or tick on it                        | package     | done               |
-| 71  | A tab's menu: rename, duplicate, delete             | package     | done               |
-| 72  | Tabs reordered by dragging                          | package     | done               |
-| 73  | Formulas reading another sheet                      | package     | asked about        |
-| 74  | The toolbar in two rows by purpose (T)              | application | done               |
-| 75  | Toplu düzenle: the bulk edits in one menu           | application | done               |
-| 76  | A bar over the selection with the bulk edits (U)    | package     | not chosen         |
-| 77  | Dosya: import and export in one menu                | application | done               |
-| 78  | The template joined with Kurallar                   | application | done               |
-| 79  | Kaydet beside the save status                       | application | done               |
-| 80  | The formula bar on top of the sheet's card          | application | done               |
-| 81  | What does not fit goes under ⋯                      | application | done               |
-| 82  | An icon-only toolbar in one row (V)                 | application | not chosen         |
-| 83  | A phone's tools in a sheet from the bottom (W)      | application | done               |
-| 84  | Toolbar and sheet in cards, on one edge (X)         | application | done               |
-| 85  | The sheet the whole width without issues            | application | done               |
-| 86  | The issues panel comes and goes with the issues (Y) | application | done               |
-| 87  | The issues switch with their count                  | both        | done               |
-| 88  | The panel opening only after a check                | application | not chosen         |
-| 89  | Alignment: left, centre, right                      | package     | done               |
-| 90  | Fill and text colour on cells (Z)                   | package     | done               |
-| 91  | Bold and italic                                     | package     | done               |
-| 92  | Clear the format                                    | package     | done               |
-| 93  | Colour rules (AA)                                   | package     | done               |
-| 94  | Decimals shown                                      | package     | done               |
-| 95  | Zoom and row density (AB)                           | package     | done               |
-| 96  | Font size and family per cell                       | package     | not chosen         |
-| 97  | Wrapped text                                        | package     | not chosen         |
-| 98  | Format painter                                      | package     | not chosen         |
-| 99  | Borders and merged cells                            | package     | not chosen         |
-| 100 | Columns stretched to the sheet (AB)                 | package     | done               |
-| 101 | Grey K, L, M… columns                               | package     | not chosen         |
-| 102 | A row for a new product at the bottom (AB)          | package     | done as 124        |
-| 103 | A totals row (AB)                                   | package     | done               |
-| 104 | Find and replace, Ctrl+H (AC)                       | package     | done               |
-| 105 | A column fitted to its contents                     | package     | done (before)      |
-| 106 | A shortcuts window                                  | application | done               |
-| 107 | Notes on cells                                      | package     | not chosen         |
-| 108 | Grouping and subtotals                              | package     | not chosen         |
-| 109 | Excel (.xlsx) import and export                     | CRM         | with the CRM       |
-| 110 | A template's formats under each user's own          | package     | done               |
-| 111 | A Biçim tab in the rules drawer (AD)                | application | done               |
-| 112 | "Şablona kaydet" in the format group (AE)           | application | not chosen         |
-| 113 | A user's formats move into the template saved       | application | done               |
-| 114 | Formats saved as a new template                     | application | done               |
-| 115 | The whole layout saved into the template            | application | not chosen         |
-| 116 | The import window before anything goes in (AF)      | both        | done               |
-| 117 | Columns suggested by name, word and values          | package     | done               |
-| 118 | Where a header went, remembered                     | application | done               |
-| 119 | Each column's first values and unreadable cells     | package     | done               |
-| 120 | Rows of a file written into the rows they find      | package     | done               |
-| 121 | A fixed value for a field the file lacks            | application | not chosen         |
-| 122 | "Boş sayfa" from + (AG)                             | both        | done               |
-| 123 | An empty sheet says how to fill it                  | application | done               |
-| 124 | A row after the last that adds one (102)            | package     | done               |
-| 125 | A row nobody filled is not checked or sent          | package     | done               |
-| 126 | The rows with issues as a file (AH)                 | both        | done               |
-| 127 | Warnings too, with who found each                   | application | done               |
-| 128 | The issues file imported again, by SKU              | both        | done               |
-| 129 | The rows with issues moved to a sheet of their own  | application | not chosen         |
-| —   | Multi-select cells, ticked in a list                | package     | done (phase two)   |
-| —   | Saved views (personal views)                        | both        | done (phase two)   |
-| —   | Templates (the layer between schema and views)      | both        | done (phase two)   |
+| #   | Part                                                 | Where       | State              |
+| --- | ---------------------------------------------------- | ----------- | ------------------ |
+| 1   | Issues in a side panel                               | package     | done               |
+| 2   | Issues in a bottom panel with tabs, and run history  | package     | not chosen         |
+| 3   | Issues as a sheet on a phone                         | package     | done               |
+| 4   | Formula bar                                          | package     | done               |
+| 5   | Column letters over the headers                      | package     | not chosen         |
+| 6   | Colour by sign                                       | package     | done               |
+| 7   | A mark by a row's number                             | package     | done               |
+| 8   | Who found an issue (browser or server)               | package     | done               |
+| 9   | Search in the sheet                                  | package     | not chosen         |
+| 10  | Filter and sort in the header                        | package     | done (phase two)   |
+| 11  | Fill handle                                          | package     | done (phase two)   |
+| 12  | Status bar with sum and average                      | package     | done               |
+| 13  | Sheet tabs                                           | package     | not chosen (large) |
+| 14  | Zoom                                                 | package     | not chosen         |
+| 15  | Save status                                          | application | done               |
+| 16  | Top bar                                              | application | done               |
+| 17  | Toolbar with import and export menus                 | application | done               |
+| 18  | Phone layout                                         | application | done               |
+| 19  | Darker green for words                               | both        | done               |
+| 20  | Rules in a drawer beside the sheet (E)               | application | done (phase two)   |
+| 21  | Rules in a centred modal (F)                         | application | not chosen         |
+| 22  | Live count of the rows a rule catches                | application | done (phase two)   |
+| 23  | A rule's own words, Turkish and English              | both        | done (phase two)   |
+| 24  | Field limits tab in the rules drawer                 | application | not chosen (later) |
+| 25  | Comparison with a worked-out value                   | package     | not chosen         |
+| 26  | Computed columns tab in the rules drawer (G)         | application | done (phase two)   |
+| 27  | Formula completion: fields and functions             | both        | done (phase two)   |
+| 28  | A function's help and its arguments, as written      | both        | done (phase two)   |
+| 29  | Live preview of a formula                            | application | done (phase two)   |
+| 30  | A formula typed into one cell with "="               | package     | not chosen         |
+| 31  | A preview before a run, in a window (H)              | both        | done (phase two)   |
+| 32  | The old values in the sheet's own cells (I)          | package     | not chosen         |
+| 33  | The check says what each row would do (`plan`)       | package     | done (phase two)   |
+| 34  | Choosing a row in the preview goes to it             | both        | done (phase two)   |
+| 35  | Rows that would not change are not sent              | package     | not chosen         |
+| 36  | Changed cells marked, and a "Değişenler" filter      | both        | done (phase two)   |
+| 37  | Bulk percentage, amount and rounding                 | both        | done (phase two)   |
+| 38  | Searching the sheet                                  | both        | done (phase two)   |
+| 39  | Column letters over the headers                      | package     | done (phase two)   |
+| 40  | Selecting and taking rows out                        | both        | done (phase two)   |
+| 41  | The cell's address and the row's name in issues      | package     | done (phase two)   |
+| 42  | The run held back while errors stand, with why       | application | done (phase two)   |
+| 43  | "Değişiklikleri uygula" in place of "İşle"           | application | done (phase two)   |
+| 44  | The issue panel opened and closed from the bar       | application | not chosen         |
+| 45  | Fixing a cell in the issue panel                     | package     | not chosen         |
+| 46  | The issues as a table in a bottom panel, with tabs   | package     | not chosen         |
+| 47  | Workflow steps over the sheet                        | application | not chosen         |
+| 48  | Type marks in cells (⌄, calendar, switch)            | package     | not chosen         |
+| 49  | A window mapping an older draft's fields (J)         | both        | done (phase two)   |
+| 50  | A warning strip, the mapping in a drawer (K)         | application | not chosen         |
+| 51  | Renames suggested by type and name                   | package     | done (phase two)   |
+| 52  | Each field's first values                            | package     | done (phase two)   |
+| 53  | Values lost, and values the new type cannot read     | package     | done (phase two)   |
+| 54  | Field labels kept in drafts                          | package     | done (phase two)   |
+| 55  | The draft kept untouched until the user decides      | application | done (phase two)   |
+| 56  | Renames declared by the schema (`renamedFrom`)       | package     | not chosen         |
+| 57  | Addresses typed in a formula read as fields (L)      | both        | done (phase two)   |
+| 58  | Column letters in the formula completion             | application | done (phase two)   |
+| 59  | The formula bar shows formulas by the fields' names  | package     | done (phase two)   |
+| 60  | The columns a formula reads, coloured (Q)            | package     | done (phase two)   |
+| 61  | References to one cell (`$D$8`)                      | package     | not chosen         |
+| 62  | References to a column's total                       | package     | not chosen         |
+| —   | A right-click menu, with the host's own items        | both        | done (phase two)   |
+| 63  | Sheet tabs under the sheet, as in Excel (R)          | both        | done               |
+| 64  | Sheet tabs at the top, as a browser's (S)            | application | not chosen         |
+| 65  | Each tab a sheet of the same module                  | both        | done               |
+| 66  | A tab of another module                              | both        | asked about        |
+| 67  | Every tab in one draft (a workbook)                  | package     | done               |
+| 68  | Checks and runs about the open sheet                 | application | done               |
+| 69  | "Apply all"                                          | application | asked about        |
+| 70  | A tab's errors or tick on it                         | package     | done               |
+| 71  | A tab's menu: rename, duplicate, delete              | package     | done               |
+| 72  | Tabs reordered by dragging                           | package     | done               |
+| 73  | Formulas reading another sheet                       | package     | asked about        |
+| 74  | The toolbar in two rows by purpose (T)               | application | done               |
+| 75  | Toplu düzenle: the bulk edits in one menu            | application | done               |
+| 76  | A bar over the selection with the bulk edits (U)     | package     | not chosen         |
+| 77  | Dosya: import and export in one menu                 | application | done               |
+| 78  | The template joined with Kurallar                    | application | done               |
+| 79  | Kaydet beside the save status                        | application | done               |
+| 80  | The formula bar on top of the sheet's card           | application | done               |
+| 81  | What does not fit goes under ⋯                       | application | done               |
+| 82  | An icon-only toolbar in one row (V)                  | application | not chosen         |
+| 83  | A phone's tools in a sheet from the bottom (W)       | application | done               |
+| 84  | Toolbar and sheet in cards, on one edge (X)          | application | done               |
+| 85  | The sheet the whole width without issues             | application | done               |
+| 86  | The issues panel comes and goes with the issues (Y)  | application | done               |
+| 87  | The issues switch with their count                   | both        | done               |
+| 88  | The panel opening only after a check                 | application | not chosen         |
+| 89  | Alignment: left, centre, right                       | package     | done               |
+| 90  | Fill and text colour on cells (Z)                    | package     | done               |
+| 91  | Bold and italic                                      | package     | done               |
+| 92  | Clear the format                                     | package     | done               |
+| 93  | Colour rules (AA)                                    | package     | done               |
+| 94  | Decimals shown                                       | package     | done               |
+| 95  | Zoom and row density (AB)                            | package     | done               |
+| 96  | Font size and family per cell                        | package     | not chosen         |
+| 97  | Wrapped text                                         | package     | not chosen         |
+| 98  | Format painter                                       | package     | not chosen         |
+| 99  | Borders and merged cells                             | package     | not chosen         |
+| 100 | Columns stretched to the sheet (AB)                  | package     | done               |
+| 101 | Grey K, L, M… columns                                | package     | not chosen         |
+| 102 | A row for a new product at the bottom (AB)           | package     | done as 124        |
+| 103 | A totals row (AB)                                    | package     | done               |
+| 104 | Find and replace, Ctrl+H (AC)                        | package     | done               |
+| 105 | A column fitted to its contents                      | package     | done (before)      |
+| 106 | A shortcuts window                                   | application | done               |
+| 107 | Notes on cells                                       | package     | not chosen         |
+| 108 | Grouping and subtotals                               | package     | not chosen         |
+| 109 | Excel (.xlsx) import and export                      | CRM         | with the CRM       |
+| 110 | A template's formats under each user's own           | package     | done               |
+| 111 | A Biçim tab in the rules drawer (AD)                 | application | done               |
+| 112 | "Şablona kaydet" in the format group (AE)            | application | not chosen         |
+| 113 | A user's formats move into the template saved        | application | done               |
+| 114 | Formats saved as a new template                      | application | done               |
+| 115 | The whole layout saved into the template             | application | not chosen         |
+| 116 | The import window before anything goes in (AF)       | both        | done               |
+| 117 | Columns suggested by name, word and values           | package     | done               |
+| 118 | Where a header went, remembered                      | application | done               |
+| 119 | Each column's first values and unreadable cells      | package     | done               |
+| 120 | Rows of a file written into the rows they find       | package     | done               |
+| 121 | A fixed value for a field the file lacks             | application | not chosen         |
+| 122 | "Boş sayfa" from + (AG)                              | both        | done               |
+| 123 | An empty sheet says how to fill it                   | application | done               |
+| 124 | A row after the last that adds one (102)             | package     | done               |
+| 125 | A row nobody filled is not checked or sent           | package     | done               |
+| 126 | The rows with issues as a file (AH)                  | both        | done               |
+| 127 | Warnings too, with who found each                    | application | done               |
+| 128 | The issues file imported again, by SKU               | both        | done               |
+| 129 | The rows with issues moved to a sheet of their own   | application | not chosen         |
+| 130 | A record fills its row's fields (AI)                 | package     | done               |
+| 131 | A product's code typed or pasted into Ürün           | application | done               |
+| 132 | The list shows code and price, the typed part marked | both        | done               |
+| 133 | Filled cells tinted, with a tooltip                  | package     | done               |
+| 134 | A code matching nothing said plainly                 | package     | done               |
+| 135 | A column of codes sent to the lookup in an import    | both        | done               |
+| 136 | The SKU column typed into on new rows (AJ)           | package     | not chosen         |
+| 137 | A server row's product kept as it is                 | package     | not chosen         |
+| —   | Multi-select cells, ticked in a list                 | package     | done (phase two)   |
+| —   | Saved views (personal views)                         | both        | done (phase two)   |
+| —   | Templates (the layer between schema and views)       | both        | done (phase two)   |
 
 A part marked "not chosen" is not built without asking first.
 

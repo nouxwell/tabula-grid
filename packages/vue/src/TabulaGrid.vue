@@ -12,6 +12,8 @@ import {
 	formulaParts,
 	hasRange,
 	headerDisplayText,
+	isLookupValue,
+	lookupFills,
 	mergeColumnFormats,
 	parseTsv,
 	readInput,
@@ -51,6 +53,7 @@ import {
 	type FieldSchema,
 	type Issue,
 	type IssueSet,
+	type LookupItem,
 	type LookupSearch,
 	type ModuleSchema,
 	type RowResults,
@@ -355,6 +358,39 @@ const cellClasses = computed(() =>
 		return isEditable(field) ? classes : `${classes} is-readonly`
 	})
 )
+
+/** The lookup filling each field it fills, by the filled field's key. */
+const filledBy = computed(() => {
+	const lookups = new Map<string, FieldSchema>()
+
+	for (const field of schema.value.fields) {
+		for (const key of field.type === "lookup" ? field.fills : []) {
+			lookups.set(key, field)
+		}
+	}
+
+	return lookups
+})
+
+/** A cell its row's record filled: tinted, and its tooltip names the record. */
+function filledClass(row: number, col: number): string | undefined {
+	void dataVersion.value
+
+	const field = fields.value[col]
+	const rowId = view.value.rowIdAt(row)
+
+	return field && rowId !== undefined && filledBy.value.has(field.key) && filledFrom(rowId, field.key) !== null
+		? "is-filled"
+		: undefined
+}
+
+/** The record a filled cell's value came from, by its label: what the cell's tooltip names. */
+function filledFrom(rowId: string, key: string): string | null {
+	const lookup = filledBy.value.get(key)
+	const record = lookup ? store.value.get(rowId, lookup.key) : null
+
+	return isLookupValue(record) ? record.label : null
+}
 
 function isEditable(field: FieldSchema | undefined): field is FieldSchema {
 	return field !== undefined && field.editable && !props.readonly
@@ -997,7 +1033,23 @@ function issueLines(issues: readonly Issue[]): string | undefined {
 }
 
 function issueTitle(row: number, col: number): string | undefined {
-	return issueLines(issuesAt(row, col))
+	const issues = issueLines(issuesAt(row, col))
+	const field = fields.value[col]
+	const rowId = view.value.rowIdAt(row)
+	const source = field && rowId !== undefined ? filledFrom(rowId, field.key) : null
+
+	// A cell its row's record filled says which record, under any issue.
+	return source
+		? [
+				issues,
+				(GRID_TEXT[props.locale][isEditable(field) ? "filledFromEditable" : "filledFrom"] ?? "").replace(
+					"{record}",
+					source
+				)
+			]
+				.filter(Boolean)
+				.join("\n")
+		: issues
 }
 
 // ---------------------------------------------------------------- rows
@@ -1401,6 +1453,28 @@ interface Suggestion {
 	readonly description: string | null
 	readonly disabled: boolean
 	readonly value: CellValue
+	/** A lookup's record, whose values fill the fields the lookup fills when it is picked. */
+	readonly record?: LookupItem
+}
+
+/**
+ * A list entry's words cut where they hold what is typed, the part typed marked: how the user sees
+ * why a record is listed, by its name or by its code.
+ */
+function marked(text: string): { readonly text: string; readonly hit: boolean }[] {
+	const needle = lower(draft.value.trim())
+	const at = needle === "" ? -1 : lower(text).indexOf(needle)
+
+	// Lower-casing keeps the length of these texts in all but rare letters; where it does not, no mark.
+	if (at < 0 || lower(text).length !== text.length) {
+		return [{ text, hit: false }]
+	}
+
+	return [
+		{ text: text.slice(0, at), hit: false },
+		{ text: text.slice(at, at + needle.length), hit: true },
+		{ text: text.slice(at + needle.length), hit: false }
+	].filter(part => part.text !== "")
 }
 
 /** How many records the list shows for a lookup; the user types on to narrow it. */
@@ -1541,7 +1615,8 @@ async function search(field: string, query: string): Promise<void> {
 			label: item.label,
 			description: item.description ?? null,
 			disabled: item.disabled === true,
-			value: Object.freeze({ id: item.id, label: item.label })
+			value: Object.freeze({ id: item.id, label: item.label }),
+			record: item
 		}))
 
 		showSuggestions(list, query, list.length === 0 ? "none" : response.more ? "more" : null)
@@ -1611,7 +1686,11 @@ function pick(index: number): boolean {
 	closeList()
 
 	if (rowId !== undefined && field) {
-		store.value.setCell(rowId, field.key, item.value)
+		// The record and what it fills, as one change: one Ctrl+Z takes back both.
+		store.value.setCells([
+			{ rowId, field: field.key, value: item.value },
+			...(item.record ? lookupFills(field, rowId, item.record) : [])
+		])
 	}
 
 	focusInput()
@@ -3225,6 +3304,7 @@ const cell = computed<ActiveCell | null>(() => {
 		address: `${columnName(at.col)}${sheetRow(at.row)}`,
 		text: editText(field, store.value.get(rowId, field.key), props.valueSettings),
 		editable: isEditable(field) && !isLockedRow(rowId),
+		filledFrom: filledFrom(rowId, field.key),
 		formula,
 		references: formula ? [...new Set(formula.flatMap(part => (part.field ? [part.field] : [])))] : []
 	})
@@ -4180,7 +4260,8 @@ defineExpose({
 									changeClass(r, c),
 									refClass(r, c),
 									lookClass(r, c),
-									foundClass(r, c)
+									foundClass(r, c),
+									filledClass(r, c)
 								]"
 								:style="cellStyles[c]"
 								:title="issueTitle(r, c)"
@@ -4229,7 +4310,8 @@ defineExpose({
 								changeClass(r, c),
 								refClass(r, c),
 								lookClass(r, c),
-								foundClass(r, c)
+								foundClass(r, c),
+								filledClass(r, c)
 							]"
 							:style="cellStyles[c]"
 							:title="issueTitle(r, c)"
@@ -4378,8 +4460,18 @@ defineExpose({
 				@mousemove="item.disabled || (highlighted = index)"
 			>
 				<span v-if="picked" class="tabula-grid-option-check" aria-hidden="true" />
-				<span class="tabula-grid-option-label">{{ item.label }}</span>
-				<span v-if="item.description" class="tabula-grid-option-description">{{ item.description }}</span>
+				<span class="tabula-grid-option-label">
+					<template v-for="(part, at) in marked(item.label)" :key="at">
+						<mark v-if="part.hit" class="tabula-grid-option-hit">{{ part.text }}</mark>
+						<template v-else>{{ part.text }}</template>
+					</template>
+				</span>
+				<span v-if="item.description" class="tabula-grid-option-description">
+					<template v-for="(part, at) in marked(item.description)" :key="at">
+						<mark v-if="part.hit" class="tabula-grid-option-hit">{{ part.text }}</mark>
+						<template v-else>{{ part.text }}</template>
+					</template>
+				</span>
 			</li>
 			<li v-if="listNote" class="tabula-grid-list-note" role="presentation">{{ GRID_TEXT[locale][listNote] }}</li>
 			<li v-if="picked" class="tabula-grid-list-note" role="presentation">{{ GRID_TEXT[locale].pickHint }}</li>
@@ -4744,6 +4836,24 @@ defineExpose({
 
 .tabula-grid-th:hover .tabula-grid-th-menu {
 	display: block;
+}
+
+/*
+ * The menu button takes room of its own while it shows, so it never covers the header: the words
+ * draw back from it, softly, and the button keeps its place on the right in every column.
+ */
+.tabula-grid-th {
+	transition: padding-right 0.12s ease-out;
+}
+
+.tabula-grid-th:hover {
+	padding-right: 40px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tabula-grid-th {
+		transition: none;
+	}
 }
 
 .tabula-grid-menu {
@@ -5214,6 +5324,23 @@ defineExpose({
 	color: var(--tabula-muted);
 }
 
+/* A cell its row's record filled, such as a product's code: tinted, with a dot in its corner. */
+.tabula-grid-cell.is-filled {
+	background: var(--tabula-filled-bg);
+	color: var(--tabula-filled-fg);
+}
+
+.tabula-grid-cell.is-filled::after {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--tabula-filled-mark);
+	content: "";
+}
+
 /* A column coloured by its numbers' sign: a rise and a fall, read or not. */
 .tabula-grid-cell.is-positive {
 	color: var(--tabula-positive);
@@ -5658,6 +5785,13 @@ defineExpose({
 	padding: 5px 10px;
 	white-space: nowrap;
 	cursor: pointer;
+}
+
+/* What is typed, where an entry holds it. */
+.tabula-grid-option-hit {
+	border-radius: 2px;
+	background: color-mix(in srgb, var(--tabula-warning) 32%, transparent);
+	color: inherit;
 }
 
 .tabula-grid-option.is-highlighted {

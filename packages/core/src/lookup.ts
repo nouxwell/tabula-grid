@@ -4,8 +4,9 @@ import { TabulaError } from "./errors.js"
 import { sequence } from "./ids.js"
 import { Listeners } from "./listeners.js"
 import type { CellWrite, RowId, RowStore, StoreChange } from "./rows.js"
-import type { LookupField, ModuleSchema } from "./schema.js"
-import type { CellValue } from "./value.js"
+import type { FieldSchema, LookupField, ModuleSchema } from "./schema.js"
+import { toCellValue, type CellValue } from "./value.js"
+import { isLookupValue } from "./values/read.js"
 import { clean } from "./values/text.js"
 
 /**
@@ -22,6 +23,21 @@ export interface LookupItem {
 	readonly description?: string
 	/** Shown, not picked, such as an inactive product; never matched to a name. */
 	readonly disabled?: boolean
+	/**
+	 * What the record says of the sheet's other fields, by their keys, such as a product's code and
+	 * current price: written into those the lookup `fills` when it is matched or picked.
+	 */
+	readonly values?: Readonly<Record<string, CellValue>>
+}
+
+/**
+ * What a lookup's record writes into its row besides itself: each field the lookup `fills`, with
+ * what the record says of it, or emptied when there is no record. Nothing for any other field.
+ */
+export function lookupFills(field: FieldSchema, rowId: RowId, item: LookupItem | null): CellWrite[] {
+	return field.type === "lookup"
+		? field.fills.map(key => ({ rowId, field: key, value: item?.values?.[key] ?? null }))
+		: []
 }
 
 export interface LookupSearchRequest {
@@ -196,6 +212,40 @@ export class LookupResolver implements LookupSearch {
 		return response
 	}
 
+	/**
+	 * What each name would be matched to in a lookup field's records, as a paste would be: the record,
+	 * or null for none or several. The names not known yet go to the backend in one request; answers
+	 * are used again for a minute. Nothing is written.
+	 */
+	async match(field: string, labels: readonly string[]): Promise<(LookupItem | null)[]> {
+		const lookup = this.#lookupOf(field)
+		const resolve = this.#adapters.resolve
+
+		if (!lookup || !resolve) {
+			return labels.map(() => null)
+		}
+
+		const known = this.#matches.get(lookup.lookup) ?? new Map<string, Cached<LookupItem | null>>()
+		const unknown = [
+			...new Set(
+				labels.filter(label => clean(label) !== "" && this.#fresh(known.get(clean(label))) === undefined)
+			)
+		]
+
+		this.#matches.set(lookup.lookup, known)
+
+		if (unknown.length > 0) {
+			const answer = await resolve(
+				{ lookup: lookup.lookup, labels: unknown },
+				{ signal: neverAborted(), requestId: this.#requestId() }
+			)
+
+			this.#learn(known, unknown, readResolveResponse(answer))
+		}
+
+		return labels.map(label => this.#fresh(known.get(clean(label))) ?? null)
+	}
+
 	/** Matches every lookup cell holding a name, such as after a draft is opened. */
 	resolveAll(): Promise<void> {
 		for (const rowId of this.#store.rowIds()) {
@@ -229,8 +279,15 @@ export class LookupResolver implements LookupSearch {
 			return
 		}
 
+		const emptied: { readonly rowId: RowId; readonly field: string }[] = []
+
 		for (const operation of change.operations) {
 			if (operation.kind === "set") {
+				// A cell left with no record leaves nothing for its record to have filled.
+				if (!isLookupValue(operation.after) && (this.#lookupOf(operation.field)?.fills.length ?? 0) > 0) {
+					emptied.push({ rowId: operation.rowId, field: operation.field })
+				}
+
 				this.#enqueue(operation.rowId, operation.field, operation.after)
 			} else if (operation.kind === "insert") {
 				for (const row of operation.rows) {
@@ -239,6 +296,34 @@ export class LookupResolver implements LookupSearch {
 					}
 				}
 			}
+		}
+
+		if (emptied.length > 0) {
+			void Promise.resolve().then(() => this.#empty(emptied))
+		}
+	}
+
+	/**
+	 * Empties what the records of cells now holding none had filled, once the change that emptied
+	 * them is done, as part of it for Ctrl+Z.
+	 */
+	#empty(cells: readonly { readonly rowId: RowId; readonly field: string }[]): void {
+		if (cells.length === 0 || this.#disposed) {
+			return
+		}
+
+		const writes = cells.flatMap(({ rowId, field }) => {
+			const lookup = this.#lookupOf(field)
+
+			if (!lookup || !this.#store.has(rowId) || isLookupValue(this.#store.get(rowId, field))) {
+				return []
+			}
+
+			return lookupFills(lookup, rowId, null).filter(write => this.#store.get(rowId, write.field) !== null)
+		})
+
+		if (writes.length > 0) {
+			this.#store.setCells(writes, { origin: LOOKUP_ORIGIN })
 		}
 	}
 
@@ -358,6 +443,12 @@ export class LookupResolver implements LookupSearch {
 				// Only where the name still stands: the user may have typed something else meanwhile.
 				if (typeof value === "string" && clean(value) === key) {
 					writes.push({ rowId, field, value: Object.freeze({ id: item.id, label: item.label }) })
+
+					const lookup = this.#lookupOf(field)
+
+					if (lookup) {
+						writes.push(...lookupFills(lookup, rowId, item))
+					}
 				}
 			}
 		}
@@ -462,11 +553,29 @@ function readItem(input: unknown, path: string): LookupItem {
 		throw new TabulaError("invalid_response", `${path} must have an id (text or a number) and a label.`)
 	}
 
+	const values = item.values === undefined || item.values === null ? null : plain(item.values)
+
+	if (item.values !== undefined && item.values !== null && !values) {
+		throw new TabulaError("invalid_response", `${path}.values must be an object of values by field key.`)
+	}
+
 	return Object.freeze({
 		id,
 		label: item.label,
 		...(typeof item.description === "string" ? { description: item.description } : {}),
-		...(item.disabled === true ? { disabled: true } : {})
+		...(item.disabled === true ? { disabled: true } : {}),
+		...(values
+			? {
+					values: Object.freeze(
+						Object.fromEntries(
+							Object.entries(values).map(([key, value]) => [
+								key,
+								toCellValue(value, `${path}.values.${key}`)
+							])
+						)
+					)
+				}
+			: {})
 	})
 }
 

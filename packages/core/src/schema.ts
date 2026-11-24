@@ -133,6 +133,12 @@ export interface LookupField extends FieldBase {
 	 * sends an id; the adapter is what turns one into the other.
 	 */
 	readonly lookup: string
+	/**
+	 * Fields the record fills when it is matched or picked, such as a product's code and current
+	 * price: each takes what the record says of it (`LookupItem.values`), and is emptied when the
+	 * cell holds no record. Fields of the schema, not the lookup itself, another lookup or a formula.
+	 */
+	readonly fills: readonly string[]
 }
 
 export type FieldSchema =
@@ -175,6 +181,8 @@ export interface FieldInput {
 	multiple?: boolean
 	/** lookup */
 	lookup?: string
+	/** lookup: the fields its record fills; see `LookupField.fills`. */
+	fills?: string[]
 	/** date and datetime */
 	pattern?: string
 }
@@ -229,7 +237,7 @@ const TYPE_PROPERTIES: Readonly<Record<FieldType, readonly string[]>> = {
 	date: ["pattern"],
 	datetime: ["pattern"],
 	options: ["options", "multiple"],
-	lookup: ["lookup"]
+	lookup: ["lookup", "fills"]
 }
 
 const TYPED_PROPERTIES: ReadonlySet<string> = new Set(Object.values(TYPE_PROPERTIES).flat())
@@ -409,6 +417,10 @@ function fieldToJson(field: FieldSchema): FieldInput {
 			break
 		case "lookup":
 			json.lookup = field.lookup
+
+			if (field.fills.length > 0) {
+				json.fills = [...field.fills]
+			}
 			break
 	}
 
@@ -537,8 +549,60 @@ function readFields(value: unknown, problems: Problems): FieldSchema[] | null {
 	})
 
 	checkFormulas(fields, firstIndex, problems)
+	checkFills(fields, firstIndex, problems)
 
 	return fields
+}
+
+/** A lookup's `fills`: a list of field keys, each once. */
+function readFills(value: unknown, path: string, problems: Problems): string[] {
+	if (value === undefined || value === null) {
+		return []
+	}
+
+	if (!Array.isArray(value) || value.some(item => typeof item !== "string" || item.trim() === "")) {
+		problems.add(path, `must be a list of field keys; got ${describe(value)}`)
+
+		return []
+	}
+
+	return [...new Set(value as string[])]
+}
+
+/**
+ * Every field a lookup fills is a field of the schema, neither the lookup itself, another lookup
+ * nor a formula's, and no field is filled by two lookups: one record says what it holds.
+ */
+function checkFills(fields: readonly FieldSchema[], indexOf: ReadonlyMap<string, number>, problems: Problems): void {
+	const byKey = new Map(fields.map(field => [field.key, field]))
+	const filledBy = new Map<string, string>()
+
+	for (const field of fields) {
+		if (field.type !== "lookup") {
+			continue
+		}
+
+		const path = `fields[${indexOf.get(field.key) ?? 0}].fills`
+
+		for (const key of field.fills) {
+			const target = byKey.get(key)
+			const other = filledBy.get(key)
+
+			if (!target) {
+				problems.add(path, `names "${key}", which is not a field of this schema`)
+			} else if (key === field.key) {
+				problems.add(path, "names the lookup itself; its record is its own value")
+			} else if (target.type === "lookup") {
+				problems.add(path, `names "${key}", a lookup: a record is matched by its own lookup`)
+			} else if (target.formula !== null) {
+				problems.add(path, `names "${key}", which a formula works out`)
+			} else if (other !== undefined) {
+				problems.add(path, `names "${key}", which "${other}" fills already`)
+			} else {
+				filledBy.set(key, field.key)
+			}
+		}
+	}
 }
 
 /**
@@ -697,7 +761,12 @@ function readField(raw: unknown, path: string, problems: Problems): FieldSchema 
 			}
 			break
 		case "lookup":
-			field = { ...base, type, lookup: readText(raw, "lookup", path, problems, true) ?? "" }
+			field = {
+				...base,
+				type,
+				lookup: readText(raw, "lookup", path, problems, true) ?? "",
+				fills: Object.freeze(readFills(raw.fills, at(path, "fills"), problems))
+			}
 			break
 	}
 

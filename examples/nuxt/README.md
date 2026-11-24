@@ -59,6 +59,9 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
   the schema lost, mapped to a new one (the likely one suggested) or dropped, with its first
   values and what would be lost. "Taslağı aç" opens the draft so mapped and saves it under the new
   schema; "Taslağı sil, sunucudan aç" lets it go. Nothing is saved while the window is open.
+- **Products by name or code.** A product typed, pasted or picked by its name or its code fills
+  its row's SKU, current price and currency from the catalogue; those cells are tinted and say
+  which product they came from. The list shows each product's code and price.
 - **Files in and out.** Dosya → İçe aktar reads a CSV and shows it first: each column's first
   values and the field it goes to, suggested and remembered from the last import, and whether the
   rows are added or written into the rows they find by SKU, counted. + adds a sheet from the

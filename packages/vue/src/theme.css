@@ -43,6 +43,10 @@
 	--tabula-head-line: color-mix(in srgb, var(--tabula-fg) 20%, var(--tabula-bg));
 	--tabula-head-selected-bg: color-mix(in srgb, var(--tabula-accent) 15%, var(--tabula-bg-alt));
 	--tabula-readonly-bg: var(--tabula-bg-alt);
+	/* A cell its row's record filled: a faint tint of the info colour, darker words, a dot. */
+	--tabula-filled-bg: color-mix(in srgb, var(--tabula-info) 7%, var(--tabula-bg));
+	--tabula-filled-fg: color-mix(in srgb, var(--tabula-info) 40%, var(--tabula-fg));
+	--tabula-filled-mark: color-mix(in srgb, var(--tabula-info) 55%, var(--tabula-bg));
 	--tabula-range-bg: color-mix(in srgb, var(--tabula-accent) 10%, transparent);
 	--tabula-hover-bg: color-mix(in srgb, var(--tabula-fg) 5%, var(--tabula-bg));
 	--tabula-required: color-mix(in srgb, var(--tabula-error) 85%, var(--tabula-fg));

@@ -26,7 +26,8 @@ const ISSUES: Readonly<Record<GridLocale, Readonly<Record<string, Wording>>>> = 
 		not_a_date: p => `“${p.value}” tarih olarak okunamadı. Örnek: ${dateExample(p.format)}`,
 		not_a_boolean: p => `“${p.value}” Evet/Hayır değeri değil. Kabul edilenler: ${p.accepted}`,
 		not_an_option: p => `“${p.value}” listede yok. Seçenekler: ${p.options || "(seçenek yok)"}`,
-		not_matched: p => `“${p.value}” bir kayıtla eşleşmedi; listeden seçin.`,
+		// None or several: the name or code is to be put right, or the record picked.
+		not_matched: p => `“${p.value}” ile eşleşen tek bir kayıt yok; düzeltin ya da listeden seçin.`,
 		min_value: (p, s) => `En az ${number(p.min, s)} olmalı.`,
 		max_value: (p, s) => `En fazla ${number(p.max, s)} olabilir.`,
 		min_length: p => `En az ${p.min} karakter olmalı; ${p.length} karakter.`,
@@ -44,7 +45,7 @@ const ISSUES: Readonly<Record<GridLocale, Readonly<Record<string, Wording>>>> = 
 		not_a_date: p => `“${p.value}” could not be read as a date. For example: ${dateExample(p.format)}`,
 		not_a_boolean: p => `“${p.value}” is not a Yes/No value. Accepted: ${p.accepted}`,
 		not_an_option: p => `“${p.value}” is not in the list. Options: ${p.options || "(no options)"}`,
-		not_matched: p => `“${p.value}” is not matched to a record; pick one from the list.`,
+		not_matched: p => `No single record matches “${p.value}”; correct it or pick one from the list.`,
 		min_value: (p, s) => `Must be at least ${number(p.min, s)}.`,
 		max_value: (p, s) => `Must be at most ${number(p.max, s)}.`,
 		min_length: p => `Must be at least ${p.min} characters; it is ${p.length}.`,
@@ -442,7 +443,9 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		totalAverage: "Ortalama",
 		totalMin: "En az",
 		totalMax: "En çok",
-		newRow: "+ Yeni satır: tıklayın, sonra yazın ya da yapıştırın"
+		newRow: "+ Yeni satır: tıklayın, sonra yazın ya da yapıştırın",
+		filledFrom: "{record} kaydından geldi; yazılamaz",
+		filledFromEditable: "{record} kaydından geldi; değiştirebilirsiniz"
 	},
 	en: {
 		cellMenu: "Cell menu",
@@ -463,6 +466,8 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		totalMin: "Smallest",
 		totalMax: "Largest",
 		newRow: "+ New row: click, then type or paste",
+		filledFrom: "From {record}; not typed into",
+		filledFromEditable: "From {record}; yours to change",
 		succeeded: "Processed",
 		failed: "Failed",
 		skipped: "Not processed",

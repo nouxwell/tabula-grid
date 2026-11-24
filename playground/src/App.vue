@@ -70,7 +70,17 @@ const channels = params.get("channels") === "1"
 // the sheet larger.
 const formatting = params.get("format") === "1"
 const zoom = Number(params.get("zoom") ?? 1)
-const withRules = channels ? withChannels(priceUpdate) : priceUpdate
+// `?fills=1`: a product picked or matched fills its row's SKU and current price.
+const withFills =
+	params.get("fills") === "1"
+		? {
+				...priceUpdate,
+				fields: priceUpdate.fields.map(field =>
+					field.key === "productId" ? { ...field, fills: ["sku", "currentPrice"] } : field
+				)
+			}
+		: priceUpdate
+const withRules = channels ? withChannels(withFills) : withFills
 const schema = ModuleSchema.from(
 	formatting
 		? {

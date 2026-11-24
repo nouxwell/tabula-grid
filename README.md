@@ -787,6 +787,25 @@ const lookups = new LookupResolver({
   were written. An answer is used again for a minute.
 - **Undo.** The change that puts matched records in place joins the paste it came from: one
   Ctrl+Z takes back both, and nothing is asked again on the way back or forward.
+- **What a record fills.** A lookup's `fills` names the fields its record fills, such as a
+  product's code and current price; a record answers with `values` for them, by field key. They
+  are written with the record, whether picked from the list or matched to a name or a code, as part
+  of the same step, and emptied when the cell is left with no record. The grid tints a filled cell
+  and names its record in the cell's tooltip and the formula bar's. `match()` says what names
+  would be matched to without writing anything, such as for a file's column before an import.
+
+  ```json
+  { "key": "productId", "type": "lookup", "lookup": "product", "fills": ["sku", "currentPrice"] }
+  ```
+
+  ```json
+  {
+    "id": 1004,
+    "label": "Ürün 000005",
+    "description": "SKU-000005",
+    "values": { "sku": "SKU-000005", "currentPrice": "104.00" }
+  }
+  ```
 
 An options field lists its choices the same way, filtered as the user types; Alt+Down opens the
 whole list.

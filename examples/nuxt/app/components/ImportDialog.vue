@@ -123,7 +123,10 @@
 		</AppModalScrollWrapper>
 		<template #footer>
 			<div class="flex flex-wrap items-center gap-2.5">
-				<span class="flex-1 text-sm text-muted">{{ summary }}</span>
+				<span class="flex-1 text-sm text-muted">
+					{{ summary }}
+					<template v-if="probing">· kodlar aranıyor…</template>
+				</span>
 				<AppButton @click="show = false">Vazgeç</AppButton>
 				<AppButton type="primary" :disabled="!ready" @click="submit">{{ action }}</AppButton>
 			</div>
@@ -144,6 +147,7 @@ import {
 	matchRows,
 	suggestColumns,
 	suggestMatch,
+	type LookupResolver,
 	type ModuleSchema,
 	type RowStore,
 	type SuggestionReason,
@@ -169,6 +173,8 @@ const props = defineProps<{
 	store: RowStore
 	settings: ValueSettings
 	remembered: ImportMemory | null
+	/** Matches a column's values to a lookup's records, such as product codes: the sheet's. */
+	lookups?: LookupResolver
 }>()
 
 const emit = defineEmits<{
@@ -188,6 +194,7 @@ const UNMATCHED = [
 const REASONS: Readonly<Record<SuggestionReason, string>> = {
 	remembered: "Geçen seferki gibi",
 	name: "Başlık tutuyor",
+	lookup: "Önerilen",
 	similar: "Önerilen",
 	values: "Önerilen"
 }
@@ -195,6 +202,7 @@ const REASONS: Readonly<Record<SuggestionReason, string>> = {
 const REASON_TEXT: Readonly<Record<SuggestionReason, string>> = {
 	remembered: "bu başlık son içe aktarmada buraya gitti",
 	name: "başlık alanın adı",
+	lookup: "kayıt bu alanla bulunur; bağlı alanlar kayıttan dolar",
 	similar: "adı benziyor",
 	values: "değerler bu alanınkilerle tutuyor"
 }
@@ -215,6 +223,9 @@ const mode = ref<"add" | "update">("add")
 const matchColumn = ref<number | null>(null)
 const matchField = ref<string | null>(null)
 const unmatched = ref<"add" | "skip">("add")
+
+/** Whether the lookups are being asked about the file's columns. */
+const probing = ref(false)
 
 /** A new file: the core's suggestions, the page's memory among them. */
 watch(
@@ -237,9 +248,62 @@ watch(
 		matchField.value = found?.field ?? props.remembered?.matchField ?? null
 		mode.value = found ? "update" : "add"
 		unmatched.value = "add"
+		void probeLookups(props.table)
 	},
 	{ immediate: true }
 )
+
+/**
+ * The columns nothing fits yet whose first values all name records of a lookup that fills other
+ * fields, such as product codes: they go to that lookup, whose records then fill the rest. The
+ * backend is asked, once for each column, while the window is open.
+ */
+async function probeLookups(table: readonly (readonly string[])[]): Promise<void> {
+	const finders = props.schema.fields.filter(
+		field => field.type === "lookup" && field.editable && field.fills.length > 0
+	)
+	const columns = importTable(table, { schema: props.schema, settings: props.settings, columns: {} }).columns
+
+	if (!props.lookups || finders.length === 0) {
+		return
+	}
+
+	probing.value = true
+
+	try {
+		for (const column of columns) {
+			const free = finders.filter(finder => !targets.value.includes(finder.key))
+
+			if (
+				targets.value[column.index] ||
+				reasons.value[column.index] ||
+				column.samples.length === 0 ||
+				free.length === 0
+			) {
+				continue
+			}
+
+			for (const finder of free) {
+				const found = await props.lookups.match(finder.key, column.samples)
+
+				// The window moved on to another file meanwhile: this answer is not for it.
+				if (props.table !== table) {
+					return
+				}
+
+				if (found.every(item => item !== null)) {
+					setTarget(column.index, finder.key)
+					reasons.value = reasons.value.map((reason, at) => (at === column.index ? "values" : reason))
+					break
+				}
+			}
+		}
+	} catch {
+		// The backend could not be asked: the user picks the column's field themselves.
+	} finally {
+		probing.value = false
+	}
+}
 
 function setMode(value: "add" | "update"): void {
 	mode.value = value

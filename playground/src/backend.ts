@@ -127,9 +127,11 @@ export class FakeBackend {
 			const number = String(index + 1).padStart(6, "0")
 			const id = 1000 + index
 
+			const values = { sku: `SKU-${number}`, currentPrice: (100 + index).toFixed(2) }
+
 			return id % 9 === 0
-				? { id, label: `Ürün ${number}`, description: `SKU-${number} · pasif`, disabled: true }
-				: { id, label: `Ürün ${number}`, description: `SKU-${number}` }
+				? { id, label: `Ürün ${number}`, description: `SKU-${number} · pasif`, disabled: true, values }
+				: { id, label: `Ürün ${number}`, description: `SKU-${number}`, values }
 		}),
 		{ id: 90_001, label: "Çelik Termos 500 ml", description: "TRM-500" },
 		{ id: 90_002, label: "Termos", description: "TRM-750" },

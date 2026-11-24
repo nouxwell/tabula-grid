@@ -30,6 +30,8 @@ export const PRICE_UPDATE: ModuleSchemaInput = {
 			label: "Ürün",
 			required: true,
 			lookup: "product",
+			// A product picked or matched by its name or code brings these from the catalogue.
+			fills: ["sku", "currentPrice", "currency"],
 			rules: [{ rule: "unique" }]
 		},
 		{ key: "sku", type: "string", label: "SKU", editable: false, submit: false },
@@ -146,52 +148,89 @@ function isInactive(id: number): boolean {
 	return id % 9 === 0
 }
 
-export const CATALOG: readonly LookupItem[] = [
+/** The products by name and code, before their prices. */
+const PRODUCTS: readonly (LookupItem & { readonly code: string })[] = [
 	...Array.from({ length: ROWS * 2 }, (_, index) => {
 		const id = FIRST_ID + index
 		const code = `SKU-${String(index + 1).padStart(6, "0")}`
 		const label = `Ürün ${String(index + 1).padStart(6, "0")}`
 
-		return isInactive(id)
-			? { id, label, description: `${code} · pasif`, disabled: true }
-			: { id, label, description: code }
+		return isInactive(id) ? { id, label, code, disabled: true } : { id, label, code }
 	}),
-	{ id: 90_001, label: "Çelik Termos 500 ml", description: "TRM-500" },
-	{ id: 90_002, label: "Termos", description: "TRM-750" },
-	{ id: 90_003, label: "Termos", description: "TRM-1000" }
+	{ id: 90_001, label: "Çelik Termos 500 ml", code: "TRM-500" },
+	{ id: 90_002, label: "Termos", code: "TRM-750" },
+	{ id: 90_003, label: "Termos", code: "TRM-1000" }
 ]
+
+/**
+ * Each product's price line as the sheet starts: its current price, the new price written for it,
+ * its currency. The products the sheet opens with take theirs in order from one seed, as they
+ * always have; the rest from their own id.
+ */
+interface PriceLine {
+	readonly current: number
+	readonly next: number
+	readonly currency: string
+}
+
+const CURRENCIES = ["TRY", "TRY", "TRY", "USD", "EUR"]
+
+function priceLine(random: () => number): PriceLine {
+	const current = 10 + Math.floor(random() * 249_000) / 100
+	const next = Math.round(current * (95 + random() * 25)) / 100
+
+	return { current, next, currency: CURRENCIES[Math.floor(random() * CURRENCIES.length)] ?? "TRY" }
+}
+
+const STARTING = (() => {
+	let refused = 0
+	const random = seeded(7)
+
+	return PRODUCTS.filter(item => !item.disabled || refused++ < 3)
+		.slice(0, ROWS)
+		.map(item => ({ item, line: priceLine(random) }))
+})()
+
+const LINES = new Map<string | number, PriceLine>(STARTING.map(({ item, line }) => [item.id, line]))
+
+function priceLineOf(id: string | number): PriceLine {
+	return LINES.get(id) ?? priceLine(seeded(Number(id)))
+}
+
+const SYMBOLS: Readonly<Record<string, string>> = { TRY: "₺", USD: "$", EUR: "€" }
+
+/**
+ * The catalogue the product lookup searches: each product with its code and price on the list's
+ * second line, and its code, current price and currency for the fields the lookup fills.
+ */
+export const CATALOG: readonly LookupItem[] = PRODUCTS.map(({ code, ...item }) => {
+	const line = priceLineOf(item.id)
+	const price = line.current.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+	return {
+		...item,
+		description: item.disabled
+			? `${code} · pasif`
+			: `${code} · ${price} ${SYMBOLS[line.currency] ?? line.currency}`,
+		values: { sku: code, currentPrice: line.current.toFixed(2), currency: line.currency }
+	}
+})
 
 /** The channels each product starts with, by its place: most are sold in the store and online. */
 const CHANNELS = [["store", "web"], ["store"], ["web", "market"], ["store", "web", "market"], ["web"]]
 
-/**
- * The products the sheet opens with: those still sold, and the first three that are not, for the
- * server to refuse. A few, so they can be put right by hand before a run.
- */
-function startingProducts(): LookupItem[] {
-	let refused = 0
-
-	return CATALOG.filter(item => !item.disabled || refused++ < 3).slice(0, ROWS)
-}
-
 /** The same rows on every load. */
 export function startingRows(): RowInit[] {
-	const random = seeded(7)
-	const currencies = ["TRY", "TRY", "TRY", "USD", "EUR"]
-	const products = startingProducts()
-
-	return Array.from({ length: ROWS }, (_, index) => {
-		const item = products[index]!
-		const current = 10 + Math.floor(random() * 249_000) / 100
-		const next = Math.round(current * (95 + random() * 25)) / 100
-
+	// The products the sheet opens with: those still sold, and the first three that are not, for
+	// the server to refuse; a few, so they can be put right by hand before a run.
+	return STARTING.map(({ item, line }, index) => {
 		return {
 			values: {
 				productId: { id: item.id, label: item.label },
-				sku: item.description?.split(" · ")[0] ?? null,
-				currentPrice: current.toFixed(2),
-				newPrice: next.toFixed(2),
-				currency: currencies[Math.floor(random() * currencies.length)] ?? "TRY",
+				sku: item.code,
+				currentPrice: line.current.toFixed(2),
+				newPrice: line.next.toFixed(2),
+				currency: line.currency,
 				validFrom: "2026-12-01",
 				active: true,
 				channels: CHANNELS[index % CHANNELS.length]

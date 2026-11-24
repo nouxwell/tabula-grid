@@ -1367,7 +1367,13 @@ describe("TabulaGrid", () => {
 
 					// The keys: an arrow opens the list and moves in it, Enter takes the one reached.
 					await kind.focus()
+					await expect
+						.poll(() =>
+							page.evaluate(() => document.activeElement?.classList.contains("tabula-grid-totals-pick"))
+						)
+						.toBe(true)
 					await press(page, "ArrowDown")
+					await expect.poll(() => page.locator(".tabula-grid-totals-menu").count()).toBe(1)
 					await press(page, "ArrowDown")
 					await press(page, "Enter")
 					await expect.poll(totals).toContain("20,50")
@@ -1768,6 +1774,38 @@ describe("TabulaGrid", () => {
 			})
 		})
 
+		it("fills the row from the record picked, marks what was typed, and empties it with the record", async () => {
+			await withPage(
+				3,
+				async page => {
+					const ghost = page.locator(".tabula-grid-new-row")
+					const row = await ghost.boundingBox()
+					const first = await header(page, 0).boundingBox()
+
+					await ghost.click({ position: { x: first!.x + 20 - row!.x, y: 8 } })
+					await expect.poll(() => page.evaluate(() => window.__playground!.store.size)).toBe(4)
+					await page.keyboard.type("000005")
+					await expect.poll(() => options(page).count()).toBe(1)
+					await expect(list(page).locator("mark").allInnerTexts()).resolves.toEqual(["000005", "000005"])
+
+					await options(page).first().click()
+					await expect.poll(() => valueAt(page, 3, "sku")).toBe("SKU-000005")
+					await expect(valueAt(page, 3, "currentPrice")).resolves.toBe("104.00")
+					await expect(cell(page, 3, 1).getAttribute("class")).resolves.toContain("is-filled")
+					await expect(cell(page, 3, 1).getAttribute("title")).resolves.toBe(
+						"Ürün 000005 kaydından geldi; yazılamaz"
+					)
+
+					// The record goes, and what it filled with it.
+					await cell(page, 3, 0).click()
+					await press(page, "Delete")
+					await expect.poll(() => valueAt(page, 3, "sku")).toBeNull()
+					await expect(valueAt(page, 3, "currentPrice")).resolves.toBeNull()
+				},
+				"&fills=1&entry=1"
+			)
+		})
+
 		it("picks with a click, and shows but never picks a record that cannot be", async () => {
 			await withPage(20, async page => {
 				await cell(page, 0, 0).click()
@@ -1784,7 +1822,7 @@ describe("TabulaGrid", () => {
 				await press(page, "Enter")
 				await expect
 					.poll(() => cell(page, 0, 0).getAttribute("title"))
-					.toBe("“Ürün 000009” bir kayıtla eşleşmedi; listeden seçin.")
+					.toBe("“Ürün 000009” ile eşleşen tek bir kayıt yok; düzeltin ya da listeden seçin.")
 
 				await cell(page, 1, 0).click()
 				await page.keyboard.type("kupa")

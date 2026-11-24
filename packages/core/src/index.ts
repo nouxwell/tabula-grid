@@ -50,7 +50,7 @@ export type {
 export { REDO_ORIGIN, UNDO_ORIGIN, UndoHistory } from "./history.js"
 export type { HistoryStep, UndoHistoryOptions } from "./history.js"
 
-export { LOOKUP_ORIGIN, LookupResolver } from "./lookup.js"
+export { LOOKUP_ORIGIN, LookupResolver, lookupFills } from "./lookup.js"
 export type {
 	LookupAdapters,
 	LookupItem,
@@ -263,7 +263,7 @@ export type {
 
 export { defineValueSettings, VALUE_SETTINGS } from "./values/settings.js"
 export type { ValueSettings } from "./values/settings.js"
-export { isFieldValue, readInput, valueProblem } from "./values/read.js"
+export { isFieldValue, isLookupValue, readInput, valueProblem } from "./values/read.js"
 export type { ReadResult, ValueProblem, ValueProblemCode } from "./values/read.js"
 export { digitsFor, editText, formatCell } from "./values/format.js"
 export type { CellFormatOptions } from "./values/format.js"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, shallowRef, watch, type PropType } from "vue"
-import { BAR_TEXT, type GridLocale } from "./messages.js"
+import { BAR_TEXT, GRID_TEXT, type GridLocale } from "./messages.js"
 import type TabulaGrid from "./TabulaGrid.vue"
 import type { GridTheme } from "./types.js"
 
@@ -152,6 +152,14 @@ function selectAll(event: FocusEvent): void {
 			:value="shownValue"
 			:readonly="!cell?.editable"
 			:aria-label="text.value"
+			:title="
+				cell?.filledFrom
+					? (GRID_TEXT[locale][cell.editable ? 'filledFromEditable' : 'filledFrom'] ?? '').replace(
+							'{record}',
+							cell.filledFrom
+						)
+					: undefined
+			"
 			@input="onValueInput"
 			@keydown.enter.prevent="commit(true)"
 			@keydown.escape.prevent="cancel"
