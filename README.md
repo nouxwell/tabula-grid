@@ -714,15 +714,16 @@ The language is a spreadsheet's, fields by key in brackets rather than cell addr
 are read while a formula is written; see below), numbers with a point, English function names,
 arguments separated by commas or semicolons. `SUM`, `AVERAGE`,
 `MIN`, `MAX`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `ABS`, `IF`, `IFERROR`, `AND`, `OR`, `NOT`, `ISBLANK`,
-`LEN` and `CONCAT` are built in, with `+ - * / ^ %`, `&` for text and the comparisons. Nothing a user
-writes is ever run as code: a formula is parsed, and the tree is worked out.
+`LEN`, `CONCAT` and `SHEET` are built in, with `+ - * / ^ %`, `&` for text and the comparisons.
+Nothing a user writes is ever run as code: a formula is parsed, and the tree is worked out.
 
 - **Exact.** Numbers are decimals, not floats: 0.1 + 0.2 is 0.3, a division goes to 20 places, and
   the result is rounded to the field's places, half away from zero.
 - **As Excel works.** An empty field is 0 in a sum and nothing in an average, `IF` works out only
   the branch it takes, text compares regardless of case, and what cannot be worked out is an error
   value: `#DIV/0!`, `#VALUE!`, `#NAME?`, `#NUM!`. The cell shows it, and it is an issue that holds
-  back processing.
+  back processing. `#REF!`, a sheet SHEET names that the workbook has not, is a warning that holds
+  nothing back.
 - **Checked as the schema is read.** A formula that does not parse, reads a field the schema does
   not have, or goes round in a circle refuses the schema. A formula field is never editable.
 - **One change.** `FormulaEngine` works the formulas out inside the change that called for them:
@@ -742,6 +743,45 @@ const formulas = new FormulaEngine({
 What the browser works out is shown to the user and sent like any value, never trusted: the
 backend works it out again. A field with `submit: false` is not sent at all.
 
+### Another sheet's value: SHEET
+
+`SHEET("Mart"; [newPrice])` finds this row's record in the workbook's sheet named "Mart" and gives
+that sheet's `newPrice`; a third argument, `SHEET("Mart"; [newPrice]; [currentPrice])`, is what it
+gives when the record is not there, and without one the cell is empty. A record the sheet holds
+twice is read from its first row. The second argument names a field of that sheet, not one this
+row reads.
+
+The application says what the sheets are, and by which field their rows are told apart:
+
+```ts
+const sheets: FormulaSheets = {
+  key: "productId",
+  // As last saved, a record's first row where it has more: undefined for a name the workbook has not.
+  sheet: name => {
+    const tab = workbook.sheets.find(each => each.name === name)
+
+    return tab ? sheetRecords(tab.draft?.rows ?? [], "productId") : undefined
+  }
+}
+
+const store = new RowStore({ rows: applyFormulas(schema, rows, {}, sheets) })
+const formulas = new FormulaEngine({ schema, store, sheets })
+
+// Another sheet saved, or a tab renamed: what the formulas read from them, again, as one change.
+formulas.refreshSheets(nextSheets)
+```
+
+A record is matched by `sheetRecordKey`: a lookup by its id, anything else by its value. A sheet
+named that the workbook has not gives `#REF!`, a warning. `formulaSheets(tree)` lists the sheets a
+formula names, `readsSheets(tree)` says whether it reads any, and `withSheetRenamed(formula, from,
+to)` writes a tab's new name into its SHEET calls and nowhere else, for formulas to follow a
+renamed tab.
+
+The grid draws a sheet after the header of a column that reads one, and its tooltip names them; a
+cell's tooltip says which sheet its value came from, with the host's words on it from the grid's
+`sheet-notes` (the example says when the sheet was saved). The formula bar draws the sheet's name
+as a chip, in `--tabula-sheet`.
+
 ### Writing a formula
 
 A formula editor helps as it is written, from three pieces:
@@ -753,7 +793,7 @@ A formula editor helps as it is written, from three pieces:
 - **`formulaWithLabels` and `formulaWithKeys`** write a formula with the fields' labels, as a
   person reads it ("ROUND([Aralık fiyatı] * 1.2, 2)"), and back with their keys, as it is saved. A
   label two fields share is left as written, for the parser to refuse.
-- **`functionHelp(name, locale)`** in `@nouxwell/tabula-vue` says what each of the 16 functions
+- **`functionHelp(name, locale)`** in `@nouxwell/tabula-vue` says what each of the 17 functions
   takes and does, in Turkish and English: `ROUND(sayı, basamak)`, "Sayıyı verilen ondalık
   basamağa yuvarlar". An application's own function has none, and is listed by its name.
 - **`formulaFromAddresses(text, columns)`** reads a cell address as the field of its column, in
@@ -771,7 +811,9 @@ row's cells stronger, as Excel colours references. The grid's `cell` carries the
 sütunlar" tab: the template's own columns, and a formula field that lists the fields after "[" and
 the functions on a letter, shows the call's arguments with the one being written in bold, and the
 values the formula gives on the first rows as it is typed. A column kept shows in the sheet at once,
-not saved until the template is.
+not saved until the template is. After `SHEET(` it lists the workbook's tabs with how many products
+each holds, and the preview says in how many rows the product was found; renaming a tab that
+formulas name asks whether they should follow it.
 
 ## Lookups
 

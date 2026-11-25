@@ -20,7 +20,13 @@
 
 		<div class="flex flex-col gap-1">
 			<label :for="formulaId" class="text-xs font-semibold text-muted">Formül</label>
-			<FormulaInput v-model="draft.formula" :fields="fields" :locale="locale" :input-id="formulaId" />
+			<FormulaInput
+				v-model="draft.formula"
+				:fields="fields"
+				:sheets="sheets"
+				:locale="locale"
+				:input-id="formulaId"
+			/>
 			<span class="text-xs text-muted">Boş bırakılırsa elle doldurulan bir yardımcı sütun olur.</span>
 		</div>
 
@@ -43,8 +49,26 @@
 				{{
 					preview.errors === 0
 						? "Hiçbir satırda hata yok."
-						: `${preview.errors} satırda hata: ${preview.firstError}`
+						: // A sheet that is not there is a warning, not an error: it holds nothing back.
+							`${preview.errors} satırda ${preview.firstError === "#REF!" ? "uyarı" : "hata"}: ${preview.firstError}`
 				}}
+			</span>
+			<!-- Each sheet the formula reads: how many of these rows' products it holds, or that it is not there. -->
+			<span
+				v-for="read in preview.sheets"
+				:key="read.name"
+				class="flex items-center gap-1.5 text-xs"
+				:class="read.found === null ? 'text-warning-text' : 'text-muted'"
+			>
+				<AppIcon name="table" class="size-3.5 flex-none text-sheet" aria-hidden="true" />
+				<span>
+					<strong class="font-semibold text-sheet">“{{ read.name }}”</strong>
+					{{
+						read.found === null
+							? "adında bir sayfa yok: sütun #REF! gösterir, gönderimi durdurmaz."
+							: `sayfasında ${read.found} / ${read.total} satırın ürünü bulundu.`
+					}}
+				</span>
 			</span>
 		</div>
 
@@ -69,6 +93,8 @@ const draft = defineModel<ColumnDraft>("draft", { required: true })
 
 const props = defineProps<{
 	fields: readonly { readonly key: string; readonly label: string; readonly kind: string }[]
+	/** The workbook's sheets, for SHEET's first argument, with how many products each holds. */
+	sheets: readonly { readonly name: string; readonly rows: number }[]
 	locale: GridLocale
 	/** The formula on the sheet as it stands: values on the first rows, or why it cannot be one. */
 	preview: {
@@ -76,6 +102,8 @@ const props = defineProps<{
 		readonly values: readonly string[]
 		readonly errors: number
 		readonly firstError: string
+		/** Each sheet the formula reads with SHEET: how many rows' products it holds; null when there is none by that name. */
+		readonly sheets: readonly { readonly name: string; readonly found: number | null; readonly total: number }[]
 	} | null
 }>()
 

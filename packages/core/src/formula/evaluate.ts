@@ -37,6 +37,11 @@ export interface EvaluationContext {
 	field(key: string): FormulaValue
 	/** The application's functions, by name in capitals. The built-in ones cannot be replaced. */
 	readonly functions: Readonly<Record<string, FormulaFunction>>
+	/**
+	 * For `SHEET`: the field `key` of this row's record in the sheet called `name`. Undefined when
+	 * there is no such sheet (or no sheets at all), null when the record is not in it.
+	 */
+	sheet?(name: string, key: string): FormulaValue | null | undefined
 }
 
 export const EMPTY: FormulaValue = Object.freeze({ type: "empty" })
@@ -290,12 +295,15 @@ export const FUNCTIONS: readonly string[] = [
 	"ROUND",
 	"ROUNDDOWN",
 	"ROUNDUP",
+	"SHEET",
 	"SUM"
 ]
 
 function call(name: string, args: readonly FormulaNode[], context: EvaluationContext): FormulaValue {
 	// The ones that work out only what they need, so IF(x > 0, 1 / x, 0) is never a division by zero.
 	switch (name) {
+		case "SHEET":
+			return sheetValue(args, context)
 		case "IF": {
 			if (args.length < 2 || args.length > 3) {
 				return errorValue("#VALUE!")
@@ -344,6 +352,37 @@ function call(name: string, args: readonly FormulaNode[], context: EvaluationCon
 	} catch {
 		return errorValue("#VALUE!")
 	}
+}
+
+/**
+ * SHEET("Mart"; [Yeni fiyat]; [yoksa]): the field of this row's record in another sheet of the
+ * workbook. The field is named, not worked out: it is that sheet's, not this row's. A sheet the
+ * workbook does not have is `#REF!`; a record not in it gives the third argument, or nothing.
+ */
+function sheetValue(args: readonly FormulaNode[], context: EvaluationContext): FormulaValue {
+	const [nameNode, fieldNode, fallback] = args
+
+	if (args.length < 2 || args.length > 3 || !nameNode || fieldNode?.kind !== "field") {
+		return errorValue("#VALUE!")
+	}
+
+	const name = toText(evaluate(nameNode, context))
+
+	if (failed(name)) {
+		return name
+	}
+
+	const found = context.sheet?.(name, fieldNode.key)
+
+	if (found === undefined) {
+		return errorValue("#REF!")
+	}
+
+	if (found === null) {
+		return fallback ? evaluate(fallback, context) : EMPTY
+	}
+
+	return found
 }
 
 /** The numbers among the arguments; an empty field is passed over, an error is the answer. */

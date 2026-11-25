@@ -7,6 +7,36 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+A value from another sheet (canvas items 183–191, designs AW–AY): a formula reads this row's
+product in another tab of the workbook. The packages add; nothing that worked changes.
+
+### Added
+
+- **`SHEET("Mart"; [newPrice])`**, a built-in function: this row's record in the sheet named
+  "Mart", by the field the application tells records apart by, and that sheet's field there. A
+  third argument is what it gives when the record is not there; without one the cell is empty. A
+  record the sheet holds twice is read from its first row. The application gives the sheets as
+  `FormulaEngineOptions.sheets` (and to `applyFormulas`), a `FormulaSheets`: the key field and a
+  `sheet(name)` that answers with `sheetRecords(rows, key)` or `undefined`.
+  `FormulaEngine.refreshSheets()` works the formulas that read sheets out again, as one change.
+- **`#REF!`**: a sheet SHEET names that the workbook has not. It is a warning that holds nothing
+  back, and the grid says why ("adı geçen sayfa bu çalışma kitabında yok").
+- **`formulaSheets`, `readsSheets`, `withSheetRenamed`, `sheetRecordKey`**: the sheets a formula
+  names, whether it reads any, a formula with a tab's new name in its SHEET calls and nowhere else,
+  and how a record is matched (a lookup by its id, anything else by its value). `FormulaPart`
+  gains `sheet`: SHEET's first argument and the field read there are pieces of their own.
+- **The grid shows where a value came from.** A column that reads another sheet has a sheet after
+  its header's label, its tooltip naming the sheets; a cell's tooltip says "“Mart” sayfasından",
+  with the host's words from the new `sheet-notes` prop. The formula bar draws the sheet's name
+  as a chip, in the new `--tabula-sheet` colour, and the field read there is not coloured as one
+  of this row's columns. `functionHelp` knows SHEET.
+- **The example** gives each sheet the other tabs as last saved, by product; a cell's tooltip says
+  when that tab was saved. Its formula field lists the tabs after `SHEET(`, with how many products
+  each holds, and then the fields; the column's preview says in how many rows the product was
+  found, and the rules drawer warns of a sheet the workbook lacks. Renaming a tab that the
+  templates' formulas name asks whether they should follow it. A row check can read such a
+  column as any other.
+
 ## [0.7.1] — 2026-11-25
 
 The right-click menu grouped (canvas items 175–180, designs AU and AV): fourteen lines become

@@ -146,6 +146,7 @@
 							v-if="columnEditing && columnEditing.index === index"
 							v-model:draft="columnEditing.draft"
 							:fields="formulaFields"
+							:sheets="sheetNames ?? []"
 							:locale="locale"
 							:preview="columnPreview"
 							@save="keepColumn"
@@ -162,6 +163,10 @@
 								<strong class="text-sm">{{ item.label }}</strong>
 								<span class="truncate text-xs text-muted">
 									{{ item.formula ? `= ${item.formula}` : "yardımcı sütun, elle doldurulur" }}
+								</span>
+								<span v-if="item.missing.length > 0" class="text-xs text-warning-text" role="note">
+									{{ item.missing.map(name => `“${name}”`).join(", ") }} adında sayfa yok: sütun #REF!
+									gösterir, gönderimi durdurmaz.
 								</span>
 							</span>
 							<AppTag size="small">{{ item.kind }}</AppTag>
@@ -198,6 +203,7 @@
 						v-if="columnEditing && columnEditing.index === null"
 						v-model:draft="columnEditing.draft"
 						:fields="formulaFields"
+						:sheets="sheetNames ?? []"
 						:locale="locale"
 						:preview="columnPreview"
 						@save="keepColumn"
@@ -379,10 +385,12 @@ import {
 	applyFormulas,
 	applyTemplate,
 	formatCell,
+	formulaSheets,
 	formulaWithLabels,
 	isFormulaError,
 	mergeColumnFormats,
 	ModuleSchema,
+	parseFormula,
 	readTemplate,
 	rowsBreaking,
 	rowsStyled,
@@ -395,8 +403,11 @@ import {
 	type ColumnLayout,
 	type StyleRuleInput,
 	type FieldInput,
+	type FormulaSheets,
 	type ModuleSchemaInput,
 	type RowId,
+	type RowInit,
+	sheetRecordKey,
 	type ValueSettings
 } from "@nouxwell/tabula-core"
 import type { IconName } from "~/components/atoms/AppIcon.vue"
@@ -439,6 +450,10 @@ const props = defineProps<{
 	letters: Readonly<Record<string, string>>
 	/** No template was chosen: what is written here becomes a new template, named as it is saved. */
 	creating?: boolean
+	/** The workbook's sheets, for formulas that read another with SHEET. */
+	sheets?: FormulaSheets | null
+	/** The workbook's sheets by name, with how many products each holds: what a formula's SHEET may name. */
+	sheetNames?: readonly { readonly name: string; readonly rows: number }[]
 }>()
 
 const emit = defineEmits<{
@@ -939,12 +954,25 @@ function withKey(current: { readonly index: number | null; readonly draft: Colum
 /** What the formula being written may read: every field but its own column. */
 const formulaFields = computed(() => namedFields.value.filter(field => field.key !== columnEditing.value?.draft.key))
 
+/** The sheets a formula names with SHEET, as written; none for one that does not parse. */
+function sheetsNamed(formula: string): string[] {
+	try {
+		return formulaSheets(parseFormula(formula))
+	} catch {
+		return []
+	}
+}
+
 const columnItems = computed(() =>
 	columns.value.map(column => ({
 		key: column.key,
 		label: column.label ?? column.key,
 		kind: kindWord(column.type),
-		formula: column.formula ? formulaWithLabels(column.formula, namedFields.value) : null
+		formula: column.formula ? formulaWithLabels(column.formula, namedFields.value) : null,
+		// A sheet its formula names that the workbook has not: the column shows #REF! there.
+		missing: column.formula
+			? sheetsNamed(column.formula).filter(name => props.sheets?.sheet(name) === undefined)
+			: []
 	}))
 )
 
@@ -970,17 +998,24 @@ const columnPreview = computed(() => {
 	if (!schema) {
 		const own = problems.find(problem => problem.path.startsWith(`columns[${position}]`)) ?? problems[0]
 
-		return { problem: `Formül uygulanamıyor: ${own?.message ?? ""}`, values: [], errors: 0, firstError: "" }
+		return {
+			problem: `Formül uygulanamıyor: ${own?.message ?? ""}`,
+			values: [],
+			errors: 0,
+			firstError: "",
+			sheets: []
+		}
 	}
 
 	if (!made.formula) {
-		return { problem: null, values: [], errors: 0, firstError: "" }
+		return { problem: null, values: [], errors: 0, firstError: "", sheets: [] }
 	}
 
 	void props.sheet.version.value
 
 	const field = schema.field(made.key)
-	const rows = applyFormulas(schema, props.sheet.store.snapshot())
+	const snapshot = props.sheet.store.snapshot()
+	const rows = applyFormulas(schema, snapshot, {}, props.sheets ?? null)
 	const values = rows.map(row => row.values?.[made.key] ?? null)
 	const failures = values.filter(value => isFormulaError(value))
 	const first = failures[0]
@@ -989,9 +1024,31 @@ const columnPreview = computed(() => {
 		problem: null,
 		values: values.slice(0, PREVIEW_ROWS).map(value => formatCell(field, value, props.settings)),
 		errors: failures.length,
-		firstError: first && isFormulaError(first) ? first.formulaError : ""
+		firstError: first && isFormulaError(first) ? first.formulaError : "",
+		sheets: sheetsNamed(made.formula).map(name => ({
+			name,
+			found: foundIn(name, snapshot),
+			total: snapshot.length
+		}))
 	}
 })
+
+/** How many of the rows have their product in the sheet by that name; null when the workbook has none. */
+function foundIn(name: string, rows: readonly RowInit[]): number | null {
+	const records = props.sheets?.sheet(name)
+
+	if (!records || !props.sheets) {
+		return null
+	}
+
+	const key = props.sheets.key
+
+	return rows.filter(row => {
+		const record = sheetRecordKey(row.values?.[key] ?? null)
+
+		return record !== null && records.has(record)
+	}).length
+}
 
 function addColumn(): void {
 	columnEditing.value = { index: null, draft: newColumnDraft(new Set(namedFields.value.map(field => field.key))) }

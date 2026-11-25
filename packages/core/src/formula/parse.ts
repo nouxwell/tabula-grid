@@ -174,7 +174,12 @@ export function formulaFields(node: FormulaNode): string[] {
 				keys.add(current.key)
 				break
 			case "call":
-				current.args.forEach(walk)
+				// SHEET's second argument names a field of another sheet: this row's is not read.
+				current.args.forEach((arg, at) => {
+					if (!(current.name === "SHEET" && at === 1)) {
+						walk(arg)
+					}
+				})
 				break
 			case "negate":
 			case "percent":
@@ -190,6 +195,70 @@ export function formulaFields(node: FormulaNode): string[] {
 	walk(node)
 
 	return [...keys]
+}
+
+/** The sheets a formula's SHEET calls name, as written: "Mart" in SHEET("Mart"; [Yeni fiyat]). */
+export function formulaSheets(node: FormulaNode): string[] {
+	const names = new Set<string>()
+	const walk = (current: FormulaNode): void => {
+		switch (current.kind) {
+			case "call":
+				if (current.name === "SHEET" && current.args[0]?.kind === "text") {
+					names.add(current.args[0].value)
+				}
+
+				current.args.forEach(walk)
+				break
+			case "negate":
+			case "percent":
+				walk(current.operand)
+				break
+			case "binary":
+				walk(current.left)
+				walk(current.right)
+				break
+		}
+	}
+
+	walk(node)
+
+	return [...names]
+}
+
+/**
+ * A formula with a sheet's new name in its SHEET calls, the rest as it was written: when a tab is
+ * renamed, the formulas that name it follow. Only a name written as text in SHEET's first place
+ * changes; `"Mart"` elsewhere in the formula stays.
+ */
+export function withSheetRenamed(source: string, from: string, to: string): string {
+	const quoted = (name: string): string => `"${name.replaceAll('"', '""')}"`
+	const call = new RegExp(`(SHEET\\s*\\(\\s*)${escapeRegExp(quoted(from))}(?=\\s*[;,)])`, "gi")
+
+	return source.replace(call, (_, opening: string) => `${opening}${quoted(to)}`)
+}
+
+function escapeRegExp(text: string): string {
+	return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/** Whether a formula reads another sheet. */
+export function readsSheets(node: FormulaNode): boolean {
+	let found = false
+	const walk = (current: FormulaNode): void => {
+		if (current.kind === "call") {
+			found ||= current.name === "SHEET"
+			current.args.forEach(walk)
+		} else if (current.kind === "negate" || current.kind === "percent") {
+			walk(current.operand)
+		} else if (current.kind === "binary") {
+			walk(current.left)
+			walk(current.right)
+		}
+	}
+
+	walk(node)
+
+	return found
 }
 
 const TWO_CHARACTER = ["<>", "<=", ">="]

@@ -17,7 +17,7 @@ import {
 	type FormulaFunction,
 	type FormulaValue
 } from "./evaluate.js"
-import { formulaFields, parseFormula, type FormulaNode } from "./parse.js"
+import { formulaFields, parseFormula, readsSheets, type FormulaNode } from "./parse.js"
 
 /**
  * The origin of the change that works out, as an engine starts, the formulas of rows a store was
@@ -34,6 +34,50 @@ export interface FormulaEngineOptions {
 	 * nothing else; the built-in ones cannot be replaced.
 	 */
 	readonly functions?: Readonly<Record<string, FormulaFunction>>
+	/** The workbook's other sheets, for SHEET. Left out, every SHEET is `#REF!`. */
+	readonly sheets?: FormulaSheets
+}
+
+/**
+ * The sheets SHEET reads, as the application has them: each by its name, its rows by their
+ * record. Records are told apart by `key`, the field naming a row's record in every sheet, such
+ * as its product: a lookup by its id, anything else by its text.
+ */
+export interface FormulaSheets {
+	readonly key: string
+	/** The sheet called `name`, its rows' values by record; undefined when the workbook has none so called. */
+	sheet(name: string): ReadonlyMap<string, Readonly<Record<string, CellValue | undefined>>> | undefined
+}
+
+/** How SHEET tells a row's record: a lookup's id, anything else as its text; null for none. */
+export function sheetRecordKey(value: CellValue | undefined): string | null {
+	if (value === undefined || value === null || value === "") {
+		return null
+	}
+
+	return isLookupValue(value) ? `id:${String(value.id)}` : `text:${describeValue(value)}`
+}
+
+/**
+ * A sheet's rows by their record, as `FormulaSheets.sheet` gives them: from its store or a draft's
+ * rows. A record with two rows is the first of them.
+ */
+export function sheetRecords(
+	rows: Iterable<{ readonly values?: Readonly<Record<string, CellValue | undefined>> }>,
+	key: string
+): Map<string, Readonly<Record<string, CellValue | undefined>>> {
+	const records = new Map<string, Readonly<Record<string, CellValue | undefined>>>()
+
+	for (const row of rows) {
+		const values = row.values ?? {}
+		const record = sheetRecordKey(values[key])
+
+		if (record !== null && !records.has(record)) {
+			records.set(record, values)
+		}
+	}
+
+	return records
 }
 
 interface Compiled {
@@ -55,6 +99,7 @@ export class FormulaEngine {
 	readonly #schema: ModuleSchema
 	readonly #store: RowStore
 	readonly #functions: Readonly<Record<string, FormulaFunction>>
+	#sheets: FormulaSheets | null
 	readonly #order: readonly Compiled[]
 	/** By field: the formulas to work out again when it changes, in order. */
 	readonly #affected: ReadonlyMap<string, readonly Compiled[]>
@@ -64,8 +109,9 @@ export class FormulaEngine {
 		this.#schema = options.schema
 		this.#store = options.store
 		this.#functions = upperKeys(options.functions ?? {})
+		this.#sheets = options.sheets ?? null
 		this.#order = compile(options.schema)
-		this.#affected = affected(this.#order)
+		this.#affected = affected(this.#order, this.#sheets?.key ?? null)
 		this.#stop = this.#store.derive(operations => this.#derive(operations))
 
 		// Rows the store was given as they were: what differs is written now, as a change of its own.
@@ -89,6 +135,39 @@ export class FormulaEngine {
 		}
 
 		return this.#workOut(rowId, this.#order.slice(0, this.#order.indexOf(formula) + 1)).get(key) ?? null
+	}
+
+	/**
+	 * The other sheets changed, or a different set of them is given: the formulas that read them are
+	 * worked out again for every row, as one change of their own.
+	 */
+	refreshSheets(sheets?: FormulaSheets): void {
+		if (sheets !== undefined) {
+			this.#sheets = sheets
+		}
+
+		const reading = this.#order.filter(formula => readsSheets(formula.tree))
+
+		if (reading.length === 0) {
+			return
+		}
+
+		this.#store.transact(
+			() => {
+				for (const rowId of this.#store.rowIds()) {
+					this.#write(
+						rowId,
+						this.#order.filter(formula => reading.includes(formula) || this.#after(formula, reading))
+					)
+				}
+			},
+			{ origin: FORMULA_ORIGIN }
+		)
+	}
+
+	/** Whether a formula reads, through others, one of the given ones: it comes later and is worked out again too. */
+	#after(formula: Compiled, reading: readonly Compiled[]): boolean {
+		return reading.some(read => this.#affected.get(read.field.key)?.includes(formula) ?? false)
 	}
 
 	/** Stops working formulas out. */
@@ -151,7 +230,7 @@ export class FormulaEngine {
 			values.has(key) ? (values.get(key) as CellValue) : this.#store.get(rowId, key)
 
 		for (const formula of formulas) {
-			values.set(formula.field.key, workOut(formula, this.#schema, read, this.#functions))
+			values.set(formula.field.key, workOut(formula, this.#schema, read, this.#functions, this.#sheets))
 		}
 
 		return values
@@ -165,7 +244,8 @@ export class FormulaEngine {
 export function applyFormulas(
 	schema: ModuleSchema,
 	rows: readonly RowInit[],
-	functions: Readonly<Record<string, FormulaFunction>> = {}
+	functions: Readonly<Record<string, FormulaFunction>> = {},
+	sheets: FormulaSheets | null = null
 ): RowInit[] {
 	const order = compile(schema)
 	const named = upperKeys(functions)
@@ -179,7 +259,7 @@ export function applyFormulas(
 		const read = (key: string): CellValue => values[key] ?? null
 
 		for (const formula of order) {
-			values[formula.field.key] = workOut(formula, schema, read, named)
+			values[formula.field.key] = workOut(formula, schema, read, named, sheets)
 		}
 
 		return { ...row, values }
@@ -192,11 +272,28 @@ function workOut(
 	formula: Compiled,
 	schema: ModuleSchema,
 	read: (key: string) => CellValue,
-	functions: Readonly<Record<string, FormulaFunction>>
+	functions: Readonly<Record<string, FormulaFunction>>,
+	sheets: FormulaSheets | null
 ): CellValue {
 	const result = evaluate(formula.tree, {
 		field: key => (schema.has(key) ? fromCell(schema.field(key), read(key)) : EMPTY),
-		functions
+		functions,
+		sheet: (name, key) => {
+			const records = sheets?.sheet(name)
+
+			if (!sheets || !records) {
+				return undefined
+			}
+
+			const record = sheetRecordKey(read(sheets.key))
+			const row = record === null ? undefined : records.get(record)
+
+			if (!row) {
+				return null
+			}
+
+			return schema.has(key) ? fromCell(schema.field(key), row[key] ?? null) : EMPTY
+		}
 	})
 
 	return toCell(formula.field, result)
@@ -317,11 +414,17 @@ function compile(schema: ModuleSchema): Compiled[] {
 }
 
 /** For each field, every formula that reads it, directly or through another formula, in order. */
-function affected(order: readonly Compiled[]): Map<string, Compiled[]> {
+function affected(order: readonly Compiled[], recordKey: string | null): Map<string, Compiled[]> {
 	const readers = new Map<string, Compiled[]>()
 
 	for (const formula of order) {
-		for (const key of formulaFields(formula.tree)) {
+		const reads = formulaFields(formula.tree)
+
+		if (recordKey !== null && readsSheets(formula.tree) && !reads.includes(recordKey)) {
+			reads.push(recordKey)
+		}
+
+		for (const key of reads) {
 			const list = readers.get(key) ?? []
 
 			list.push(formula)

@@ -21,6 +21,7 @@
 	--color-warning: var(--app-warning);
 	--color-warning-text: var(--app-warning-text);
 	--color-error: var(--app-error);
+	--color-sheet: var(--app-sheet);
 	--color-divider: var(--app-divider);
 	--radius-app: 6px;
 	--font-display: "Lexend", system-ui, sans-serif;

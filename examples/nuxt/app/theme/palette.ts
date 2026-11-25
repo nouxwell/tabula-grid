@@ -33,6 +33,8 @@ export interface Palette {
 	/** The warning colour where it carries words: a step towards the text colour, to read at 4.5:1. */
 	readonly warningText: string
 	readonly error: string
+	/** Another sheet a formula reads with SHEET: its name in a formula, its mark in a header. */
+	readonly sheet: string
 	readonly divider: string
 	readonly hover: string
 	/** The scroll bars' thumb, and under the pointer: the text colour at 20% and 30%. */
@@ -55,6 +57,7 @@ export const PALETTE: Readonly<Record<ColorMode, Palette>> = {
 		warning: "#d98a00",
 		warningText: "#8a5a00",
 		error: "#c4183c",
+		sheet: "#7a4fd0",
 		divider: "#dde1e6",
 		hover: "rgba(16, 19, 24, 0.05)",
 		scrollbar: "rgba(16, 19, 24, 0.2)",
@@ -74,6 +77,7 @@ export const PALETTE: Readonly<Record<ColorMode, Palette>> = {
 		warning: "#f0b44c",
 		warningText: "#f0b44c",
 		error: "#ff6b81",
+		sheet: "#b69cff",
 		divider: "#2e333b",
 		hover: "rgba(231, 233, 236, 0.06)",
 		scrollbar: "rgba(231, 233, 236, 0.2)",
@@ -103,6 +107,7 @@ export function paletteCss(mode: ColorMode): string {
 		`--tabula-error: ${colors.error};`,
 		`--tabula-warning: ${colors.warning};`,
 		`--tabula-success: ${colors.success};`,
+		`--tabula-sheet: ${colors.sheet};`,
 		`--tabula-scrollbar: ${colors.scrollbar};`,
 		`--tabula-scrollbar-hover: ${colors.scrollbarHover};`
 	].join(" ")

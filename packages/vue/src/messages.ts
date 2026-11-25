@@ -463,7 +463,9 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		newRow: "+ Yeni satır: tıklayın, sonra yazın ya da yapıştırın",
 		filledFrom: "{record} kaydından geldi; yazılamaz",
 		filledFromEditable: "{record} kaydından geldi; değiştirebilirsiniz",
-		filledColumn: "{lookup} seçilince dolar"
+		filledColumn: "{lookup} seçilince dolar",
+		sheetColumn: "{sheets} sayfasından değer alır",
+		fromSheet: "“{sheet}” sayfasından"
 	},
 	en: {
 		cellMenu: "Cell menu",
@@ -494,6 +496,8 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		filledFrom: "From {record}; not typed into",
 		filledFromEditable: "From {record}; yours to change",
 		filledColumn: "Filled from the {lookup} picked",
+		sheetColumn: "Reads the {sheets} sheet",
+		fromSheet: "From the “{sheet}” sheet",
 		succeeded: "Processed",
 		failed: "Failed",
 		skipped: "Not processed",
@@ -660,6 +664,11 @@ const FUNCTION_HELP: Readonly<Record<GridLocale, Readonly<Record<string, Functio
 			short: "yukarı yuvarlar",
 			text: "Sayıyı verilen basamakta sıfırdan uzağa yuvarlar."
 		},
+		SHEET: {
+			params: ["sayfa", "[alan]", "[yoksa]"],
+			short: "başka sayfadan değer",
+			text: "Bu satırın ürününü başka bir sayfada bulur, o sayfadaki alanın değerini verir. Ürün orada yoksa boş kalır, ya da “yoksa” yazılanı verir."
+		},
 		SUM: { params: SOME_TR, short: "toplam", text: "Sayıların toplamı; boş alanlar sayılmaz." }
 	},
 	en: {
@@ -709,6 +718,11 @@ const FUNCTION_HELP: Readonly<Record<GridLocale, Readonly<Record<string, Functio
 			params: ["number", "places"],
 			short: "rounds up",
 			text: "The number rounded away from zero at the places given."
+		},
+		SHEET: {
+			params: ["sheet", "[field]", "[if missing]"],
+			short: "a value from another sheet",
+			text: "Finds this row's record in another sheet and gives that sheet's field. Empty when the record is not there, or the third value when one is given."
 		},
 		SUM: { params: SOME_EN, short: "sum", text: "The sum of the numbers; empty fields are not counted." }
 	}
@@ -764,13 +778,15 @@ const FORMULA_REASONS: Readonly<Record<GridLocale, Readonly<Record<string, strin
 		"#DIV/0!": "sıfıra bölme",
 		"#VALUE!": "bir değer beklenen türde değil",
 		"#NAME?": "bilinmeyen fonksiyon",
-		"#NUM!": "sayı olarak hesaplanamıyor"
+		"#NUM!": "sayı olarak hesaplanamıyor",
+		"#REF!": "adı geçen sayfa bu çalışma kitabında yok"
 	},
 	en: {
 		"#DIV/0!": "a division by zero",
 		"#VALUE!": "a value is not of the kind expected",
 		"#NAME?": "an unknown function",
-		"#NUM!": "not a number that can be worked out"
+		"#NUM!": "not a number that can be worked out",
+		"#REF!": "the sheet it names is not in this workbook"
 	}
 }
 

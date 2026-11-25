@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { FormulaPart } from "@nouxwell/tabula-core"
 import { computed, ref, shallowRef, watch, type PropType } from "vue"
 import { BAR_TEXT, GRID_TEXT, type GridLocale } from "./messages.js"
 import type TabulaGrid from "./TabulaGrid.vue"
@@ -23,7 +24,13 @@ const cell = computed(() => props.grid?.cell ?? null)
 /** A column worked out by a formula: its formula in pieces, with labels, each field in its colour. */
 const formula = computed(() => cell.value?.formula ?? null)
 
-function partClass(field: string | null): string[] | undefined {
+/** A field in the colour its column has; another sheet's name as a chip, and the field read there in its colour. */
+function partClass(part: FormulaPart): string[] | undefined {
+	if (part.sheet !== undefined) {
+		return [part.field === null ? "tabula-formula-sheet" : "tabula-formula-sheet-field"]
+	}
+
+	const field = part.field
 	const index = field === null ? -1 : (cell.value?.references.indexOf(field) ?? -1)
 
 	return index < 0 ? undefined : ["tabula-formula-ref", `tabula-ref-${index % 6}`]
@@ -141,7 +148,7 @@ function selectAll(event: FocusEvent): void {
 			:title="text.formulaHint"
 		>
 			<span>=</span>
-			<span v-for="(part, at) in formula" :key="at" :class="partClass(part.field)" v-text="part.text" />
+			<span v-for="(part, at) in formula" :key="at" :class="partClass(part)" v-text="part.text" />
 		</div>
 		<input
 			v-else
@@ -233,6 +240,20 @@ function selectAll(event: FocusEvent): void {
 
 .tabula-formula-ref {
 	color: var(--tabula-ref);
+	font-weight: 600;
+}
+
+/* Another sheet a SHEET call reads: its name as a chip, the field read there in the same colour. */
+.tabula-formula-sheet {
+	padding: 1px 6px;
+	border-radius: var(--tabula-radius-small);
+	background: var(--tabula-sheet-bg);
+	color: var(--tabula-sheet);
+	font-weight: 600;
+}
+
+.tabula-formula-sheet-field {
+	color: var(--tabula-sheet);
 	font-weight: 600;
 }
 

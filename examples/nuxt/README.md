@@ -36,7 +36,10 @@ corepack pnpm --filter example-nuxt test        # the built server, as a browser
   server makes it from what was written. Its second
   tab, Hesaplanan sütunlar, writes the template's own columns: a formula field that completes
   fields and functions ([app/components/FormulaInput.vue](app/components/FormulaInput.vue)) and
-  the values it gives on the first rows as it is typed.
+  the values it gives on the first rows as it is typed. `SHEET("Mart"; [Yeni fiyat])` reads
+  another tab, as last saved, by product ([app/utils/workbook.ts](app/utils/workbook.ts)): the
+  field lists the tabs after `SHEET(`, the preview says in how many rows the product was found,
+  and renaming a tab that formulas name asks whether they should follow it.
 - **Saved views.** The toolbar's view menu keeps the sheet as the user arranged it under a name,
   in the browser's storage ([app/utils/views.ts](app/utils/views.ts)); the page opens in the view
   chosen for it. An application keeps the same JSON on its server for each user.

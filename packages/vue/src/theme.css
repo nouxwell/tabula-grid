@@ -87,6 +87,9 @@
 	--tabula-ref-4: #0f8f8f;
 	--tabula-ref-5: #d1307a;
 	--tabula-ref-6: #5b7f00;
+	/* Another sheet a formula reads with SHEET: its name in the formula bar, its mark in a header. */
+	--tabula-sheet: #7a4fd0;
+	--tabula-sheet-bg: color-mix(in srgb, var(--tabula-sheet) 12%, var(--tabula-bg));
 
 	--tabula-issues-bg: var(--tabula-bg);
 	--tabula-issues-fg: var(--tabula-fg);
@@ -128,6 +131,8 @@
 	--tabula-ref-4: #3cc7c7;
 	--tabula-ref-5: #ff6fae;
 	--tabula-ref-6: #a4cf3a;
+	--tabula-sheet: #b69cff;
+	--tabula-sheet-bg: color-mix(in srgb, var(--tabula-sheet) 18%, var(--tabula-bg));
 
 	color-scheme: dark;
 }

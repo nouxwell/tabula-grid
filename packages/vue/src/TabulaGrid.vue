@@ -10,11 +10,14 @@ import {
 	filterKeys,
 	formatCell,
 	formulaParts,
+	formulaSheets,
 	hasRange,
 	headerDisplayText,
+	isFormulaError,
 	isLookupValue,
 	lookupFills,
 	mergeColumnFormats,
+	parseFormula,
 	parseTsv,
 	readInput,
 	REDO_ORIGIN,
@@ -174,7 +177,12 @@ const props = defineProps({
 	 * A faint row after the last: a click there adds a row with the schema's defaults and selects its
 	 * cell, to type or paste into. Not shown where the sheet cannot be typed into.
 	 */
-	newRow: { type: Boolean, default: false }
+	newRow: { type: Boolean, default: false },
+	/**
+	 * A few words on each sheet the formulas read with SHEET, by its name, such as when the values
+	 * read from it were saved: a cell worked out from that sheet says them in its tooltip.
+	 */
+	sheetNotes: { type: Object as PropType<Readonly<Record<string, string>>>, default: undefined }
 })
 
 const emit = defineEmits<{
@@ -406,13 +414,44 @@ function fillingLookup(col: number): string | null {
 	return field ? (filledBy.value.get(field.key)?.label ?? null) : null
 }
 
+/** The sheets each formula field reads with SHEET, by the field's key; a field reading none is left out. */
+const sheetsRead = computed(() => {
+	const sheets = new Map<string, readonly string[]>()
+
+	for (const field of schema.value.fields) {
+		if (!field.formula) {
+			continue
+		}
+
+		try {
+			const names = formulaSheets(parseFormula(field.formula))
+
+			if (names.length > 0) {
+				sheets.set(field.key, names)
+			}
+		} catch {
+			// A formula that does not parse reads nothing; its error is the engine's to show.
+		}
+	}
+
+	return sheets
+})
+
+/** The sheets the column's formula reads, as their names are written in it. */
+function sheetsOf(col: number): readonly string[] {
+	const field = fields.value[col]
+
+	return (field && sheetsRead.value.get(field.key)) || []
+}
+
 /**
- * The header's tooltip: the whole label, the formula of a column worked out from the others, and
- * the lookup that fills a column.
+ * The header's tooltip: the whole label, the formula of a column worked out from the others, the
+ * sheets it reads, and the lookup that fills a column.
  */
 function headerTitle(col: number): string | undefined {
 	const field = fields.value[col]
 	const lookup = fillingLookup(col)
+	const sheets = sheetsOf(col)
 
 	if (!field) {
 		return undefined
@@ -421,18 +460,35 @@ function headerTitle(col: number): string | undefined {
 	return [
 		field.label,
 		field.formula ? `= ${field.formula}` : "",
+		sheets.length > 0
+			? (GRID_TEXT[props.locale].sheetColumn ?? "").replace(
+					"{sheets}",
+					sheets.map(name => `“${name}”`).join(", ")
+				)
+			: "",
 		lookup ? (GRID_TEXT[props.locale].filledColumn ?? "").replace("{lookup}", lookup) : ""
 	]
 		.filter(Boolean)
 		.join("\n")
 }
 
-/** What a header holds past its label's words: the letter before it and a link after it. */
+/** What a header holds past its label's words: the letter before it, and a link or a sheet after it. */
 function headerExtra(col: number, measure: (text: string) => number): number {
 	return (
 		(props.columnLetters ? measure(columnName(col)) + LETTER_GAP : 0) +
-		(fillingLookup(col) === null ? 0 : LINK_ROOM)
+		(fillingLookup(col) === null ? 0 : LINK_ROOM) +
+		(sheetsOf(col).length === 0 ? 0 : LINK_ROOM)
 	)
+}
+
+/** The lines a cell worked out from other sheets adds to its tooltip: each sheet, and the host's note on it. */
+function sheetLines(col: number): string[] {
+	return sheetsOf(col).map(name => {
+		const from = (GRID_TEXT[props.locale].fromSheet ?? "").replace("{sheet}", name)
+		const note = props.sheetNotes?.[name]
+
+		return note ? `${from} · ${note}` : from
+	})
 }
 
 function headerText(col: number): string {
@@ -1087,18 +1143,23 @@ function issueTitle(row: number, col: number): string | undefined {
 	const rowId = view.value.rowIdAt(row)
 	const source = field && rowId !== undefined ? filledFrom(rowId, field.key) : null
 
-	// A cell its row's record filled says which record, under any issue.
-	return source
-		? [
-				issues,
-				(GRID_TEXT[props.locale][isEditable(field) ? "filledFromEditable" : "filledFrom"] ?? "").replace(
+	// A cell whose formula could not be worked out has its issue to say why: no sheet it came from.
+	const failed = field && rowId !== undefined && isFormulaError(store.value.get(rowId, field.key))
+
+	// A cell its row's record filled says which record, and one read from other sheets says which,
+	// under any issue.
+	const lines = [
+		issues,
+		source
+			? (GRID_TEXT[props.locale][isEditable(field) ? "filledFromEditable" : "filledFrom"] ?? "").replace(
 					"{record}",
 					source
 				)
-			]
-				.filter(Boolean)
-				.join("\n")
-		: issues
+			: "",
+		...(failed ? [] : sheetLines(col))
+	].filter(Boolean)
+
+	return lines.length > 0 ? lines.join("\n") : undefined
 }
 
 // ---------------------------------------------------------------- rows
@@ -3356,7 +3417,10 @@ const cell = computed<ActiveCell | null>(() => {
 		editable: isEditable(field) && !isLockedRow(rowId),
 		filledFrom: filledFrom(rowId, field.key),
 		formula,
-		references: formula ? [...new Set(formula.flatMap(part => (part.field ? [part.field] : [])))] : []
+		// A field read in another sheet is not one of this row's columns.
+		references: formula
+			? [...new Set(formula.flatMap(part => (part.field && part.sheet === undefined ? [part.field] : [])))]
+			: []
 	})
 })
 
@@ -4274,6 +4338,15 @@ defineExpose({
 								<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
 								<path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
 							</svg>
+							<svg
+								v-if="sheetsOf(c).length > 0"
+								class="tabula-grid-th-link tabula-grid-th-sheet"
+								viewBox="0 0 24 24"
+								aria-hidden="true"
+							>
+								<rect x="4" y="4" width="16" height="16" rx="2" />
+								<path d="M4 10h16M10 10v10" />
+							</svg>
 							<span v-if="sortOf(c)" class="tabula-grid-sort" aria-hidden="true">
 								{{ sortOf(c) === "asc" ? "↑" : "↓" }}
 							</span>
@@ -4340,6 +4413,15 @@ defineExpose({
 						>
 							<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
 							<path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+						</svg>
+						<svg
+							v-if="sheetsOf(c).length > 0"
+							class="tabula-grid-th-link tabula-grid-th-sheet"
+							viewBox="0 0 24 24"
+							aria-hidden="true"
+						>
+							<rect x="4" y="4" width="16" height="16" rx="2" />
+							<path d="M4 10h16M10 10v10" />
 						</svg>
 						<span v-if="sortOf(c)" class="tabula-grid-sort" aria-hidden="true">
 							{{ sortOf(c) === "asc" ? "↑" : "↓" }}
@@ -4993,6 +5075,11 @@ defineExpose({
 	stroke-width: 2;
 	stroke-linecap: round;
 	stroke-linejoin: round;
+}
+
+/* A column worked out from other sheets: a sheet after its label; the tooltip names them. */
+.tabula-grid-th-sheet {
+	stroke: var(--tabula-sheet);
 }
 
 .tabula-grid-th-text {

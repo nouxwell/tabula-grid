@@ -363,6 +363,18 @@ Redrawn on 2026-11-24 (canvas items 138–160, boards AK–AO): one bar, one wor
 | 180 | Groups open with the pointer, Right, Enter; flip     | package     | done               |
 | 181 | The clipboard as a row of icons (AV)                 | package     | not chosen         |
 | 182 | No groups, titled sections instead (AV)              | package     | not chosen         |
+| 183 | SHEET("Sayfa"; [Alan]): the product there (AW)       | package     | done               |
+| 184 | A third argument for a product not there             | package     | done               |
+| 185 | A product twice in that sheet: its first row         | package     | done               |
+| 186 | Sheets, then fields, suggested; rows found shown     | both        | done               |
+| 187 | Read as last saved; the cell says when (AX)          | application | done               |
+| 188 | A sheet in the header, the name a chip in the bar    | package     | done               |
+| 189 | Row checks through a computed column                 | application | done               |
+| 190 | A renamed tab asks whether formulas follow (AY)      | both        | done               |
+| 191 | A missing sheet: #REF!, explained, nothing held back | both        | done               |
+| 192 | LOOKUP with a key of one's own choosing              | package     | not chosen         |
+| 193 | 'Mart'!D2, Excel's cross-sheet address               | package     | not chosen         |
+| 194 | A sheet named by its id, not its name                | both        | not chosen         |
 | —   | Multi-select cells, ticked in a list                 | package     | done (phase two)   |
 | —   | Saved views (personal views)                         | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)       | both        | done (phase two)   |

@@ -62,8 +62,8 @@ export type {
 	LookupSearchResponse
 } from "./lookup.js"
 
-export { applyFormulas, FORMULA_ORIGIN, FormulaEngine } from "./formula/engine.js"
-export type { FormulaEngineOptions } from "./formula/engine.js"
+export { applyFormulas, FORMULA_ORIGIN, FormulaEngine, sheetRecordKey, sheetRecords } from "./formula/engine.js"
+export type { FormulaEngineOptions, FormulaSheets } from "./formula/engine.js"
 export {
 	boolValue as formulaBool,
 	EMPTY as FORMULA_EMPTY,
@@ -74,7 +74,7 @@ export {
 	textValue as formulaText
 } from "./formula/evaluate.js"
 export type { FormulaFunction, FormulaValue } from "./formula/evaluate.js"
-export { formulaFields, parseFormula } from "./formula/parse.js"
+export { formulaFields, formulaSheets, parseFormula, readsSheets, withSheetRenamed } from "./formula/parse.js"
 export {
 	formulaCaret,
 	formulaFromAddresses,

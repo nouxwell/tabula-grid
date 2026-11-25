@@ -586,6 +586,7 @@
 								:row-height="narrow ? 40 : DENSITY_HEIGHTS[density]"
 								:marks="sheet.marks"
 								:found="found ?? undefined"
+								:sheet-notes="notesOfSheets"
 								fit
 								totals
 								new-row
@@ -1044,9 +1045,31 @@
 			:settings="valueSettings"
 			:save="saveTemplate"
 			:letters="columnLetters"
+			:sheets="formulaSheetsNow"
+			:sheet-names="sheetChoices"
 			@show-rows="showRuleRows"
 			@preview="previewTemplate"
 		/>
+
+		<!-- A tab renamed that formulas read by name: they follow it, or keep the old name. -->
+		<AppModal v-model:show="renameOpen" title="Formüller de güncellensin mi?" width="460px">
+			<AppModalScrollWrapper>
+				<p v-if="renaming" class="m-0 text-sm">
+					<strong class="text-sheet">“{{ renaming.from }}”</strong>
+					şablonlardaki {{ renaming.count }} formülde geçiyor. Güncellenirse bu formüller
+					<strong class="text-sheet">“{{ renaming.to }}”</strong>
+					sayfasını okur; güncellenmezse eski adı aradıkları için #REF! gösterirler.
+				</p>
+			</AppModalScrollWrapper>
+			<template #footer>
+				<div class="flex flex-wrap justify-end gap-2">
+					<AppButton :disabled="renameBusy" @click="renameOpen = false">Yalnız sekmeyi adlandır</AppButton>
+					<AppButton type="primary" :loading="renameBusy" @click="renameInFormulas">
+						Formülleri güncelle
+					</AppButton>
+				</div>
+			</template>
+		</AppModal>
 
 		<AppModal v-model:show="templateNameOpen" title="Yeni şablon" width="440px">
 			<AppModalScrollWrapper>
@@ -1230,8 +1253,11 @@ import {
 	RowStore,
 	moveSheet,
 	openSheet,
+	formulaSheets,
+	parseFormula,
 	removeSheet,
 	withSheet,
+	withSheetRenamed,
 	type Workbook,
 	type WorkbookSheet,
 	arrangeColumns,
@@ -1281,7 +1307,15 @@ import AppIcon, { type IconName } from "~/components/atoms/AppIcon.vue"
 import { LOCALES, localeMenu, type Locale } from "~/utils/locales"
 import type { ImportChoice, Sheet } from "~/utils/sheet"
 import type { ImportMemory } from "~/components/ImportDialog.vue"
-import { loadWorkbook, newId, storeWorkbook } from "~/utils/workbook"
+import {
+	loadWorkbook,
+	newId,
+	sheetNotes,
+	sheetRowCount,
+	sheetsSignature,
+	storeWorkbook,
+	workbookSheets
+} from "~/utils/workbook"
 import { FIT_TOOLTIP_STYLE } from "~/utils/tooltip"
 import { MARK_SWATCHES } from "~/utils/styles"
 
@@ -1435,7 +1469,9 @@ function makeSheet(
 			// The server's rows: what the user's changes are told against, whichever rows the sheet opens with;
 			// a blank sheet's rows are all its own.
 			baseline: tab.meta.blank === true ? [] : rowList,
-			...(draft ? { mapping: draft } : {})
+			...(draft ? { mapping: draft } : {}),
+			// The other tabs, as last saved, for formulas that read them with SHEET.
+			sheets: workbookSheets(workbookNow(), rowList)
 		}
 	)
 
@@ -1487,6 +1523,35 @@ function keepWorkbook(next: Workbook): void {
 	workbook.value = next
 	storeWorkbook(next)
 }
+
+/** When each tab was last saved: a cell worked out from another tab says it in its tooltip. */
+const notesOfSheets = computed(() => (workbook.value ? sheetNotes(workbook.value) : {}))
+
+/** The tabs as SHEET reads them, for the rules drawer's preview. */
+const formulaSheetsNow = computed(() =>
+	workbook.value && rows.value ? workbookSheets(workbook.value, rows.value) : null
+)
+
+/** The tabs a formula may name, with how many products each holds, for the formula editor's list. */
+const sheetChoices = computed(() => {
+	const book = workbook.value
+	const server = rows.value
+
+	return book && server
+		? book.sheets.map(tab => ({ name: tab.name, rows: sheetRowCount(book, tab.name, server) ?? 0 }))
+		: []
+})
+
+// Another tab saved, as the window that applies every tab saves them, or a tab renamed: what the open
+// sheet's formulas read from the others is worked out again. Its own saves change nothing it reads.
+watch(
+	() => (workbook.value ? sheetsSignature(workbook.value) : ""),
+	(now, before) => {
+		if (before !== "" && now !== before && sheet.value && workbook.value && rows.value) {
+			sheet.value.refreshSheets(workbookSheets(workbook.value, rows.value))
+		}
+	}
+)
 
 /** The open sheet went through to the backend, with nothing left to send. */
 const runDone = computed(
@@ -1610,7 +1675,8 @@ function backgroundSheet(tab: WorkbookSheet): Sheet | null {
 			kept: tab.draft,
 			save: async kept => keepWorkbook(withSheet(workbookNow(), tab.sheetId, { draft: kept })),
 			template: templates.value?.find(item => item.id === tab.template) ?? null,
-			baseline: tab.meta.blank === true ? [] : rows.value
+			baseline: tab.meta.blank === true ? [] : rows.value,
+			sheets: workbookSheets(workbookNow(), rows.value)
 		}
 	)
 }
@@ -1811,9 +1877,95 @@ async function addTab(key?: string): Promise<void> {
 	}
 }
 
-function renameTab(id: string, name: string): void {
-	keepWorkbook(withSheet(workbookNow(), id, { name }))
+/** A tab renamed whose old name the templates' formulas read with SHEET: the question waiting for the user. */
+const renaming = ref<{ readonly from: string; readonly to: string; readonly count: number } | null>(null)
+const renameOpen = ref(false)
+const renameBusy = ref(false)
+
+/** How many of the templates' formulas name the sheet with SHEET. */
+function formulasNaming(name: string): number {
+	return (templates.value ?? [])
+		.flatMap(template => template.columns ?? [])
+		.filter(column => {
+			try {
+				return column.formula ? formulaSheets(parseFormula(column.formula)).includes(name) : false
+			} catch {
+				return false
+			}
+		}).length
 }
+
+function renameTab(id: string, name: string): void {
+	const from = workbookNow().sheets.find(each => each.sheetId === id)?.name
+	const count = from === undefined || from === name ? 0 : formulasNaming(from)
+
+	keepWorkbook(withSheet(workbookNow(), id, { name }))
+
+	if (from !== undefined && count > 0) {
+		renaming.value = { from, to: name, count }
+		renameOpen.value = true
+	}
+}
+
+/**
+ * The templates whose formulas name the tab's old name, saved with its new one; the open sheet is
+ * made again with its template, as saving it in the rules drawer does.
+ */
+async function renameInFormulas(): Promise<void> {
+	const change = renaming.value
+
+	if (!change || renameBusy.value) {
+		return
+	}
+
+	renameBusy.value = true
+
+	try {
+		let openChanged = false
+
+		for (const template of templates.value ?? []) {
+			const columns = (template.columns ?? []).map(column =>
+				column.formula
+					? { ...column, formula: withSheetRenamed(column.formula, change.from, change.to) }
+					: column
+			)
+
+			if (columns.every((column, index) => column.formula === template.columns?.[index]?.formula)) {
+				continue
+			}
+
+			await $fetch(`/api/modules/price-update/templates/${template.id}`, {
+				method: "PUT",
+				body: { ...toRaw(template), columns }
+			})
+			openChanged ||= template.id === templateId.value
+		}
+
+		await refreshTemplates()
+
+		if (openChanged && sheet.value && input.value && rows.value) {
+			const carried = sheet.value.store.snapshot()
+			const unsaved = sheet.value.saver.dirty
+
+			sheet.value.dispose()
+			makeSheet(input.value, rows.value, carried, {})
+			saveCarried(unsaved)
+		}
+
+		message.success(`Formüller “${change.to}” sayfasını okuyor.`)
+		renameOpen.value = false
+	} catch {
+		message.error("Formüller güncellenemedi; sekmenin adı değişti, formüller eski adı arıyor.")
+	} finally {
+		renameBusy.value = false
+	}
+}
+
+watch(renameOpen, open => {
+	if (!open) {
+		renaming.value = null
+	}
+})
 
 /** A tab to another place; the open sheet stays open, as it is. */
 function moveTab(id: string, to: number): void {

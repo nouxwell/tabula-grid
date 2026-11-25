@@ -47,13 +47,7 @@
 				class="px-3 pt-1.5 pb-1 text-[11px] font-semibold tracking-wide text-muted uppercase"
 				role="presentation"
 			>
-				{{
-					context.token?.kind === "field"
-						? "Alanlar"
-						: suggestions[0]?.letter
-							? "Sütun ve fonksiyonlar"
-							: "Fonksiyonlar"
-				}}
+				{{ listTitle }}
 			</li>
 			<li
 				v-for="(item, index) in suggestions"
@@ -73,6 +67,7 @@
 				>
 					{{ item.letter }}
 				</span>
+				<AppIcon v-else-if="item.sheet" name="table" class="size-4 flex-none text-sheet" aria-hidden="true" />
 				<span :class="item.mono ? 'font-medium tabular-nums' : 'font-semibold'">{{ item.label }}</span>
 				<span class="text-xs text-muted">{{ item.detail }}</span>
 				<span v-if="item.kind" class="ml-auto text-xs text-muted">{{ item.kind }}</span>
@@ -93,6 +88,9 @@
  *
  * An address, "D" or "D2", reads this row's column D: the list offers that column first, and leaving
  * the field writes every address as its field's label, so moving a column changes nothing.
+ *
+ * In SHEET's first place it lists the workbook's sheets, with how many products each holds; one
+ * picked is written in quotes, and the list of fields follows for the field read there.
  */
 import { FORMULA_FUNCTIONS, formulaCaret, formulaFromAddresses } from "@nouxwell/tabula-core"
 import { functionHelp, type GridLocale } from "@nouxwell/tabula-vue"
@@ -109,11 +107,13 @@ const props = withDefaults(
 			readonly kind: string
 			readonly letter?: string | null
 		}[]
+		/** The workbook's sheets, for SHEET's first argument, with how many products each holds. */
+		sheets?: readonly { readonly name: string; readonly rows: number }[]
 		locale?: GridLocale
 		inputId?: string
 		placeholder?: string
 	}>(),
-	{ locale: "tr", inputId: undefined, placeholder: "ROUND([Aralık fiyatı] * 1.2, 2)" }
+	{ sheets: () => [], locale: "tr", inputId: undefined, placeholder: "ROUND([Aralık fiyatı] * 1.2, 2)" }
 )
 
 const box = ref<HTMLElement | null>(null)
@@ -126,12 +126,82 @@ const dismissed = ref(false)
 
 const context = computed(() => formulaCaret(text.value, caret.value))
 
+/** A sheet's name as SHEET's first argument is written: after its "(", or inside its quotes. */
+const SHEET_NAME = /SHEET\s*\(\s*("(?:[^"]|"")*)?$/i
+/** The sheet a SHEET call names, when its field is being written: "Mart" in SHEET("Mart"; [Ye. */
+const SHEET_FIELD = /SHEET\s*\(\s*"((?:[^"]|"")*)"\s*[;,]\s*\[[^\]]*$/i
+
+/** SHEET's first argument being written, to complete with a sheet's name: what is typed and what it replaces. */
+const sheetToken = computed(() => {
+	if (props.sheets.length === 0) {
+		return null
+	}
+
+	const match = SHEET_NAME.exec(text.value.slice(0, caret.value))
+
+	if (!match) {
+		return null
+	}
+
+	const quoted = match[1] ?? ""
+	// The rest of a name already written goes too, to its closing quote.
+	const rest = quoted === "" ? "" : (/^(?:[^"]|"")*"?/.exec(text.value.slice(caret.value))?.[0] ?? "")
+
+	return {
+		query: quoted.slice(1).replaceAll('""', '"'),
+		start: caret.value - quoted.length,
+		end: caret.value + rest.length
+	}
+})
+
+/** The sheet whose field is being written, in SHEET's second place; null anywhere else. */
+const sheetOfField = computed(() => {
+	const match = context.value.token?.kind === "field" ? SHEET_FIELD.exec(text.value.slice(0, caret.value)) : null
+
+	return match ? (match[1] ?? "").replaceAll('""', '"') : null
+})
+
+/** What a suggestion takes the place of: a sheet's name, a field, or a function's name. */
+const replacing = computed(() => sheetToken.value ?? context.value.token)
+
+const listTitle = computed(() => {
+	if (sheetToken.value) {
+		return "Sayfalar"
+	}
+
+	if (context.value.token?.kind === "field") {
+		return sheetOfField.value === null ? "Alanlar" : `“${sheetOfField.value}” sayfasının alanları`
+	}
+
+	return suggestions.value[0]?.letter ? "Sütun ve fonksiyonlar" : "Fonksiyonlar"
+})
+
 /** Folded as a Turkish reader folds: "I" is "ı", "İ" is "i". */
 function fold(value: string): string {
 	return value.toLocaleLowerCase("tr")
 }
 
 const suggestions = computed(() => {
+	const named = sheetToken.value
+
+	if (named) {
+		const needle = fold(named.query.trim())
+
+		return props.sheets
+			.filter(sheet => needle === "" || fold(sheet.name).includes(needle))
+			.slice(0, 8)
+			.map(sheet => ({
+				label: sheet.name,
+				detail: `${sheet.rows} ürün`,
+				kind: "sayfa",
+				letter: null as string | null,
+				sheet: true,
+				// The field read there comes next: its list opens after the "[".
+				insert: `"${sheet.name.replaceAll('"', '""')}"; [`,
+				mono: false
+			}))
+	}
+
 	const token = context.value.token
 
 	if (!token) {
@@ -153,7 +223,9 @@ const suggestions = computed(() => {
 					label: field.label,
 					detail: `[${field.key}]`,
 					kind: field.kind,
-					letter: field.letter ?? null,
+					// Another sheet's field is not this row's column: no letter for it.
+					letter: sheetOfField.value === null ? (field.letter ?? null) : null,
+					sheet: false,
 					insert: `[${field.label}]`,
 					mono: false
 				}))
@@ -171,6 +243,7 @@ const suggestions = computed(() => {
 			detail: functionHelp(name, props.locale)?.short ?? "",
 			kind: "",
 			letter: null as string | null,
+			sheet: false,
 			insert: `${name}(`,
 			mono: true
 		}))
@@ -182,6 +255,7 @@ const suggestions = computed(() => {
 					detail: "bu satırın hücresi",
 					kind: column.kind,
 					letter: column.letter ?? null,
+					sheet: false,
 					insert: `[${column.label}]`,
 					mono: false
 				},
@@ -255,7 +329,7 @@ function typed(value: string): void {
 /** Puts a suggestion in place of what it completes, and the caret after it. */
 function insert(index: number): void {
 	const item = suggestions.value[index]
-	const token = context.value.token
+	const token = replacing.value
 
 	if (!item || !token) {
 		return

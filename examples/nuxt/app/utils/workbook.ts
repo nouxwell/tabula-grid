@@ -1,4 +1,11 @@
-import { createWorkbook, readWorkbook, type Workbook } from "@nouxwell/tabula-core"
+import {
+	createWorkbook,
+	readWorkbook,
+	sheetRecords,
+	type FormulaSheets,
+	type RowInit,
+	type Workbook
+} from "@nouxwell/tabula-core"
 
 /**
  * The example keeps its workbook, every sheet's tab, template and draft, in the browser's storage.
@@ -46,4 +53,89 @@ export function newId(): string {
 	return typeof crypto !== "undefined" && "randomUUID" in crypto
 		? crypto.randomUUID()
 		: `w-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
+/** The field a sheet's rows are told apart by: SHEET finds this row's product in another sheet by it. */
+export const RECORD_KEY = "productId"
+
+/** A tab's rows as SHEET reads them: as last saved, or the server's for a tab never saved. */
+function savedRows(tab: Workbook["sheets"][number], serverRows: readonly RowInit[]): readonly RowInit[] {
+	if (tab.draft) {
+		return tab.draft.rows
+	}
+
+	return tab.meta.blank === true ? [] : serverRows
+}
+
+/**
+ * The workbook's sheets for SHEET, by their tabs' names: each one as last saved, a product's first
+ * row where it has more than one. A sheet is read only when a formula names it, and once.
+ */
+export function workbookSheets(workbook: Workbook, serverRows: readonly RowInit[]): FormulaSheets {
+	const read = new Map<string, ReturnType<typeof sheetRecords>>()
+
+	return {
+		key: RECORD_KEY,
+		sheet: name => {
+			const tab = workbook.sheets.find(each => each.name === name)
+
+			if (!tab) {
+				return undefined
+			}
+
+			let records = read.get(name)
+
+			if (!records) {
+				records = sheetRecords(savedRows(tab, serverRows), RECORD_KEY)
+				read.set(name, records)
+			}
+
+			return records
+		}
+	}
+}
+
+/**
+ * What changes what SHEET reads, for the open sheet: every tab's name, and when each of the others
+ * was saved. The open sheet's own saves are left out, so saving it does not work it out again.
+ */
+export function sheetsSignature(workbook: Workbook): string {
+	return JSON.stringify(
+		workbook.sheets.map(tab => [tab.name, tab.sheetId === workbook.active ? "" : (tab.draft?.savedAt ?? "")])
+	)
+}
+
+/** How many products a sheet holds, for a formula editor to show; null for a name no tab has. */
+export function sheetRowCount(workbook: Workbook, name: string, serverRows: readonly RowInit[]): number | null {
+	const tab = workbook.sheets.find(each => each.name === name)
+
+	return tab ? sheetRecords(savedRows(tab, serverRows), RECORD_KEY).size : null
+}
+
+/**
+ * When each tab was last saved, for the tooltip of a cell that reads it: "son kayıt 10:24", the day
+ * too when it was not today. A tab never saved holds the server's rows.
+ */
+export function sheetNotes(workbook: Workbook, now = new Date()): Record<string, string> {
+	const notes: Record<string, string> = {}
+	const time = new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit" })
+	const day = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long" })
+
+	for (const tab of workbook.sheets) {
+		if (tab.name in notes) {
+			continue
+		}
+
+		if (!tab.draft) {
+			notes[tab.name] = "sunucudaki satırlar"
+			continue
+		}
+
+		const saved = new Date(tab.draft.savedAt)
+		const today = saved.toDateString() === now.toDateString()
+
+		notes[tab.name] = `son kayıt ${today ? "" : `${day.format(saved)} `}${time.format(saved)}`
+	}
+
+	return notes
 }

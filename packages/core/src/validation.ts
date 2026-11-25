@@ -558,10 +558,14 @@ export class SheetValidator implements IssueSet {
 export function checkValue(rowId: RowId, field: FieldSchema, value: CellValue, settings: ValueSettings): Issue[] {
 	// A formula that could not be worked out: its error is the only thing to say about the cell.
 	if (isFormulaError(value)) {
+		const issue = cellIssue(rowId, field, "formula_error", `The formula gives ${value.formulaError}.`, {
+			error: value.formulaError
+		})
+
+		// A sheet SHEET names that the workbook lacks is the workbook's matter, not the row's: it warns
+		// and holds nothing back.
 		return [
-			cellIssue(rowId, field, "formula_error", `The formula gives ${value.formulaError}.`, {
-				error: value.formulaError
-			})
+			value.formulaError === "#REF!" ? Object.freeze({ ...issue, severity: "warning", blocking: false }) : issue
 		]
 	}
 

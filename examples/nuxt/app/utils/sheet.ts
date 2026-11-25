@@ -29,6 +29,7 @@ import {
 	type ColumnLayout,
 	type Draft,
 	type DraftChanges,
+	type FormulaSheets,
 	type GridTemplate,
 	type LookupAdapters,
 	type ModuleSchemaInput,
@@ -133,6 +134,8 @@ export function createSheet(
 		readonly mapping?: { readonly rename: Readonly<Record<string, string>> }
 		/** Marks carried with the rows, from a sheet made again over them. */
 		readonly marks?: MarksData
+		/** The workbook's sheets, for formulas that read another with SHEET. */
+		readonly sheets?: FormulaSheets
 	}
 ) {
 	const { columns, widths } = layout
@@ -156,8 +159,9 @@ export function createSheet(
 	const opened = opening?.status === "opened" ? opening : null
 	const review: { readonly draft: Draft; readonly changes: DraftChanges } | null =
 		kept && opening?.status === "review" ? { draft: kept.draft, changes: opening.changes } : null
-	const store = new RowStore({ rows: opened ? opened.rows : applyFormulas(schema, rows) })
-	const formulas = new FormulaEngine({ schema, store })
+	const sheets = options.sheets ?? null
+	const store = new RowStore({ rows: opened ? opened.rows : applyFormulas(schema, rows, {}, sheets) })
+	const formulas = new FormulaEngine({ schema, store, ...(sheets ? { sheets } : {}) })
 	const validator = new SheetValidator(schema, store, VALUE_SETTINGS[locale.value])
 	const history = new UndoHistory(store)
 	// What the user put on cells by hand: kept with the draft, taken back with Ctrl+Z in its turn.
@@ -387,12 +391,18 @@ export function createSheet(
 		history.dispose()
 	}
 
+	/** The other sheets were saved or renamed: what the formulas read from them is worked out again. */
+	function refreshSheets(next: FormulaSheets): void {
+		formulas.refreshSheets(next)
+	}
+
 	return {
 		schema,
 		store,
 		validator,
 		history,
 		session,
+		refreshSheets,
 		lookups,
 		view,
 		saver,

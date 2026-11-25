@@ -269,6 +269,11 @@ export interface FormulaPart {
 	readonly text: string
 	/** The key of the field this piece reads; null for the rest of the formula. */
 	readonly field: string | null
+	/**
+	 * The other sheet this piece is about, in a SHEET call: its name, the call's first argument, or
+	 * the field read there, its second. Such a field is not one of this row's.
+	 */
+	readonly sheet?: string
 }
 
 /**
@@ -280,14 +285,27 @@ export function formulaParts(formula: string, fields: readonly NamedField[]): Fo
 	const parts: FormulaPart[] = []
 	let plain = ""
 	let at = 0
+	/** The sheet a SHEET call just named: the field after it, past a separator, is read there. */
+	let named: string | null = null
 
 	while (at < formula.length) {
 		const char = formula.charAt(at)
 
 		if (char === '"') {
 			const close = closingQuote(formula, at)
+			const quoted = formula.slice(at, close)
 
-			plain += formula.slice(at, close)
+			// A sheet's name, as SHEET's first argument: a piece of its own, to be drawn as a sheet.
+			if (/SHEET\s*\(\s*$/i.test(plain)) {
+				named = quoted.slice(1, -1).replaceAll('""', '"')
+				parts.push({ text: plain, field: null })
+				parts.push({ text: quoted, field: null, sheet: named })
+				plain = ""
+			} else {
+				named = null
+				plain += quoted
+			}
+
 			at = close
 		} else if (char === "[") {
 			const close = formula.indexOf("]", at + 1)
@@ -298,13 +316,15 @@ export function formulaParts(formula: string, fields: readonly NamedField[]): Fo
 			}
 
 			const key = formula.slice(at + 1, close)
+			const sheet = named !== null && /^\s*[;,]\s*$/.test(plain) ? named : null
 
 			if (plain !== "") {
 				parts.push({ text: plain, field: null })
 				plain = ""
 			}
 
-			parts.push({ text: `[${labels.get(key) ?? key}]`, field: key })
+			parts.push({ text: `[${labels.get(key) ?? key}]`, field: key, ...(sheet === null ? {} : { sheet }) })
+			named = null
 			at = close + 1
 		} else {
 			plain += char
