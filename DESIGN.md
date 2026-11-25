@@ -375,6 +375,21 @@ Redrawn on 2026-11-24 (canvas items 138–160, boards AK–AO): one bar, one wor
 | 192 | LOOKUP with a key of one's own choosing              | package     | not chosen         |
 | 193 | 'Mart'!D2, Excel's cross-sheet address               | package     | not chosen         |
 | 194 | A sheet named by its id, not its name                | both        | not chosen         |
+| 195 | "=" in a cell; Enter writes the result (AZ)          | package     | done               |
+| 196 | Fields, letters, functions and the call's help       | package     | done               |
+| 197 | The columns it reads coloured in the sheet           | package     | done               |
+| 198 | A click on a cell writes its column into it          | package     | done               |
+| 199 | The result over the cell before Enter                | package     | done               |
+| 200 | Turkish numbers: 1,1 and ";"                         | package     | done               |
+| 201 | Ctrl+Enter into every cell selected (BA)             | package     | done               |
+| 202 | A cell it cannot work out kept, marked, counted      | package     | done               |
+| 203 | Read as typed; a record takes no formula (BB)        | package     | done               |
+| 204 | "'=" keeps the text                                  | package     | done               |
+| 205 | The same in the formula bar                          | package     | done               |
+| 206 | Over a touch screen's keyboard, with buttons (BC)    | both        | done               |
+| 207 | The cell keeps its formula, live                     | both        | not chosen         |
+| 208 | "=C5" reads row 5                                    | package     | not chosen         |
+| 209 | A pasted "=…" worked out too                         | package     | not chosen         |
 | —   | Multi-select cells, ticked in a list                 | package     | done (phase two)   |
 | —   | Saved views (personal views)                         | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)       | both        | done (phase two)   |

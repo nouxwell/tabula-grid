@@ -39,6 +39,8 @@ import {
 	type Adjustment,
 	type CellMarkChange,
 	type CellMarks,
+	type CellWrite,
+	type FormulaSheets,
 	type CellStyle,
 	type FoundCell,
 	type MarkedCell,
@@ -78,6 +80,16 @@ import {
 	type PropType
 } from "vue"
 import { columnName, parseAddress } from "./address.js"
+import FormulaHelp from "./FormulaHelp.vue"
+import {
+	entryHelp,
+	entryPoints,
+	entryReferences,
+	entryResult,
+	isEntryFormula,
+	type EntryColumn,
+	type EntryResult
+} from "./formulaEntry.js"
 import ScrollThumbs from "./ScrollThumbs.vue"
 import { alignmentOf } from "./alignment.js"
 import { GRID_TEXT, issueText, type GridLocale } from "./messages.js"
@@ -182,7 +194,12 @@ const props = defineProps({
 	 * A few words on each sheet the formulas read with SHEET, by its name, such as when the values
 	 * read from it were saved: a cell worked out from that sheet says them in its tooltip.
 	 */
-	sheetNotes: { type: Object as PropType<Readonly<Record<string, string>>>, default: undefined }
+	sheetNotes: { type: Object as PropType<Readonly<Record<string, string>>>, default: undefined },
+	/**
+	 * The workbook's sheets, for SHEET in a formula typed into a cell with "=", such as the
+	 * `FormulaEngine`'s. Left out, SHEET there is `#REF!`.
+	 */
+	sheets: { type: Object as PropType<FormulaSheets>, default: undefined }
 })
 
 const emit = defineEmits<{
@@ -1447,6 +1464,8 @@ function beginEdit(mode: EditState["mode"]): boolean {
 		original: editText(field, current, props.valueSettings),
 		mode
 	}
+	entryDismissed.value = false
+	entryHighlighted.value = 0
 	reveal()
 
 	return true
@@ -1513,25 +1532,42 @@ function onInputBlur(): void {
 	commitEdit(false)
 }
 
-/** Writes what was typed. `refocus` is false when focus is leaving the grid and should be let go. */
-function commitEdit(refocus = true): void {
+/**
+ * Writes what was typed. `refocus` is false when focus is leaving the grid and should be let go.
+ *
+ * A formula, "=" first, writes its result for the row. One that gives none writes nothing and
+ * returns false: with `refocus` the edit stays open, its reason under it, to be put right; leaving
+ * the grid lets it go.
+ */
+function commitEdit(refocus = true): boolean {
 	const state = editing.value
 
 	if (!state) {
-		return
+		return true
 	}
 
 	const text = draft.value
 	const ticked = picked.value
+	const rowId = view.value.rowIdAt(state.row)
+	const field = fields.value[state.col]
+	const outcome =
+		rowId !== undefined && takesEntry(field) && isEntryFormula(text) && text !== state.original
+			? entryOutcomeFor(rowId, field.key, text)
+			: null
+
+	if (outcome && !outcome.ok && refocus) {
+		return false
+	}
 
 	editing.value = null
 	draft.value = ""
 	picked.value = null
 
-	const rowId = view.value.rowIdAt(state.row)
-	const field = fields.value[state.col]
-
-	if (rowId !== undefined && field?.type === "options" && ticked && text.trim() === "") {
+	if (outcome) {
+		if (outcome.ok && rowId !== undefined && field !== undefined) {
+			store.value.setCell(rowId, field.key, outcome.value)
+		}
+	} else if (rowId !== undefined && field?.type === "options" && ticked && text.trim() === "") {
 		// In the options' own order, whatever order they were ticked in.
 		const values = field.options.filter(option => ticked.has(String(option.value))).map(option => option.value)
 		const value = values.length === 0 ? null : Object.freeze(values)
@@ -1540,12 +1576,19 @@ function commitEdit(refocus = true): void {
 			store.value.setCell(rowId, field.key, value)
 		}
 	} else if (rowId !== undefined && field !== undefined && text !== state.original) {
-		store.value.setCell(rowId, field.key, valueOf(field, text))
+		store.value.setCell(rowId, field.key, valueOf(field, asTyped(text)))
 	}
 
 	if (refocus) {
 		focusInput()
 	}
+
+	return outcome?.ok ?? true
+}
+
+/** Text as it is written: "'=" first keeps the rest as typed, as Excel's apostrophe does. */
+function asTyped(text: string): string {
+	return text.startsWith("'=") ? text.slice(1) : text
 }
 
 function cancelEdit(): void {
@@ -1671,6 +1714,13 @@ function suggest(): void {
 	const query = draft.value
 
 	stopSearch()
+
+	// A formula has suggestions of its own; an options field's list waits.
+	if (entryField.value) {
+		closeList()
+
+		return
+	}
 
 	if (field?.type === "options") {
 		const needle = lower(query)
@@ -1899,10 +1949,383 @@ function openList(): boolean {
 	return true
 }
 
+// ---------------------------------------------------------------- a formula typed into a cell
+
+/**
+ * Whether a field takes a formula typed into it with "=", worked out once and written as a value:
+ * any field the user can edit but a record, which is picked rather than worked out.
+ */
+function takesEntry(field: FieldSchema | undefined): field is FieldSchema {
+	return isEditable(field) && field.type !== "lookup"
+}
+
+/** The columns as they stand on screen, with their letters: what a formula's addresses and suggestions name. */
+const entryColumns = computed<EntryColumn[]>(() =>
+	fields.value.map((field, col) => ({
+		key: field.key,
+		label: field.label,
+		type: field.type,
+		letter: columnName(col)
+	}))
+)
+
+/** Numbers with a decimal comma: "1,1" is a number in a formula, and ";" separates, as in a Turkish Excel. */
+const comma = computed(() => props.valueSettings.decimalSeparator === ",")
+/** Where the caret stands in the editor: the suggestions and the call's help follow it. */
+const entryCaret = ref(0)
+const entryHighlighted = ref(0)
+/** Escape closed the suggestions; they open again with what is typed next. */
+const entryDismissed = ref(false)
+const entryListId = `${id}-formula`
+/** A touch screen: the formula's help sits over its keyboard, with buttons for what the keyboard hides. */
+const coarsePointer = ref(false)
+
+/** The field being edited, while a formula is typed into it. */
+const entryField = computed(() => {
+	const state = editing.value
+	const field = state ? fields.value[state.col] : undefined
+
+	return state && takesEntry(field) && isEntryFormula(draft.value) ? field : null
+})
+
+const entryAid = computed(() =>
+	entryField.value ? entryHelp(draft.value, entryCaret.value, entryColumns.value, props.locale, comma.value) : null
+)
+
+const entryListOpen = computed(
+	() => entryAid.value !== null && !entryDismissed.value && entryAid.value.items.length > 0
+)
+
+/** What a formula gives for a row's cell, the value to write or why there is none. */
+function entryOutcomeFor(rowId: string, key: string, text: string): EntryResult {
+	return entryResult(
+		text,
+		entryColumns.value,
+		{
+			schema: schema.value,
+			field: key,
+			read: field => store.value.get(rowId, field),
+			settings: props.valueSettings,
+			sheets: props.sheets ?? null
+		},
+		props.locale
+	)
+}
+
+/** What the formula being typed gives for the cell's row, as it is typed; nothing for a lone "=". */
+const entryOutcome = computed<EntryResult | null>(() => {
+	void dataVersion.value
+
+	const state = editing.value
+	const field = entryField.value
+	const rowId = state ? view.value.rowIdAt(state.row) : undefined
+
+	return field && rowId !== undefined && draft.value.trim() !== "="
+		? entryOutcomeFor(rowId, field.key, draft.value)
+		: null
+})
+
+/** After the result: which cell Enter writes into, and how many Ctrl+Enter does. */
+const entryNote = computed(() => {
+	const state = editing.value
+	const area = range.value
+
+	if (!state) {
+		return ""
+	}
+
+	const words = GRID_TEXT[props.locale]
+	const one = (words.formulaWrites ?? "").replace("{address}", `${columnName(state.col)}${sheetRow(state.row)}`)
+	const count = area ? (area.bottom - area.top + 1) * (area.right - area.left + 1) : 1
+
+	return count > 1 ? `${one} · ${(words.formulaWritesMany ?? "").replace("{n}", String(count))}` : one
+})
+
+/** On a touch screen, buttons for the columns that hold numbers, the ones a formula reads most. */
+const entryButtons = computed(() =>
+	coarsePointer.value ? entryColumns.value.filter(column => NUMERIC_TYPES.has(column.type)).slice(0, 4) : []
+)
+
+/** Where the result and the help go: around the editor, or docked over a touch screen's keyboard. */
+const entryPlace = shallowRef<{
+	readonly left: number
+	readonly top: number
+	readonly bottom: number
+	/** The help goes over the editor: there is more room there. */
+	readonly above: boolean
+	/** Docked: how far the keyboard leaves the bottom of the window. */
+	readonly docked: number | null
+} | null>(null)
+
+function placeEntry(): void {
+	const input = editor.value
+	const frame = root.value
+
+	if (!input || !frame || !entryField.value) {
+		entryPlace.value = null
+
+		return
+	}
+
+	const cell = input.getBoundingClientRect()
+	const box = frame.getBoundingClientRect()
+	const below = box.bottom - cell.bottom
+	const viewport = typeof window === "undefined" ? null : window.visualViewport
+
+	entryPlace.value = {
+		left: cell.left - box.left,
+		top: cell.top - box.top,
+		bottom: cell.bottom - box.top,
+		above: below < 240 && cell.top - box.top > below,
+		docked:
+			coarsePointer.value && viewport
+				? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+				: null
+	}
+}
+
+watch([entryField, draft, entryCaret], () => void nextTick(placeEntry))
+watch(
+	() => entryAid.value?.items,
+	() => {
+		entryHighlighted.value = 0
+	}
+)
+watch(draft, () => {
+	entryDismissed.value = false
+})
+
+/** Where the caret is, read after every key and click: the suggestions follow it. */
+function followCaret(): void {
+	entryCaret.value = editor.value?.selectionStart ?? draft.value.length
+}
+
+watch(draft, () => void nextTick(followCaret))
+
+/** Puts text in place of `start`..`end` of what is typed, the caret after it. */
+function replaceDraft(start: number, end: number, text: string): void {
+	const at = start + text.length
+
+	draft.value = `${draft.value.slice(0, start)}${text}${draft.value.slice(end)}`
+	entryCaret.value = at
+
+	void nextTick(() => {
+		const input = editor.value
+
+		input?.focus({ preventScroll: true })
+		input?.setSelectionRange(at, at)
+	})
+}
+
+/** A suggestion in place of what it completes. */
+function insertEntry(index: number): void {
+	const help = entryAid.value
+	const item = help?.items[index]
+
+	if (help && item) {
+		replaceDraft(help.start, help.end, item.insert)
+	}
+}
+
+/** A field or a sign at the caret, from a click on a column's cell or a button. */
+function insertAtCaret(text: string): void {
+	const caret = Math.min(entryCaret.value, draft.value.length)
+
+	replaceDraft(caret, caret, text)
+}
+
+/** The keys the suggestions take while a formula is typed. False when the key is not theirs. */
+function onEntryKeydown(event: KeyboardEvent): boolean {
+	const help = entryAid.value
+
+	if (!entryListOpen.value || !help) {
+		return false
+	}
+
+	if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+		const count = help.items.length
+
+		entryHighlighted.value = (entryHighlighted.value + (event.key === "ArrowDown" ? 1 : -1) + count) % count
+
+		return true
+	}
+
+	if ((event.key === "Enter" && !(event.ctrlKey || event.metaKey)) || event.key === "Tab") {
+		insertEntry(entryHighlighted.value)
+
+		return true
+	}
+
+	if (event.key === "Escape") {
+		entryDismissed.value = true
+
+		return true
+	}
+
+	return false
+}
+
+/** A cell that Ctrl+Enter gave no value, and why. */
+interface EntryFailure {
+	readonly rowId: string
+	readonly key: string
+	readonly reason: string
+}
+
+/** What the last Ctrl+Enter wrote, and the cells it could not: shown until closed. */
+const entryNotice = shallowRef<{ readonly written: number; readonly failed: readonly EntryFailure[] } | null>(null)
+let entryNoticeTimer: ReturnType<typeof setTimeout> | null = null
+
+const failedEntries = computed(
+	() => new Set((entryNotice.value?.failed ?? []).map(item => `${item.rowId}|${item.key}`))
+)
+
+/** The notice in words: how many cells were written, and how many could not be, with the first one's reason. */
+const entryNoticeLines = computed(() => {
+	const notice = entryNotice.value
+	const words = GRID_TEXT[props.locale]
+	const first = notice?.failed[0]
+
+	return {
+		written:
+			notice && notice.written > 0 ? (words.entryWritten ?? "").replace("{n}", String(notice.written)) : null,
+		failed:
+			notice && first
+				? (words.entryFailed ?? "")
+						.replace("{n}", String(notice.failed.length))
+						.replace("{reason}", first.reason)
+				: null
+	}
+})
+
+/** A cell the last Ctrl+Enter could not work out: tinted until its notice is closed. */
+function entryClass(row: number, col: number): string | undefined {
+	if (failedEntries.value.size === 0) {
+		return undefined
+	}
+
+	const rowId = view.value.rowIdAt(row)
+	const field = fields.value[col]
+
+	return rowId !== undefined && field && failedEntries.value.has(`${rowId}|${field.key}`)
+		? "is-entry-failed"
+		: undefined
+}
+
+function closeEntryNotice(): void {
+	if (entryNoticeTimer !== null) {
+		clearTimeout(entryNoticeTimer)
+		entryNoticeTimer = null
+	}
+
+	entryNotice.value = null
+}
+
+function undoEntry(): void {
+	closeEntryNotice()
+	undoHistory.value.undo()
+	focusInput()
+}
+
+/** Goes to the first cell Ctrl+Enter could not work out. */
+function showEntryFailure(): void {
+	const first = entryNotice.value?.failed[0]
+
+	if (first) {
+		go(first.rowId, first.key, false)
+	}
+}
+
+/**
+ * Text into every cell selected, as Excel's Ctrl+Enter puts it: a formula worked out for each cell's
+ * row and field, anything else read as typed there. A cell the formula gives no value keeps its own
+ * and is counted. One change: Ctrl+Z takes all of it back. Returns how many cells were written.
+ */
+function enterSelected(text: string): number {
+	const area = selection.range
+
+	if (!area || props.readonly) {
+		return 0
+	}
+
+	const formula = isEntryFormula(text)
+	const writes: CellWrite[] = []
+	const failed: EntryFailure[] = []
+
+	for (let row = area.top; row <= area.bottom; row++) {
+		const rowId = view.value.rowIdAt(row)
+
+		if (rowId === undefined || isLockedRow(rowId)) {
+			continue
+		}
+
+		for (let col = area.left; col <= area.right; col++) {
+			const field = fields.value[col]
+
+			if (!isEditable(field)) {
+				continue
+			}
+
+			if (!formula) {
+				writes.push({ rowId, field: field.key, value: valueOf(field, asTyped(text)) })
+				continue
+			}
+
+			const outcome = entryOutcomeFor(rowId, field.key, text)
+
+			if (outcome.ok) {
+				writes.push({ rowId, field: field.key, value: outcome.value })
+			} else {
+				failed.push({ rowId, key: field.key, reason: outcome.text })
+			}
+		}
+	}
+
+	if (writes.length > 0) {
+		store.value.setCells(writes, { origin: "entry" })
+	}
+
+	closeEntryNotice()
+	entryNotice.value = { written: writes.length, failed }
+
+	// Nothing to look at: the notice goes by itself.
+	if (failed.length === 0) {
+		entryNoticeTimer = setTimeout(closeEntryNotice, 6000)
+	}
+
+	return writes.length
+}
+
+/** Ctrl+Enter in the editor: one cell as Enter writes it, several each by its own row. */
+function enterEdit(): void {
+	const state = editing.value
+	const area = selection.range
+
+	if (!state || !area || picked.value || (area.top === area.bottom && area.left === area.right)) {
+		commitEdit()
+
+		return
+	}
+
+	const text = draft.value
+
+	editing.value = null
+	draft.value = ""
+	closeList()
+	enterSelected(text)
+	focusInput()
+}
+
 function onEditorKeydown(event: KeyboardEvent): void {
 	const state = editing.value
 
 	if (!state) {
+		return
+	}
+
+	if (entryField.value && onEntryKeydown(event)) {
+		event.preventDefault()
+
 		return
 	}
 
@@ -1912,15 +2335,19 @@ function onEditorKeydown(event: KeyboardEvent): void {
 		return
 	}
 
-	if (event.key === "Enter") {
-		commitEdit()
-		move(event.shiftKey ? -1 : 1, 0)
+	if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+		enterEdit()
+	} else if (event.key === "Enter") {
+		if (commitEdit()) {
+			move(event.shiftKey ? -1 : 1, 0)
+		}
 	} else if (event.key === "Tab") {
-		commitEdit()
-		move(0, event.shiftKey ? -1 : 1)
+		if (commitEdit()) {
+			move(0, event.shiftKey ? -1 : 1)
+		}
 	} else if (event.key === "Escape") {
 		cancelEdit()
-	} else if (state.mode === "enter" && ARROWS[event.key] !== undefined) {
+	} else if (state.mode === "enter" && !entryField.value && ARROWS[event.key] !== undefined) {
 		const step = STEPS[ARROWS[event.key] as Direction]
 
 		commitEdit()
@@ -2652,6 +3079,19 @@ function onBodyDown(event: MouseEvent): void {
 		return
 	}
 
+	// Writing a formula where a value is expected: a cell's column goes into it, as Excel's pointing.
+	if (entryField.value && entryPoints(draft.value, entryCaret.value, comma.value)) {
+		const cell = cellAt(event)
+		const column = cell ? entryColumns.value[cell.col] : undefined
+
+		if (column) {
+			event.preventDefault()
+			insertAtCaret(`[${column.label}]`)
+
+			return
+		}
+	}
+
 	takeFocus(event)
 
 	const cell = cellAt(event)
@@ -3333,9 +3773,14 @@ onMounted(() => {
 
 	// A web font that arrives later is a different width; measure again once it has.
 	void document.fonts?.ready.then(() => measureHeaders())
+
+	coarsePointer.value = window.matchMedia?.("(pointer: coarse)").matches ?? false
+	window.visualViewport?.addEventListener("resize", placeEntry)
 })
 
 onBeforeUnmount(() => {
+	window.visualViewport?.removeEventListener("resize", placeEntry)
+	closeEntryNotice()
 	stopSearch()
 	closeColumnMenu()
 	closeFilterPanel()
@@ -3427,10 +3872,25 @@ const cell = computed<ActiveCell | null>(() => {
 /** How many colours the fields a formula reads take in turn. */
 const REFERENCE_COLOURS = 6
 
-/** Each field the active cell's formula reads, with the colour of its place. */
-const references = computed(
-	() => new Map((cell.value?.references ?? []).map((key, index) => [key, index % REFERENCE_COLOURS]))
-)
+/**
+ * A formula typed into the formula bar, while it is: the grid colours the columns it reads, as it
+ * does for one typed into a cell.
+ */
+const barEntry = ref<string | null>(null)
+
+/**
+ * Each field a formula reads, with the colour of its place: one being typed into a cell or the
+ * formula bar, or else the active cell's column's own.
+ */
+const references = computed(() => {
+	const typed = entryField.value ? draft.value : barEntry.value
+	const keys =
+		typed !== null && isEntryFormula(typed)
+			? entryReferences(typed, entryColumns.value)
+			: (cell.value?.references ?? [])
+
+	return new Map(keys.map((key, index) => [key, index % REFERENCE_COLOURS]))
+})
 
 /** A column the active cell's formula reads, in its colour; stronger on the active row. */
 function refClass(row: number | null, col: number): string | undefined {
@@ -3510,11 +3970,55 @@ function writeCell(rowId: string, key: string, input: string): boolean {
 		commitEdit(false)
 	}
 
+	// A formula writes its result; one that gives none writes nothing.
+	if (takesEntry(field) && isEntryFormula(input)) {
+		const outcome = entryOutcomeFor(rowId, key, input)
+
+		if (outcome.ok) {
+			store.value.setCell(rowId, key, outcome.value)
+		}
+
+		return outcome.ok
+	}
+
 	if (input !== editText(field, store.value.get(rowId, key), props.valueSettings)) {
-		store.value.setCell(rowId, key, valueOf(field, input))
+		store.value.setCell(rowId, key, valueOf(field, asTyped(input)))
 	}
 
 	return true
+}
+
+/**
+ * For a formula bar: the help and the result of a formula typed there, for the active cell, as the
+ * cell's own editor gives them. Null when the active cell takes no formula.
+ */
+function entryFor(
+	text: string,
+	caret: number
+): { readonly help: ReturnType<typeof entryHelp>; readonly result: EntryResult | null; readonly note: string } | null {
+	const at = selection.active
+	const field = at ? fields.value[at.col] : undefined
+	const rowId = at ? view.value.rowIdAt(at.row) : undefined
+
+	if (!at || rowId === undefined || !takesEntry(field) || isLockedRow(rowId) || !isEntryFormula(text)) {
+		return null
+	}
+
+	const area = range.value
+	const count = area ? (area.bottom - area.top + 1) * (area.right - area.left + 1) : 1
+	const words = GRID_TEXT[props.locale]
+	const one = (words.formulaWrites ?? "").replace("{address}", `${columnName(at.col)}${sheetRow(at.row)}`)
+
+	return {
+		help: entryHelp(text, caret, entryColumns.value, props.locale, comma.value),
+		result: text.trim() === "=" ? null : entryOutcomeFor(rowId, field.key, text),
+		note: count > 1 ? `${one} · ${(words.formulaWritesMany ?? "").replace("{n}", String(count))}` : one
+	}
+}
+
+/** A formula bar's text, while a formula is typed there: the columns it reads are coloured. Null ends it. */
+function showEntry(text: string | null): void {
+	barEntry.value = text
 }
 
 /**
@@ -4216,6 +4720,15 @@ defineExpose({
 	goTo,
 	goToAddress,
 	writeCell,
+	/**
+	 * Text into every cell selected, as Ctrl+Enter writes it: a formula, "=" first, worked out for
+	 * each cell's row. Returns how many cells were written.
+	 */
+	enterSelected,
+	/** The help and the result of a formula typed into a formula bar, for the active cell. */
+	entryFor,
+	/** A formula bar's formula while it is typed, to colour the columns it reads; null ends it. */
+	showEntry,
 	adjustSelection,
 	removeRows,
 	insertRows,
@@ -4525,7 +5038,8 @@ defineExpose({
 									refClass(r, c),
 									lookClass(r, c),
 									foundClass(r, c),
-									filledClass(r, c)
+									filledClass(r, c),
+									entryClass(r, c)
 								]"
 								:style="cellStyles[c]"
 								:title="issueTitle(r, c)"
@@ -4575,7 +5089,8 @@ defineExpose({
 								refClass(r, c),
 								lookClass(r, c),
 								foundClass(r, c),
-								filledClass(r, c)
+								filledClass(r, c),
+								entryClass(r, c)
 							]"
 							:style="cellStyles[c]"
 							:title="issueTitle(r, c)"
@@ -4618,15 +5133,23 @@ defineExpose({
 						:class="editing ? ['is-editing', cellClasses[editing.col]] : undefined"
 						:style="editing ? editorStyle : inputStyle"
 						:aria-label="inputLabel"
-						:role="listField ? 'combobox' : undefined"
-						:aria-autocomplete="listField ? 'list' : undefined"
-						:aria-expanded="listField ? listOpen : undefined"
-						:aria-controls="listField ? listId : undefined"
-						:aria-activedescendant="listOpen && highlighted >= 0 ? `${listId}-${highlighted}` : undefined"
+						:role="listField || entryField ? 'combobox' : undefined"
+						:aria-autocomplete="listField || entryField ? 'list' : undefined"
+						:aria-expanded="entryField ? entryListOpen : listField ? listOpen : undefined"
+						:aria-controls="entryField ? entryListId : listField ? listId : undefined"
+						:aria-activedescendant="
+							entryListOpen
+								? `${entryListId}-${entryHighlighted}`
+								: listOpen && highlighted >= 0
+									? `${listId}-${highlighted}`
+									: undefined
+						"
 						:placeholder="picked ? `${picked.size} ${GRID_TEXT[locale].picked}` : undefined"
 						autocomplete="off"
 						spellcheck="false"
 						@keydown="onInputKeydown"
+						@keyup="followCaret"
+						@click="followCaret"
 						@input="onInput"
 						@compositionstart="onCompositionStart"
 						@blur="onInputBlur"
@@ -4741,6 +5264,73 @@ defineExpose({
 			<li v-if="picked" class="tabula-grid-list-note" role="presentation">{{ GRID_TEXT[locale].pickHint }}</li>
 		</ul>
 		<ScrollThumbs v-if="listOpen" :target="suggestionList" :layer="5" />
+		<template v-if="entryField && entryPlace">
+			<p
+				v-if="entryOutcome && entryPlace.docked === null"
+				class="tabula-grid-entry-result"
+				:class="{ 'is-bad': !entryOutcome.ok, 'is-below': entryPlace.above }"
+				role="status"
+				:style="{
+					left: `${entryPlace.left}px`,
+					top: `${entryPlace.above ? entryPlace.bottom + 4 : entryPlace.top - 4}px`
+				}"
+			>
+				<template v-if="entryOutcome.ok">
+					= {{ entryOutcome.text }}
+					<span class="tabula-grid-entry-note">· {{ entryNote }}</span>
+				</template>
+				<template v-else>{{ entryOutcome.text }}</template>
+			</p>
+			<FormulaHelp
+				class="tabula-grid-entry"
+				:class="{
+					'is-above': entryPlace.above && entryPlace.docked === null,
+					'is-docked': entryPlace.docked !== null
+				}"
+				:style="
+					entryPlace.docked !== null
+						? { bottom: `${entryPlace.docked + 8}px` }
+						: {
+								left: `${entryPlace.left}px`,
+								top: `${entryPlace.above ? entryPlace.top - 4 : entryPlace.bottom + 4}px`
+							}
+				"
+				:help="entryAid"
+				:list-open="entryListOpen"
+				:highlighted="entryHighlighted"
+				:list-id="entryListId"
+				:locale="locale"
+				:buttons="entryButtons"
+				:comma="comma"
+				:result="entryPlace.docked !== null ? entryOutcome : null"
+				@pick="insertEntry"
+				@hover="entryHighlighted = $event"
+				@insert="insertAtCaret"
+			/>
+		</template>
+		<div v-if="entryNotice" class="tabula-grid-entry-notice" role="status">
+			<p v-if="entryNoticeLines.written" class="tabula-grid-entry-line">
+				<span v-text="entryNoticeLines.written" />
+				<button type="button" class="tabula-grid-entry-action" @click="undoEntry">
+					{{ GRID_TEXT[locale].entryUndo }}
+				</button>
+			</p>
+			<p v-if="entryNoticeLines.failed" class="tabula-grid-entry-line is-bad">
+				<span v-text="entryNoticeLines.failed" />
+				<button type="button" class="tabula-grid-entry-action" @click="showEntryFailure">
+					{{ GRID_TEXT[locale].entryShow }}
+				</button>
+			</p>
+			<button
+				type="button"
+				class="tabula-grid-entry-close"
+				:aria-label="GRID_TEXT[locale].entryClose"
+				:title="GRID_TEXT[locale].entryClose"
+				@click="closeEntryNotice"
+			>
+				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+			</button>
+		</div>
 		<div
 			v-if="columnMenu"
 			class="tabula-grid-menu"
@@ -6081,6 +6671,153 @@ defineExpose({
 
 .tabula-grid-input.is-right {
 	text-align: right;
+}
+
+/* A formula typed with "=": its result over the editor, its help under it. */
+.tabula-grid-entry-result {
+	animation: tabula-grid-drop 0.12s ease-out;
+	position: absolute;
+	z-index: 6;
+	max-width: 520px;
+	margin: 0;
+	padding: 4px 10px;
+	overflow: hidden;
+	border-radius: var(--tabula-radius);
+	background: color-mix(in srgb, var(--tabula-fg) 88%, var(--tabula-bg));
+	color: var(--tabula-bg);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	box-shadow: 0 6px 16px rgb(0 0 0 / 20%);
+	transform: translateY(-100%);
+	pointer-events: none;
+}
+
+.tabula-grid-entry-result.is-below {
+	transform: none;
+}
+
+.tabula-grid-entry-result.is-bad {
+	background: var(--tabula-error-bg);
+	color: var(--tabula-required);
+	box-shadow:
+		inset 0 0 0 1px color-mix(in srgb, var(--tabula-error) 40%, var(--tabula-bg)),
+		0 6px 16px rgb(0 0 0 / 12%);
+}
+
+.tabula-grid-entry-note {
+	opacity: 0.72;
+}
+
+.tabula-grid-entry {
+	animation: tabula-grid-drop 0.12s ease-out;
+	position: absolute;
+	z-index: 6;
+	width: max-content;
+}
+
+.tabula-grid-entry.is-above {
+	transform: translateY(-100%);
+}
+
+/* On a touch screen: over the keyboard, the width of the screen. */
+.tabula-grid-entry.is-docked {
+	position: fixed;
+	right: 8px;
+	left: 8px;
+	width: auto;
+	max-width: none;
+	padding: 8px;
+	border: 1px solid var(--tabula-head-line);
+	border-radius: var(--tabula-radius);
+	background: var(--tabula-bg);
+	box-shadow: 0 -8px 24px rgb(0 0 0 / 14%);
+}
+
+/* What Ctrl+Enter wrote, and the cells it could not: until it is closed. */
+.tabula-grid-entry-notice {
+	animation: tabula-grid-drop 0.12s ease-out;
+	position: absolute;
+	bottom: 12px;
+	left: 12px;
+	z-index: 7;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-width: min(460px, calc(100% - 24px));
+	padding: 10px 40px 10px 14px;
+	border-radius: var(--tabula-radius);
+	background: color-mix(in srgb, var(--tabula-fg) 90%, var(--tabula-bg));
+	color: var(--tabula-bg);
+	box-shadow: 0 10px 28px rgb(0 0 0 / 25%);
+}
+
+.tabula-grid-entry-line {
+	display: flex;
+	gap: 10px;
+	align-items: baseline;
+	margin: 0;
+}
+
+.tabula-grid-entry-line > span {
+	flex: 1;
+}
+
+.tabula-grid-entry-line.is-bad > span {
+	color: color-mix(in srgb, var(--tabula-error) 55%, var(--tabula-bg));
+}
+
+.tabula-grid-entry-action {
+	flex: none;
+	padding: 2px 4px;
+	border: 0;
+	border-radius: var(--tabula-radius-small);
+	background: transparent;
+	color: color-mix(in srgb, var(--tabula-accent) 60%, var(--tabula-bg));
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color 0.12s ease;
+}
+
+.tabula-grid-entry-action:hover {
+	background: color-mix(in srgb, var(--tabula-bg) 14%, transparent);
+}
+
+.tabula-grid-entry-close {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border: 0;
+	border-radius: var(--tabula-radius-small);
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	opacity: 0.7;
+	transition: opacity 0.12s ease;
+}
+
+.tabula-grid-entry-close:hover {
+	opacity: 1;
+}
+
+.tabula-grid-entry-close svg {
+	width: 16px;
+	height: 16px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+}
+
+.tabula-grid-cell.is-entry-failed {
+	background: var(--tabula-error-bg);
+	box-shadow: inset 0 0 0 1px var(--tabula-error-mark);
 }
 
 /* The list under the editor: options, or a lookup's records. */

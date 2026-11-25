@@ -7,6 +7,36 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+A formula typed into a cell with "=" (canvas items 195–206, designs AZ–BC), as in a spreadsheet:
+worked out for the cell's row, its result written as a value. The packages add; nothing that
+worked changes, but for text typed into a cell starting with "=", which is now a formula.
+
+### Added
+
+- **"=" in a cell.** `=[Mevcut fiyat] * 1,1`, or `=C * 1,1` by the column's letter, is worked out
+  for the cell's row when Enter is pressed, and its result written as the cell's value: the
+  formula is not kept, and the value is checked, sent and taken back with Ctrl+Z as any typed one.
+  While it is typed the grid lists the fields after "[" or a letter and the functions on a letter,
+  shows the call's arguments with the one being written in bold, colours the columns it reads,
+  and shows the result over the cell; a click on a cell where a value is expected writes its
+  column into the formula. A formula that gives no value writes nothing: the edit stays open with
+  the reason ("#DIV/0! · sıfıra bölme", "Formül yarım kaldı"). Parentheses left open are closed.
+  A record field, such as a lookup, takes no formula. `'=` writes the text as it is.
+- **Ctrl+Enter** writes what was typed into every cell selected, a formula worked out for each
+  one's row, as one step to undo. A cell it gives no value keeps its own, is marked, and is counted
+  in a notice with "Göster" and "Geri al".
+- **The formula bar** takes "=" the same way, its help under it; Ctrl+Enter there writes the cells
+  selected. The grid exposes `entryFor`, `enterSelected` and `showEntry` for a bar of one's own.
+- **On a touch screen** the formula's help sits over the keyboard, with 44px buttons for the
+  number columns and the signs a phone keyboard hides.
+- **Turkish numbers in a formula.** `parseFormula(text, { decimalSeparator: "," })` reads `1,1` as
+  a number and only `;` between arguments, as a Turkish Excel; `formulaCaret` takes the same
+  option. A cell's formula follows the sheet's `valueSettings`; a schema's and a template's stay
+  as they are written. A formula that does not parse throws `FormulaSyntaxError`, with `at`.
+- **`workOutCell(formula, options)`** works a formula out for one row and field, as the grid does
+  for "=": the value to write, or why there is none (`invalid`, `unknown`, `error`, `unfit`). The
+  grid's new `sheets` prop gives SHEET its sheets there.
+
 ## [0.8.0] — 2026-11-25
 
 A value from another sheet (canvas items 183–191, designs AW–AY): a formula reads this row's

@@ -74,7 +74,17 @@ export {
 	textValue as formulaText
 } from "./formula/evaluate.js"
 export type { FormulaFunction, FormulaValue } from "./formula/evaluate.js"
-export { formulaFields, formulaSheets, parseFormula, readsSheets, withSheetRenamed } from "./formula/parse.js"
+export {
+	formulaFields,
+	formulaSheets,
+	FormulaSyntaxError,
+	parseFormula,
+	readsSheets,
+	withSheetRenamed
+} from "./formula/parse.js"
+export type { FormulaParseOptions } from "./formula/parse.js"
+export { workOutCell } from "./formula/cell.js"
+export type { CellFormulaOptions, CellFormulaResult } from "./formula/cell.js"
 export {
 	formulaCaret,
 	formulaFromAddresses,

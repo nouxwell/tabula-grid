@@ -14,6 +14,7 @@ import {
 	toBool,
 	toNumber,
 	toText,
+	type EvaluationContext,
 	type FormulaFunction,
 	type FormulaValue
 } from "./evaluate.js"
@@ -275,7 +276,17 @@ function workOut(
 	functions: Readonly<Record<string, FormulaFunction>>,
 	sheets: FormulaSheets | null
 ): CellValue {
-	const result = evaluate(formula.tree, {
+	return toCell(formula.field, evaluate(formula.tree, rowContext(schema, read, functions, sheets)))
+}
+
+/** What a formula sees of a row: its fields as the user does, and the other sheets' for SHEET. */
+export function rowContext(
+	schema: ModuleSchema,
+	read: (key: string) => CellValue,
+	functions: Readonly<Record<string, FormulaFunction>>,
+	sheets: FormulaSheets | null
+): EvaluationContext {
+	return {
 		field: key => (schema.has(key) ? fromCell(schema.field(key), read(key)) : EMPTY),
 		functions,
 		sheet: (name, key) => {
@@ -294,9 +305,7 @@ function workOut(
 
 			return schema.has(key) ? fromCell(schema.field(key), row[key] ?? null) : EMPTY
 		}
-	})
-
-	return toCell(formula.field, result)
+	}
 }
 
 /** A cell's value as a formula sees it: by its field's type, as the user does. */
@@ -455,6 +464,6 @@ function affected(order: readonly Compiled[], recordKey: string | null): Map<str
 	return result
 }
 
-function upperKeys(functions: Readonly<Record<string, FormulaFunction>>): Record<string, FormulaFunction> {
+export function upperKeys(functions: Readonly<Record<string, FormulaFunction>>): Record<string, FormulaFunction> {
 	return Object.fromEntries(Object.entries(functions).map(([name, fn]) => [name.toUpperCase(), fn]))
 }

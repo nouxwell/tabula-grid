@@ -4,6 +4,7 @@ import {
 	type ModuleSchema,
 	type RowCheck,
 	type RowCondition,
+	type ValueProblem,
 	type ValueSettings
 } from "@nouxwell/tabula-core"
 
@@ -465,7 +466,26 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		filledFromEditable: "{record} kaydından geldi; değiştirebilirsiniz",
 		filledColumn: "{lookup} seçilince dolar",
 		sheetColumn: "{sheets} sayfasından değer alır",
-		fromSheet: "“{sheet}” sayfasından"
+		fromSheet: "“{sheet}” sayfasından",
+		formulaFields: "Alanlar",
+		formulaFunctions: "Fonksiyonlar",
+		formulaColumnsAndFunctions: "Sütun ve fonksiyonlar",
+		formulaThisRow: "bu satırın hücresi",
+		formulaKeys: "↑↓ seç · Enter ya da Tab ekler · Esc kapatır",
+		formulaWrites: "Enter ile {address} hücresine yazılır",
+		formulaWritesMany: "Ctrl+Enter ile seçili {n} hücreye",
+		formulaEmpty: "boş",
+		formulaUnfinished: "Formül yarım kaldı",
+		formulaUseSemicolon: "Değerleri ; ayırır: ROUND([Fiyat]; 2)",
+		formulaUseComma: "Ondalık için virgül: 1,5",
+		formulaUnexpected: "“{char}” burada beklenmiyor",
+		formulaUnknown: "“{name}” adında bir sütun yok",
+		entryWritten: "{n} hücreye yazıldı.",
+		entryFailed: "{n} hücrede hesaplanamadı: {reason}",
+		entryUndo: "Geri al",
+		entryShow: "Göster",
+		entryClose: "Kapat",
+		entryWrite: "Yaz"
 	},
 	en: {
 		cellMenu: "Cell menu",
@@ -498,6 +518,25 @@ export const GRID_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		filledColumn: "Filled from the {lookup} picked",
 		sheetColumn: "Reads the {sheets} sheet",
 		fromSheet: "From the “{sheet}” sheet",
+		formulaFields: "Fields",
+		formulaFunctions: "Functions",
+		formulaColumnsAndFunctions: "Column and functions",
+		formulaThisRow: "this row's cell",
+		formulaKeys: "↑↓ choose · Enter or Tab adds · Esc closes",
+		formulaWrites: "Enter writes it into {address}",
+		formulaWritesMany: "Ctrl+Enter writes the {n} cells selected",
+		formulaEmpty: "empty",
+		formulaUnfinished: "The formula is not finished",
+		formulaUseSemicolon: "Separate values with ;",
+		formulaUseComma: "Write decimals with a comma: 1,5",
+		formulaUnexpected: "“{char}” is not expected here",
+		formulaUnknown: "There is no column called “{name}”",
+		entryWritten: "Written into {n} cells.",
+		entryFailed: "{n} cells could not be worked out: {reason}",
+		entryUndo: "Undo",
+		entryShow: "Show",
+		entryClose: "Close",
+		entryWrite: "Write",
 		succeeded: "Processed",
 		failed: "Failed",
 		skipped: "Not processed",
@@ -788,6 +827,52 @@ const FORMULA_REASONS: Readonly<Record<GridLocale, Readonly<Record<string, strin
 		"#NUM!": "not a number that can be worked out",
 		"#REF!": "the sheet it names is not in this workbook"
 	}
+}
+
+/** Why a formula gave its error, in words; null for an error with none. */
+export function formulaReason(error: string, locale: GridLocale): string | null {
+	return FORMULA_REASONS[locale][error] ?? null
+}
+
+/** A value that could not be read as its field's, in words, as an issue about it says it. */
+export function valueProblemText(problem: ValueProblem, locale: GridLocale, settings: ValueSettings): string {
+	const wording = ISSUES[locale][problem.code]
+
+	return wording ? wording(problem.params, settings) : problem.message
+}
+
+const KIND_WORDS: Readonly<Record<GridLocale, Readonly<Record<string, string>>>> = {
+	tr: {
+		string: "metin",
+		integer: "tam sayı",
+		decimal: "sayı",
+		quantity: "miktar",
+		money: "para",
+		percent: "yüzde",
+		date: "tarih",
+		datetime: "tarih ve saat",
+		bool: "evet/hayır",
+		options: "seçenek",
+		lookup: "kayıt"
+	},
+	en: {
+		string: "text",
+		integer: "whole number",
+		decimal: "number",
+		quantity: "quantity",
+		money: "money",
+		percent: "percent",
+		date: "date",
+		datetime: "date and time",
+		bool: "yes/no",
+		options: "option",
+		lookup: "record"
+	}
+}
+
+/** A field's kind in a word, for a list of fields: "para", "tarih". */
+export function fieldKindWord(type: string, locale: GridLocale): string {
+	return KIND_WORDS[locale][type] ?? type
 }
 
 function because(error: string | undefined, locale: GridLocale): string {

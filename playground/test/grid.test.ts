@@ -2209,6 +2209,135 @@ describe("TabulaGrid", () => {
 		})
 	})
 
+	describe('a formula typed into a cell with "="', () => {
+		const editor = (page: Page): Locator => page.locator(".tabula-grid-input.is-editing")
+		const result = (page: Page): Locator => page.locator(".tabula-grid-entry-result")
+
+		it("works out for its row, Turkish numbers and all, and Enter writes the result", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 3).click()
+				await page.keyboard.type("=C * 1,1")
+
+				// The column it reads in its colour while it is typed, and the result before it is written.
+				await expect.poll(() => header(page, 2).getAttribute("class")).toContain("tabula-ref-0")
+				await expect.poll(() => result(page).innerText()).toBe("= 1.728,55 · Enter ile D1 hücresine yazılır")
+
+				await press(page, "Enter")
+
+				await expect.poll(() => valueAt(page, 0, "newPrice")).toBe("1728.55")
+				await expect((await selected(page)).active).toEqual({ row: 1, col: 3 })
+				await expect(page.locator(".tabula-grid-th.is-ref").count()).resolves.toBe(0)
+			})
+		})
+
+		it("keeps the edit open, saying why, when the formula gives no value", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 3).click()
+				await page.keyboard.type("=C / 0")
+				await press(page, "Enter")
+
+				await expect(editor(page).inputValue()).resolves.toBe("=C / 0")
+				await expect(result(page).innerText()).resolves.toBe("#DIV/0! · sıfıra bölme")
+
+				await press(page, "Escape")
+
+				await expect(valueAt(page, 0, "newPrice")).resolves.toBe("1493.91")
+			})
+		})
+
+		it("lists the fields after [ and the functions on a letter, the call's arguments over them", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 3).click()
+				await page.keyboard.type("=ROU")
+
+				await expect
+					.poll(() => page.locator(".tabula-formula-help-item").first().innerText())
+					.toContain("ROUND")
+
+				await press(page, "Tab")
+				await page.keyboard.type("[Mev")
+				await press(page, "Tab")
+				await page.keyboard.type("; ")
+
+				await expect(editor(page).inputValue()).resolves.toBe("=ROUND([Mevcut fiyat]; ")
+				await expect(page.locator(".tabula-formula-help-hint .is-current").innerText()).resolves.toBe("basamak")
+
+				// The parenthesis left open is closed, as Excel closes it.
+				await page.keyboard.type("0")
+				await press(page, "Enter")
+
+				await expect.poll(() => valueAt(page, 0, "newPrice")).toBe("1571")
+			})
+		})
+
+		it("writes a cell's column into the formula when the cell is clicked where a value is expected", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 3).click()
+				await page.keyboard.type("=")
+				await cell(page, 4, 2).click()
+
+				await expect(editor(page).inputValue()).resolves.toBe("=[Mevcut fiyat]")
+				await expect((await selected(page)).active).toEqual({ row: 0, col: 3 })
+			})
+		})
+
+		it("writes every cell selected with Ctrl+Enter, each by its own row, as one step to undo", async () => {
+			await withPage(20, async page => {
+				const before = await Promise.all([0, 1, 2].map(row => valueAt(page, row, "newPrice")))
+
+				await cell(page, 0, 3).click()
+				await press(page, "Shift+ArrowDown", 2)
+				await page.keyboard.type("=C * 2")
+				await press(page, "Control+Enter")
+
+				for (const row of [0, 1, 2]) {
+					const current = Number(await valueAt(page, row, "currentPrice"))
+
+					await expect
+						.poll(() => valueAt(page, row, "newPrice"))
+						.toBe(String(Math.round(current * 200) / 100))
+				}
+
+				await expect(page.locator(".tabula-grid-entry-notice").innerText()).resolves.toContain(
+					"3 hücreye yazıldı."
+				)
+
+				await press(page, "Control+Z")
+
+				await expect
+					.poll(() => Promise.all([0, 1, 2].map(row => valueAt(page, row, "newPrice"))))
+					.toEqual(before)
+			})
+		})
+
+		it("leaves a cell Ctrl+Enter cannot work out as it was, marked and counted", async () => {
+			await withPage(20, async page => {
+				const before = await valueAt(page, 0, "currency")
+
+				await cell(page, 0, 5).click()
+				await press(page, "Shift+ArrowDown")
+				await page.keyboard.type("=C")
+				await press(page, "Control+Enter")
+
+				await expect
+					.poll(() => page.locator(".tabula-grid-entry-notice").innerText())
+					.toContain("2 hücrede hesaplanamadı")
+				await expect(valueAt(page, 0, "currency")).resolves.toEqual(before)
+				await expect(cell(page, 0, 5).getAttribute("class")).resolves.toContain("is-entry-failed")
+			})
+		})
+
+		it("keeps text that starts with an apostrophe as it is written", async () => {
+			await withPage(20, async page => {
+				await cell(page, 0, 8).click()
+				await page.keyboard.type("'=yalnız mağazada")
+				await press(page, "Enter")
+
+				await expect.poll(() => valueAt(page, 0, "note")).toBe("=yalnız mağazada")
+			})
+		})
+	})
+
 	describe("hiding and pinning columns", () => {
 		const headerText = (page: Page, col: number): Promise<string> =>
 			header(page, col).locator(".tabula-grid-th-text").innerText()
@@ -2555,6 +2684,27 @@ describe("the bars around the sheet", () => {
 			await value(page).press("Enter")
 
 			await expect.poll(() => valueAt(page, 1, "newPrice")).toBe("123.5")
+			await expect.poll(() => gridHasFocus(page)).toBe(true)
+		})
+	})
+
+	it('works out a formula typed with "=" for the active cell, its help under the bar', async () => {
+		await withPage(20, async page => {
+			await cell(page, 1, 3).click()
+			await value(page).click()
+			await value(page).fill("")
+			await page.keyboard.type("=C * 2")
+
+			await expect
+				.poll(() => page.locator(".tabula-formula-entry").innerText())
+				.toContain("Enter ile D2 hücresine yazılır")
+			await expect(header(page, 2).getAttribute("class")).resolves.toContain("tabula-ref-0")
+
+			await value(page).press("Enter")
+
+			const current = Number(await valueAt(page, 1, "currentPrice"))
+
+			await expect.poll(() => valueAt(page, 1, "newPrice")).toBe(String(Math.round(current * 200) / 100))
 			await expect.poll(() => gridHasFocus(page)).toBe(true)
 		})
 	})

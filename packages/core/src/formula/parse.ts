@@ -32,18 +32,39 @@ type Token =
 /** Lowest first. Exponents are left to right, and a minus sign binds tighter than them, as in Excel. */
 const LEVELS: readonly (readonly string[])[] = [["=", "<>", "<", ">", "<=", ">="], ["&"], ["+", "-"], ["*", "/"], ["^"]]
 
+/** How a formula's numbers are written. */
+export interface FormulaParseOptions {
+	/**
+	 * The point by default, as a schema's and a template's formulas are written. With a comma, as a
+	 * Turkish Excel reads what is typed into a cell, `1,1` is a number and only `;` separates a
+	 * function's arguments.
+	 */
+	readonly decimalSeparator?: "." | ","
+}
+
+/** A formula that does not parse, and where: `at` is the character it stopped at, from 0. */
+export class FormulaSyntaxError extends TabulaError {
+	readonly at: number
+
+	constructor(message: string, at: number) {
+		super("invalid_formula", message)
+		this.at = at
+	}
+}
+
 /**
  * Parses a formula.
  *
- * @throws TabulaError `invalid_formula`, saying where the text stopped making sense
+ * @throws FormulaSyntaxError, a TabulaError `invalid_formula`, saying where the text stopped making sense
  */
-export function parseFormula(source: string): FormulaNode {
-	const tokens = tokenize(source)
+export function parseFormula(source: string, options: FormulaParseOptions = {}): FormulaNode {
+	const comma = options.decimalSeparator === ","
+	const tokens = tokenize(source, comma)
 	let at = 0
 	const peek = (): Token => tokens[at] as Token
 	const next = (): Token => tokens[at++] as Token
 	const fail = (token: Token, message: string): never => {
-		throw new TabulaError("invalid_formula", `${message} at character ${token.at + 1} of "${source}".`)
+		throw new FormulaSyntaxError(`${message} at character ${token.at + 1} of "${source}".`, token.at)
 	}
 
 	const binary = (level: number): FormulaNode => {
@@ -150,8 +171,9 @@ export function parseFormula(source: string): FormulaNode {
 				return args
 			}
 
-			if (!(token.kind === "op" && (token.text === "," || token.text === ";"))) {
-				fail(token, 'A "," or a ")" is expected')
+			// With a decimal comma, a comma is part of a number: only a semicolon separates.
+			if (!(token.kind === "op" && (token.text === ";" || (token.text === "," && !comma)))) {
+				fail(token, comma ? 'A ";" or a ")" is expected' : 'A "," or a ")" is expected')
 			}
 		}
 	}
@@ -264,12 +286,14 @@ export function readsSheets(node: FormulaNode): boolean {
 const TWO_CHARACTER = ["<>", "<=", ">="]
 const ONE_CHARACTER = "+-*/^&=<>(),;%"
 
-function tokenize(source: string): Token[] {
+function tokenize(source: string, comma = false): Token[] {
 	const tokens: Token[] = []
 	let at = source.trimStart().startsWith("=") ? source.indexOf("=") + 1 : 0
+	const point = comma ? "," : "."
+	const number = comma ? /^\d*(?:,\d+)?/ : /^\d*(?:\.\d+)?/
 
 	const fail = (where: number, message: string): never => {
-		throw new TabulaError("invalid_formula", `${message} at character ${where + 1} of "${source}".`)
+		throw new FormulaSyntaxError(`${message} at character ${where + 1} of "${source}".`, where)
 	}
 
 	while (at < source.length) {
@@ -282,11 +306,12 @@ function tokenize(source: string): Token[] {
 
 		const start = at
 
-		if (/\d/.test(char) || (char === "." && /\d/.test(source.charAt(at + 1)))) {
-			const match = /^\d*(?:\.\d+)?/.exec(source.slice(at)) as RegExpExecArray
+		if (/\d/.test(char) || (char === point && /\d/.test(source.charAt(at + 1)))) {
+			const match = number.exec(source.slice(at)) as RegExpExecArray
+			const text = match[0].replace(",", ".")
 
 			at += match[0].length
-			tokens.push({ kind: "number", text: match[0].startsWith(".") ? `0${match[0]}` : match[0], at: start })
+			tokens.push({ kind: "number", text: text.startsWith(".") ? `0${text}` : text, at: start })
 		} else if (char === '"') {
 			let text = ""
 

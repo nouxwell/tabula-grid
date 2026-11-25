@@ -38,9 +38,16 @@ const NAME_PART = /[A-Za-z0-9_.]/
 /**
  * Reads a formula up to the caret as the parser would: text in quotes and fields in brackets are
  * passed over, parentheses open and close calls, commas and semicolons move to the next argument.
+ * With a decimal comma, as `parseFormula` takes it, a comma is part of a number and only a
+ * semicolon moves on.
  */
-export function formulaCaret(text: string, caret: number): FormulaCaret {
+export function formulaCaret(
+	text: string,
+	caret: number,
+	options: { readonly decimalSeparator?: "." | "," } = {}
+): FormulaCaret {
 	const end = Math.max(0, Math.min(caret, text.length))
+	const separators = options.decimalSeparator === "," ? ";" : ",;"
 	const calls: { name: string | null; argument: number }[] = []
 	let inText = false
 	let fieldAt = -1
@@ -81,7 +88,7 @@ export function formulaCaret(text: string, caret: number): FormulaCaret {
 		} else if (char === ")") {
 			calls.pop()
 			name = ""
-		} else if (char === "," || char === ";") {
+		} else if (separators.includes(char)) {
 			const innermost = calls[calls.length - 1]
 
 			if (innermost) {

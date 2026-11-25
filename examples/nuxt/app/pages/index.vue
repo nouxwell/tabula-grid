@@ -587,6 +587,7 @@
 								:marks="sheet.marks"
 								:found="found ?? undefined"
 								:sheet-notes="notesOfSheets"
+								:sheets="formulaSheetsNow ?? undefined"
 								fit
 								totals
 								new-row

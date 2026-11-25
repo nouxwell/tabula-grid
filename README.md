@@ -783,6 +783,34 @@ cell's tooltip says which sheet its value came from, with the host's words on it
 `sheet-notes` (the example says when the sheet was saved). The formula bar draws the sheet's name
 as a chip, in `--tabula-sheet`.
 
+### "=" in a cell
+
+As in a spreadsheet, text typed into a cell that starts with "=" is a formula: `=[Mevcut fiyat] *
+1,1`, or `=C * 1,1` by the column's letter. Enter works it out for the cell's row and writes the
+result as the cell's value; the formula is not kept, so the value is checked, sent and taken back
+with Ctrl+Z as any typed one (a value worked out again whenever the row changes is a formula field,
+above). Ctrl+Enter writes every cell selected, each worked out for its own row, as one step to
+undo; a cell it gives no value keeps its own and is counted.
+
+Numbers follow the sheet's `valueSettings`: with a decimal comma, `1,1` is a number and `;`
+separates arguments, as in a Turkish Excel. A formula that gives no value writes nothing, and says
+why. A record field, such as a lookup, takes no formula, and `'=` keeps the text as written.
+
+```ts
+const result = workOutCell("=[currentPrice] * 1,1", {
+  schema,
+  field: "newPrice",
+  read: key => store.get(rowId, key),
+  settings: VALUE_SETTINGS.tr
+})
+// { status: "value", value: "1646.33" }, or "invalid", "unknown", "error", "unfit"
+```
+
+The grid lists the fields and functions as the formula is written, shows the call's arguments and
+the result over the cell, and colours the columns it reads; a click on a cell where a value is
+expected writes its column into the formula. The formula bar does the same, through the grid's
+`entryFor`, `enterSelected` and `showEntry`. Pass the grid `sheets` for SHEET there.
+
 ### Writing a formula
 
 A formula editor helps as it is written, from three pieces:
