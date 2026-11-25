@@ -69,6 +69,13 @@ export interface GridMenuItem {
 	readonly disabled?: boolean
 	/** Items opened beside this one; choosing one of them emits its own key. */
 	readonly children?: readonly GridMenuItem[]
+	/**
+	 * Among an item's `children` only: `heading` is a small title over the items after it, such as
+	 * "Yuvarla" over its ways; `line` a rule between them. Neither is chosen.
+	 */
+	readonly kind?: "item" | "heading" | "line"
+	/** Drawn in the error colour: an item that takes something away. */
+	readonly danger?: boolean
 }
 
 /** The cells selected, as a status bar shows them (`TabulaGrid`'s `selected`). */

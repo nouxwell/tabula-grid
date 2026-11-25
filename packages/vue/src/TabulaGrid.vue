@@ -3626,15 +3626,71 @@ function keys(key: string): string {
 	return MAC ? `⌘${key}` : `Ctrl+${key}`
 }
 
-interface MenuEntry {
-	readonly key: string
-	readonly label: string
-	readonly shortcut?: string
-	readonly disabled?: boolean
-	readonly children?: readonly GridMenuItem[]
+interface MenuEntry extends GridMenuItem {
+	/** Beside a group's name, such as how many rows its items act on. */
+	readonly badge?: string
 }
 
-/** The menu's items in order, a null between groups: the grid's own, the host's, then sorting and filtering. */
+/** How far a cell's value is written in an item's name before it is cut short. */
+const MENU_VALUE_LENGTH = 24
+
+/** How many rows the selection spans: what the row items act on. */
+function selectedRowCount(): number {
+	const area = selection.range
+
+	return area ? area.bottom - area.top + 1 : 1
+}
+
+/** The row items, in words that say how many rows they act on. */
+function rowEntries(): MenuEntry[] {
+	const words = GRID_TEXT[props.locale]
+	const fixed = props.readonly
+	const count = selectedRowCount()
+	const counted = (one: string, many: string): string =>
+		count > 1 ? (words[many] ?? "").replace("{n}", count.toLocaleString(numberLocale())) : (words[one] ?? "")
+
+	return [
+		{
+			key: "tabula:insertAbove",
+			label: counted("insertAbove", "insertAboveCount"),
+			shortcut: keys("+"),
+			disabled: fixed
+		},
+		{ key: "tabula:insertBelow", label: counted("insertBelow", "insertBelowCount"), disabled: fixed },
+		{ key: "tabula:rowsLine", label: "", kind: "line" },
+		{
+			key: "tabula:removeRows",
+			label: counted("removeRows", "removeRowsCount"),
+			shortcut: keys("−"),
+			disabled: fixed,
+			danger: true
+		}
+	]
+}
+
+function numberLocale(): string {
+	return props.locale === "tr" ? "tr-TR" : "en-US"
+}
+
+/** "“TRY” olanları göster": the active cell's value, as its cell shows it, cut short when long. */
+function filterValueLabel(): string {
+	const words = GRID_TEXT[props.locale]
+	const at = selection.active
+	const field = at ? fields.value[at.col] : undefined
+	const rowId = at ? view.value.rowIdAt(at.row) : undefined
+	const text =
+		field && rowId !== undefined ? formatCell(field, store.value.get(rowId, field.key), props.valueSettings) : ""
+	const shown = text === "" ? (words.empty ?? "") : text
+	const short = shown.length > MENU_VALUE_LENGTH ? `${shown.slice(0, MENU_VALUE_LENGTH - 1)}…` : shown
+
+	return (words.filterValue ?? "").replace("{value}", short)
+}
+
+/**
+ * The menu's items in order, a null between groups. On a cell: the clipboard and clearing at once,
+ * then the groups (Doldur, Satırlar, the host's items, Süz ve sırala), each opened beside it. On a
+ * row's number, the row items are what the menu is about, so they stay in the open.
+ */
 const contextEntries = computed<readonly (MenuEntry | null)[]>(() => {
 	const menu = contextMenu.value
 	const words = GRID_TEXT[props.locale]
@@ -3644,6 +3700,8 @@ const contextEntries = computed<readonly (MenuEntry | null)[]>(() => {
 		return []
 	}
 
+	void selectionVersion.value
+
 	const entries: (MenuEntry | null)[] = [
 		{ key: "tabula:cut", label: words.cut ?? "", shortcut: keys("X"), disabled: fixed },
 		{ key: "tabula:copy", label: words.copy ?? "", shortcut: keys("C") },
@@ -3652,39 +3710,81 @@ const contextEntries = computed<readonly (MenuEntry | null)[]>(() => {
 			label: words.paste ?? "",
 			shortcut: keys("V"),
 			disabled: fixed || typeof navigator === "undefined" || !navigator.clipboard?.readText
-		},
-		null
+		}
 	]
 
-	if (menu.kind === "cell") {
-		entries.push(
-			{ key: "tabula:clear", label: words.clearCells ?? "", shortcut: "Delete", disabled: fixed },
-			{ key: "tabula:fillDown", label: words.fillDown ?? "", shortcut: keys("D"), disabled: fixed },
-			{ key: "tabula:fillRight", label: words.fillRight ?? "", shortcut: keys("R"), disabled: fixed },
-			null
-		)
-	}
-
-	entries.push(
-		{ key: "tabula:insertAbove", label: words.insertAbove ?? "", shortcut: keys("+"), disabled: fixed },
-		{ key: "tabula:insertBelow", label: words.insertBelow ?? "", disabled: fixed },
-		{ key: "tabula:removeRows", label: words.removeRows ?? "", shortcut: keys("−"), disabled: fixed }
-	)
-
-	if (props.menuItems.length > 0) {
-		entries.push(null, ...props.menuItems)
-	}
-
-	if (menu.kind === "cell") {
+	if (menu.kind === "row") {
 		entries.push(
 			null,
-			{ key: "tabula:filterValue", label: words.filterValue ?? "" },
-			{ key: "tabula:sortAsc", label: words.sortAsc ?? "" },
-			{ key: "tabula:sortDesc", label: words.sortDesc ?? "" }
+			...rowEntries().map(entry => (entry.kind === "line" ? null : entry)),
+			...(props.menuItems.length > 0 ? [null, ...props.menuItems] : [])
 		)
+
+		return entries
 	}
 
+	const count = selectedRowCount()
+	const col = selection.active?.col ?? -1
+
+	entries.push(
+		{ key: "tabula:clear", label: words.clearCells ?? "", shortcut: "Delete", disabled: fixed },
+		null,
+		{
+			key: "tabula:fill",
+			label: words.fill ?? "",
+			disabled: fixed,
+			children: [
+				{ key: "tabula:fillDown", label: words.fillDown ?? "", shortcut: keys("D") },
+				{ key: "tabula:fillRight", label: words.fillRight ?? "", shortcut: keys("R") }
+			]
+		},
+		{
+			key: "tabula:rows",
+			label: words.rows ?? "",
+			...(count > 1 ? { badge: count.toLocaleString(numberLocale()) } : {}),
+			children: rowEntries()
+		},
+		...props.menuItems,
+		{
+			key: "tabula:filterSort",
+			label: words.filterAndSort ?? "",
+			children: [
+				{ key: "tabula:filterValue", label: filterValueLabel() },
+				{
+					key: "tabula:filterClear",
+					label: words.filterColumnClear ?? "",
+					disabled: col < 0 || !isFiltered(col)
+				},
+				{ key: "tabula:filterLine", label: "", kind: "line" },
+				{ key: "tabula:sortAsc", label: words.sortAsc ?? "" },
+				{ key: "tabula:sortDesc", label: words.sortDesc ?? "" }
+			]
+		}
+	)
+
 	return entries
+})
+
+/** Where the open group's items stand: beside it on the right, or on the left and higher when the window has no room. */
+const submenuPlace = ref<{ readonly left: boolean; readonly shift: number }>({ left: false, shift: 0 })
+
+watch(submenu, open => {
+	submenuPlace.value = { left: false, shift: 0 }
+
+	if (open === null) {
+		return
+	}
+
+	void nextTick(() => {
+		const box = root.value?.querySelector(".tabula-grid-submenu")?.getBoundingClientRect()
+
+		if (box) {
+			submenuPlace.value = {
+				left: box.right > window.innerWidth - 8,
+				shift: Math.min(0, window.innerHeight - 8 - box.bottom)
+			}
+		}
+	})
 })
 
 /**
@@ -3825,14 +3925,23 @@ function closeContextMenu(refocus = false): void {
 	}
 }
 
-/** Runs an item: the grid's own does its work, the host's is emitted. */
-function chooseMenu(entry: MenuEntry): void {
-	if (entry.disabled) {
+/**
+ * Runs an item: the grid's own does its work, the host's is emitted. A group opens its items, and
+ * from the keyboard (Enter or Space) goes into them.
+ */
+function chooseMenu(entry: MenuEntry, event?: MouseEvent): void {
+	if (entry.disabled || (entry.kind !== undefined && entry.kind !== "item")) {
 		return
 	}
 
 	if (entry.children && entry.children.length > 0) {
 		submenu.value = submenu.value === entry.key ? null : entry.key
+
+		if (submenu.value !== null && event?.detail === 0) {
+			void nextTick(() =>
+				root.value?.querySelector<HTMLElement>(".tabula-grid-submenu button:not(:disabled)")?.focus()
+			)
+		}
 
 		return
 	}
@@ -3883,6 +3992,12 @@ function chooseMenu(entry: MenuEntry): void {
 		case "tabula:filterValue":
 			if (field && rowId !== undefined) {
 				setFilter(field.key, { kind: "values", keys: filterKeys(field, store.value.get(rowId, field.key)) })
+			}
+
+			break
+		case "tabula:filterClear":
+			if (field) {
+				setFilter(field.key, null)
 			}
 
 			break
@@ -4637,29 +4752,44 @@ defineExpose({
 						:aria-expanded="submenu === entry.key"
 						:data-key="entry.key"
 						:disabled="entry.disabled"
-						@click="chooseMenu(entry)"
+						:class="{ 'is-open': submenu === entry.key }"
+						@click="chooseMenu(entry, $event)"
 						@mouseenter="submenu = entry.key"
 					>
 						<span v-text="entry.label" />
-						<span class="tabula-grid-menu-key" aria-hidden="true">▸</span>
+						<span class="tabula-grid-menu-key" aria-hidden="true">
+							<span v-if="entry.badge" class="tabula-grid-menu-badge" v-text="entry.badge" />
+							<svg class="tabula-grid-menu-chevron" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" /></svg>
+						</span>
 					</button>
 					<div
 						v-if="submenu === entry.key"
 						class="tabula-grid-menu tabula-grid-submenu"
+						:class="{ 'is-left': submenuPlace.left }"
+						:style="submenuPlace.shift ? { marginTop: `${submenuPlace.shift}px` } : undefined"
 						role="menu"
 						:aria-label="entry.label"
 					>
-						<button
-							v-for="child in entry.children"
-							:key="child.key"
-							type="button"
-							role="menuitem"
-							:disabled="child.disabled"
-							@click="chooseMenu(child)"
-						>
-							<span v-text="child.label" />
-							<span v-if="child.shortcut" class="tabula-grid-menu-key" v-text="child.shortcut" />
-						</button>
+						<template v-for="child in entry.children" :key="child.key">
+							<span v-if="child.kind === 'line'" class="tabula-grid-menu-line" role="separator" />
+							<span
+								v-else-if="child.kind === 'heading'"
+								class="tabula-grid-menu-heading"
+								role="presentation"
+								v-text="child.label"
+							/>
+							<button
+								v-else
+								type="button"
+								role="menuitem"
+								:class="{ 'is-danger': child.danger }"
+								:disabled="child.disabled"
+								@click="chooseMenu(child)"
+							>
+								<span v-text="child.label" />
+								<span v-if="child.shortcut" class="tabula-grid-menu-key" v-text="child.shortcut" />
+							</button>
+						</template>
 					</div>
 				</div>
 				<button
@@ -4667,6 +4797,7 @@ defineExpose({
 					type="button"
 					role="menuitem"
 					:data-key="entry.key"
+					:class="{ 'is-danger': entry.danger }"
 					:disabled="entry.disabled"
 					@click="chooseMenu(entry)"
 					@mouseenter="submenu = null"
@@ -4985,8 +5116,16 @@ defineExpose({
 }
 
 .tabula-grid-menu-key {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
 	color: var(--tabula-muted);
 	font-size: 0.9em;
+	white-space: nowrap;
+}
+
+/* A group's items keep to one line each: the group grows to the longest, such as a value filtered by. */
+.tabula-grid-submenu button {
 	white-space: nowrap;
 }
 
@@ -5011,6 +5150,47 @@ defineExpose({
 	top: -4px;
 	left: 100%;
 	min-width: 190px;
+}
+
+/* No room on the right: the items open on the left of their group. */
+.tabula-grid-submenu.is-left {
+	right: 100%;
+	left: auto;
+}
+
+/* A group whose items are open stays marked while the pointer is among them. */
+.tabula-grid-menu button.is-open {
+	background: var(--tabula-range-bg);
+}
+
+.tabula-grid-menu-chevron {
+	width: 14px;
+	height: 14px;
+	vertical-align: -2px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+/* How many rows a group's items act on, before its chevron. */
+.tabula-grid-menu-badge {
+	margin-right: 6px;
+	font-variant-numeric: tabular-nums;
+}
+
+/* A small title over the items after it, inside a group, such as "Yuvarla". */
+.tabula-grid-menu-heading {
+	padding: 6px 12px 2px;
+	color: var(--tabula-muted);
+	font-size: 0.85em;
+	font-weight: 600;
+}
+
+/* An item that takes something away, such as deleting rows. */
+.tabula-grid-menu button.is-danger:not(:disabled) {
+	color: var(--tabula-required);
 }
 
 .tabula-grid-menu-line {

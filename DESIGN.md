@@ -124,9 +124,11 @@ Redrawn on 2026-11-24 (canvas items 138–160, boards AK–AO): one bar, one wor
    - **The sheet** (`TabulaGrid`): each column's letter before its label in the header's one row,
      green in a selected column; a link after the label of a column a record fills; changed cells
      marked in the top left corner in the info colour; the totals row's choice as its own words
-     ("Toplam ▾"). The sheet shows 21 rows at 1440×900. A right click opens the grid's menu: cut,
-     copy, paste, clear, fill, add and take out rows, the page's Yüzde uygula, Tutar ekle and
-     Yuvarla ▸, filter by the value and sort, each with its keys on the right.
+     ("Toplam ▾"). The sheet shows 21 rows at 1440×900. A right click opens the grid's menu (designs AU
+     and AV): Kes, Kopyala, Yapıştır and İçeriği temizle at once, then Doldur ▸, Satırlar ▸ (the
+     selection's row count on it and in its words, deleting in red), the page's Toplu düzenle ▸
+     (Yüzde uygula, Tutar ekle, and the ways to round under a "Yuvarla" title) and Süz ve sırala ▸,
+     each item with its keys on the right; no menu opens a third level.
    - **The issues** (`TabulaIssues`, 320px, 360px from 1280px) inside the card, beside the sheet,
      with the first issue and gone with the last; the chip or their × closes them until the next
      check. A plain list: a dot, "Satır 9 · Ürün", the cell's address, who found it, the product
@@ -353,6 +355,14 @@ Redrawn on 2026-11-24 (canvas items 138–160, boards AK–AO): one bar, one wor
 | 172 | The same on a phone, as a sheet of the screen (AT)   | application | done               |
 | 173 | Nothing sent while any sheet has an error            | application | not chosen         |
 | 174 | The right-hand tab wins a product, unasked           | both        | not chosen         |
+| 175 | The clipboard and clearing at once in the menu (AU)  | package     | done               |
+| 176 | Doldur ▸                                             | package     | done               |
+| 177 | Satırlar ▸, with the selection's row count           | package     | done               |
+| 178 | Toplu düzenle ▸, rounding under a title              | both        | done               |
+| 179 | Süz ve sırala ▸, the value named                     | package     | done               |
+| 180 | Groups open with the pointer, Right, Enter; flip     | package     | done               |
+| 181 | The clipboard as a row of icons (AV)                 | package     | not chosen         |
+| 182 | No groups, titled sections instead (AV)              | package     | not chosen         |
 | —   | Multi-select cells, ticked in a list                 | package     | done (phase two)   |
 | —   | Saved views (personal views)                         | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)       | both        | done (phase two)   |

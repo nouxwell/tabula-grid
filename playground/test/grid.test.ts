@@ -860,6 +860,9 @@ describe("TabulaGrid", () => {
 		const menu = (page: Page): Locator => page.locator(".tabula-grid-context")
 		const item = (page: Page, name: string): Locator =>
 			menu(page).getByRole("menuitem", { name, exact: false }).first()
+		/** Each item's words and keys, without the space a group's chevron leaves. */
+		const texts = async (items: Locator): Promise<string[]> =>
+			(await items.allInnerTexts()).map(text => text.trimEnd())
 		const editTo = async (page: Page, row: number, col: number, text: string): Promise<void> => {
 			await cell(page, row, col).click()
 			await page.keyboard.type(text)
@@ -871,20 +874,22 @@ describe("TabulaGrid", () => {
 				await cell(page, 3, 2).click({ button: "right" })
 
 				await expect(selected(page)).resolves.toMatchObject({ active: { row: 3, col: 2 } })
-				await expect(menu(page).getByRole("menuitem").allInnerTexts()).resolves.toEqual([
+				await expect(texts(menu(page).getByRole("menuitem"))).resolves.toEqual([
 					"Kes\nCtrl+X",
 					"Kopyala\nCtrl+C",
 					"Yapıştır\nCtrl+V",
 					"İçeriği temizle\nDelete",
+					"Doldur",
+					"Satırlar",
+					"Yuvarla",
+					"Süz ve sırala"
+				])
+
+				// A group opens its items beside it, each with its keys.
+				await item(page, "Doldur").hover()
+				await expect(texts(page.locator(".tabula-grid-submenu").getByRole("menuitem"))).resolves.toEqual([
 					"Aşağı doldur\nCtrl+D",
-					"Sağa doldur\nCtrl+R",
-					"Üste satır ekle\nCtrl++",
-					"Alta satır ekle",
-					"Satırları sil\nCtrl+−",
-					"Yuvarla\n▸",
-					"Bu değere göre süz",
-					"Artan sırala",
-					"Azalan sırala"
+					"Sağa doldur\nCtrl+R"
 				])
 
 				await page.keyboard.press("Escape")
@@ -893,11 +898,57 @@ describe("TabulaGrid", () => {
 			})
 		})
 
+		it("says how many rows the row items act on, and marks taking them out", async () => {
+			await withPage(20, async page => {
+				await cell(page, 2, 1).click()
+				await page.keyboard.press("Shift+ArrowDown")
+				await page.keyboard.press("Shift+ArrowDown")
+				await cell(page, 3, 1).click({ button: "right" })
+
+				await expect(texts(item(page, "Satırlar"))).resolves.toEqual(["Satırlar\n3"])
+
+				await item(page, "Satırlar").hover()
+
+				const rows = page.locator(".tabula-grid-submenu")
+
+				await expect(texts(rows.getByRole("menuitem"))).resolves.toEqual([
+					"Üste 3 satır ekle\nCtrl++",
+					"Alta 3 satır ekle",
+					"3 satırı sil\nCtrl+−"
+				])
+				await expect(
+					rows.getByRole("menuitem", { name: "3 satırı sil" }).getAttribute("class")
+				).resolves.toContain("is-danger")
+			})
+		})
+
+		it("goes into a group with the keys and back out of it", async () => {
+			await withPage(20, async page => {
+				await cell(page, 1, 1).click()
+				await page.keyboard.press("Shift+F10")
+
+				// Kes, Kopyala, Yapıştır, İçeriği temizle, then Doldur.
+				for (let step = 0; step < 4; step++) {
+					await page.keyboard.press("ArrowDown")
+				}
+
+				await page.keyboard.press("ArrowRight")
+				await expect
+					.poll(() => page.evaluate(() => document.activeElement?.textContent?.trim()))
+					.toMatch(/^Aşağı doldur/)
+
+				await page.keyboard.press("ArrowLeft")
+				await expect.poll(() => page.locator(".tabula-grid-submenu").count()).toBe(0)
+				await expect(page.evaluate(() => document.activeElement?.textContent?.trim())).resolves.toBe("Doldur")
+			})
+		})
+
 		it("adds a row below the selection, and filters by the cell's value", async () => {
 			await withPage(20, async page => {
 				const size = (): Promise<number> => page.evaluate(() => window.__playground!.store.size)
 
 				await cell(page, 1, 0).click({ button: "right" })
+				await item(page, "Satırlar").hover()
 				await item(page, "Alta satır ekle").click()
 
 				await expect(size()).resolves.toBe(21)
@@ -905,7 +956,9 @@ describe("TabulaGrid", () => {
 				await expect(selected(page)).resolves.toMatchObject({ range: { top: 2, bottom: 2, left: 0 } })
 
 				await cell(page, 0, 5).click({ button: "right" })
-				await item(page, "Bu değere göre süz").click()
+				await item(page, "Süz ve sırala").hover()
+				await expect(item(page, "olanları göster").innerText()).resolves.toMatch(/^“.+” olanları göster$/)
+				await item(page, "olanları göster").click()
 
 				const currency = await valueAt(page, 0, "currency")
 				const shown = await page.evaluate(() => window.__playground!.view.size)
@@ -954,9 +1007,9 @@ describe("TabulaGrid", () => {
 				await page.locator(".tabula-grid-rh").nth(4).click({ button: "right" })
 
 				await expect(selected(page)).resolves.toMatchObject({ range: { top: 4, bottom: 4, left: 0 } })
-				await expect(menu(page).getByRole("menuitem").allInnerTexts()).resolves.not.toContain(
-					"Bu değere göre süz"
-				)
+				// On a row's number the row items are in the open, and there is nothing to filter by.
+				await expect(texts(menu(page).getByRole("menuitem"))).resolves.toContain("Üste satır ekle\nCtrl++")
+				await expect(texts(menu(page).getByRole("menuitem"))).resolves.not.toContain("Süz ve sırala")
 			})
 		})
 

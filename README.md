@@ -203,14 +203,19 @@ wrapped in `ref()`: the grid subscribes to the store rather than watching it.
   changed since the sheet was loaded has a mark in its top left corner (see below).
 - **Column letters.** `column-letters` puts A, B, C before each header's label, in the same row,
   as the columns stand on screen: the addresses the formula bar shows.
-- **A right-click menu.** On a cell: Kes, Kopyala, Yapıştır; İçeriği temizle; Aşağı and Sağa
-  doldur; rows added above or below the selection (as many as it spans) and taken out; then
-  "Bu değere göre süz" and the sorts. On a row's number the same without the cell's own; on a
-  header, the header's menu. A click outside the selection selects the cell or row first, as in
+- **A right-click menu.** On a cell, what is done most at once: Kes, Kopyala, Yapıştır, İçeriği
+  temizle; then the groups, each opening its items beside it: Doldur (down, right), Satırlar
+  (added above or below the selection, as many as it spans, and taken out, the count in their
+  words: "3 satırı sil"), the host's items, and Süz ve sırala ("“TRY” olanları göster", the
+  column's filter cleared, the sorts). On a row's number the row items stand in the open, without
+  the cell's own; on a header, the header's menu. A click outside the selection selects the cell or row first, as in
   Excel; any issue the cell has heads the menu. Shift+F10 and the menu key open it at the active
   cell; arrows move in it, Escape closes it. While a cell is being edited the browser's own menu
-  stays, for the text. `menu-items` adds the host's own items after the grid's, one with
-  `children` opening them beside it, and `@menu` gives the key of the one chosen. Ctrl++ adds rows
+  stays, for the text. `menu-items` adds the host's own items among the grid's groups, one
+  with `children` opening them beside it (a child of `kind: "heading"` titles the ones after it,
+  `kind: "line"` parts them, `danger` draws one in red), and `@menu` gives the key of the one
+  chosen. A group opens under the pointer, with Right or Enter, and closes with Left or Escape; on
+  the left when the window has no room on the right. Ctrl++ adds rows
   as Ctrl+− takes them out, and `insertRows("above" | "below")` does it for a button. Menu
   pasting reads the clipboard, which a browser may ask the user to allow; refused, the menu stays
   open and says to paste with Ctrl+V, which needs nothing.

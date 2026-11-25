@@ -7,6 +7,26 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+The right-click menu grouped (canvas items 175–180, designs AU and AV): fourteen lines become
+eight, the keys stay as they were.
+
+### Changed
+
+- **The cell's right-click menu is grouped.** Kes, Kopyala, Yapıştır and İçeriği temizle stay at
+  once; Doldur, Satırlar and Süz ve sırala each open their items beside them, the host's items
+  among them. Satırlar says how many rows the selection spans, on the group and in its items'
+  words ("Üste 3 satır ekle", "3 satırı sil", drawn in red); Süz ve sırala names the value it
+  filters by ("“TRY” olanları göster") and clears the column's filter. A group opens on the left
+  when the window has no room on the right, and Enter goes into it as Right does. On a row's
+  number the row items stay in the open. "Satırları sil" reads "Satırı sil" for one row.
+
+### Added
+
+- **`GridMenuItem`'s `kind` and `danger`**: among an item's children, `kind: "heading"` is a
+  small title over the items after it and `kind: "line"` a rule between them, so a group goes no
+  deeper than two; `danger` draws an item in the error colour. The example's Toplu düzenle holds
+  Yüzde uygula, Tutar ekle and, under "Yuvarla", the ways to round.
+
 ## [0.7.0] — 2026-11-25
 
 Every sheet at once (canvas items 163–172, designs AQ–AT): a workbook's sheets checked together,

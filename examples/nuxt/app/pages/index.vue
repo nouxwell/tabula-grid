@@ -3347,12 +3347,17 @@ function chooseTool(key: string, choice?: string | number): void {
 
 /** The page's own items in the grid's right-click menu: the bulk changes, each with its window. */
 const menuItems = computed<GridMenuItem[]>(() => [
-	{ key: "percent", label: "Yüzde uygula…" },
-	{ key: "add", label: "Tutar ekle…" },
 	{
-		key: "round",
-		label: "Yuvarla",
-		children: roundOptions.map(option => ({ key: `round:${String(option.key)}`, label: String(option.label) }))
+		key: "bulk",
+		label: "Toplu düzenle",
+		children: [
+			{ key: "percent", label: "Yüzde uygula…" },
+			{ key: "add", label: "Tutar ekle…" },
+			{ key: "bulk-line", label: "", kind: "line" },
+			// The ways to round, under a title of their own: the menu goes no deeper than two.
+			{ key: "round-heading", label: "Yuvarla", kind: "heading" },
+			...roundOptions.map(option => ({ key: `round:${String(option.key)}`, label: String(option.label) }))
+		]
 	}
 ])
 
