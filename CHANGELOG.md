@@ -7,6 +7,8 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-25
+
 A formula typed into a cell with "=" (canvas items 195–206, designs AZ–BC), as in a spreadsheet:
 worked out for the cell's row, its result written as a value. The packages add; nothing that
 worked changes, but for text typed into a cell starting with "=", which is now a formula.
@@ -727,7 +729,8 @@ taken to a backend through the application's own adapters, and kept as a draft.
   gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
   which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.
 
-[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/nouxwell/tabula-grid/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/nouxwell/tabula-grid/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/nouxwell/tabula-grid/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/nouxwell/tabula-grid/compare/v0.6.0...v0.7.0
