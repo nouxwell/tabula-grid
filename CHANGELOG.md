@@ -7,6 +7,21 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A toolbar shows what the cells selected already have.** Bold, italic and colours put on cells
+  were kept, but nothing said so: the bold button looked the same on a bold cell, and pressing it
+  again, to "choose it again", took bold off. The grid's new `selectionMarks` says what the cells
+  selected have in common, kept up as the selection and the marks change, and the example's
+  toolbar shows its bold and italic buttons pressed by it, ticks the colour in its colour menus,
+  and draws the bar under the A and the bucket in the cells' colour (empty for none, grey when they
+  differ), on a narrow screen's Biçim menu and a phone's tools as well.
+
+### Added
+
+- **`CellMarks.shared(cells)`** and the type `SharedMarks`: bold and italic when every cell is,
+  a fill and a text colour when every cell has the same one, `"mixed"` when they differ.
+
 ## [0.9.0] — 2026-11-25
 
 A formula typed into a cell with "=" (canvas items 195–206, designs AZ–BC), as in a spreadsheet:

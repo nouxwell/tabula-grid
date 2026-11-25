@@ -41,6 +41,7 @@ import {
 	type CellMarks,
 	type CellWrite,
 	type FormulaSheets,
+	type SharedMarks,
 	type CellStyle,
 	type FoundCell,
 	type MarkedCell,
@@ -914,6 +915,21 @@ function selectedCells(): MarkedCell[] {
 
 	return cells
 }
+
+/**
+ * What the cells selected have in common: bold and italic when every one is, a colour when every
+ * one has it. For a toolbar to show its buttons pressed and its colours ticked, kept up as the
+ * selection and the marks change. Null with no `marks`, or nothing selected.
+ */
+const selectionMarks = computed<SharedMarks | null>(() => {
+	void marksVersion.value
+	void viewVersion.value
+
+	const marks = toRaw(props.marks)
+	const cells = selectedCells()
+
+	return marks && cells.length > 0 ? marks.shared(cells) : null
+})
 
 /** The keys of the columns the selection spans, as they stand on screen. */
 function selectedFields(): string[] {
@@ -4742,6 +4758,11 @@ defineExpose({
 	selectedCells,
 	/** The keys of the columns the selection spans: what a toolbar's column formats go on. */
 	selectedFields,
+	/**
+	 * What the cells selected have in common in `marks`: bold, italic, a fill, a text colour. A
+	 * toolbar shows its bold button pressed by it, and ticks the colours. Null with nothing selected.
+	 */
+	selectionMarks,
 	/** Puts a fill, a text colour, bold or italic on the cells selected, into `marks`. */
 	markSelection,
 	/** Bold or italic on the cells selected, or off when every one has it. */

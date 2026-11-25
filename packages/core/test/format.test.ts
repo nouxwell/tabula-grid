@@ -273,6 +273,20 @@ describe("cell marks", () => {
 		expect(marks.size).toBe(0)
 	})
 
+	it("says what cells have in common, as a toolbar's buttons show it", () => {
+		const marks = new CellMarks()
+
+		expect(marks.shared(cells)).toEqual({ bold: false, italic: false, fill: null, color: null })
+
+		marks.mark(cells, { bold: true, fill: "yellow" })
+		marks.mark([cells[0]!], { italic: true, color: "red" })
+
+		// Bold on both: pressed, and pressing takes it off. Italic on one: not pressed, pressing puts it on.
+		expect(marks.shared(cells)).toEqual({ bold: true, italic: false, fill: "yellow", color: "mixed" })
+		expect(marks.shared([cells[0]!])).toEqual({ bold: true, italic: true, fill: "yellow", color: "red" })
+		expect(marks.shared([])).toEqual({ bold: false, italic: false, fill: null, color: null })
+	})
+
 	it("takes a mark back with Ctrl+Z, in its turn with the rows' changes", () => {
 		const store = sheet()
 		const history = new UndoHistory(store)

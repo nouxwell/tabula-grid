@@ -282,7 +282,15 @@ export type { ReadResult, ValueProblem, ValueProblemCode } from "./values/read.j
 export { digitsFor, editText, formatCell } from "./values/format.js"
 export type { CellFormatOptions } from "./values/format.js"
 export { CellMarks, MARK_COLORS, readMarks, rowsMarked } from "./marks.js"
-export type { CellMark, CellMarkChange, CellMarksOptions, MarkColor, MarkedCell, MarksData } from "./marks.js"
+export type {
+	CellMark,
+	CellMarkChange,
+	CellMarksOptions,
+	MarkColor,
+	MarkedCell,
+	MarksData,
+	SharedMarks
+} from "./marks.js"
 export { readStyleRules, rowStyles, rowsStyled, styleApplies, styleRuleToJson } from "./styles.js"
 export type { CellStyle, StyleRule, StyleRuleInput } from "./styles.js"
 export { findCells, REPLACE_ORIGIN, replaceCells } from "./find.js"

@@ -1365,10 +1365,20 @@ describe("TabulaGrid", () => {
 
 					await expect.poll(() => cell(page, 1, NEW_PRICE).getAttribute("class")).toContain("is-bold")
 					await expect(cell(page, 0, NEW_PRICE).getAttribute("class")).resolves.toContain("is-italic")
+					// What a toolbar shows pressed: the selection's own, kept up as it changes.
+					await expect(page.evaluate(() => window.__playground!.selectionMarks())).resolves.toEqual({
+						bold: true,
+						italic: true,
+						fill: null,
+						color: null
+					})
 
 					await press(page, "Control+z")
 					await expect.poll(() => cell(page, 0, NEW_PRICE).getAttribute("class")).not.toContain("is-italic")
 					await expect(cell(page, 0, NEW_PRICE).getAttribute("class")).resolves.toContain("is-bold")
+					await expect
+						.poll(() => page.evaluate(() => window.__playground!.selectionMarks()?.italic))
+						.toBe(false)
 
 					// A fill and a text colour put on by the host.
 					await page.evaluate(() => {
@@ -1378,6 +1388,11 @@ describe("TabulaGrid", () => {
 					})
 					await expect.poll(() => cell(page, 2, NOTE).getAttribute("class")).toContain("is-fill-yellow")
 					await expect(cell(page, 2, NOTE).getAttribute("class")).resolves.toContain("is-text-red")
+
+					await cell(page, 2, NOTE).click()
+					await expect
+						.poll(() => page.evaluate(() => window.__playground!.selectionMarks()))
+						.toEqual({ bold: false, italic: false, fill: "yellow", color: "red" })
 				},
 				"&format=1"
 			)

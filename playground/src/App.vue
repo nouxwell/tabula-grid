@@ -698,6 +698,7 @@ onMounted(() => {
 		widths: () => widths.value,
 		columns: () => columns.value,
 		marks,
+		selectionMarks: () => grid.value?.selectionMarks ?? null,
 		setColumns: layout => (columns.value = layout),
 		setDefaultFormats: formats => (defaultFormats.value = formats)
 	}

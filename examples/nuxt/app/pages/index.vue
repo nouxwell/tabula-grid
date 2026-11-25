@@ -267,6 +267,8 @@
 									quaternary
 									:disabled="!sheet"
 									aria-label="Kalın (Ctrl+B)"
+									:aria-pressed="formatState?.bold === true"
+									:class="formatState?.bold ? PRESSED : undefined"
 									@click="toggleMark('bold')"
 								>
 									<strong class="w-4 text-center">K</strong>
@@ -280,6 +282,8 @@
 									quaternary
 									:disabled="!sheet"
 									aria-label="İtalik (Ctrl+I)"
+									:aria-pressed="formatState?.italic === true"
+									:class="formatState?.italic ? PRESSED : undefined"
 									@click="toggleMark('italic')"
 								>
 									<em class="w-4 text-center font-serif">T</em>
@@ -291,10 +295,7 @@
 							<AppButton quaternary :disabled="!sheet" aria-label="Yazı rengi">
 								<span class="flex flex-col items-center leading-none">
 									<strong>A</strong>
-									<span
-										class="mt-0.5 h-[3px] w-4 rounded-sm"
-										:style="{ background: hexOf(lastColor) }"
-									/>
+									<span class="mt-0.5 h-[3px] w-4 rounded-sm" :style="colorBar('color')" />
 								</span>
 								<AppIcon name="chevronDown" :size="12" class="ml-0.5 text-muted" />
 							</AppButton>
@@ -303,10 +304,7 @@
 							<AppButton quaternary :disabled="!sheet" aria-label="Hücre rengi">
 								<span class="flex flex-col items-center leading-none">
 									<AppIcon name="bucket" :size="16" />
-									<span
-										class="mt-0.5 h-[3px] w-4 rounded-sm"
-										:style="{ background: hexOf(lastFill) }"
-									/>
+									<span class="mt-0.5 h-[3px] w-4 rounded-sm" :style="colorBar('fill')" />
 								</span>
 								<AppIcon name="chevronDown" :size="12" class="ml-0.5 text-muted" />
 							</AppButton>
@@ -901,7 +899,9 @@
 								<button
 									v-else
 									type="button"
-									class="flex h-16 flex-col items-center justify-center gap-1 rounded-app bg-surface-alt text-xs transition-colors duration-150 hover:bg-divider disabled:opacity-50"
+									class="flex h-16 flex-col items-center justify-center gap-1 rounded-app text-xs transition-colors duration-150 hover:bg-divider disabled:opacity-50"
+									:class="tile.pressed ? 'bg-primary/15 text-primary-text' : 'bg-surface-alt'"
+									:aria-pressed="tile.pressed ?? undefined"
 									:disabled="!sheet"
 									@click="chooseTool(tile.key)"
 								>
@@ -2941,9 +2941,43 @@ const ALIGNS: readonly { readonly value: ColumnAlign; readonly label: string; re
 	{ value: "right", label: "Sağa yasla", icon: "alignRight" }
 ]
 
-/** The colours last chosen, drawn under the A and the bucket, as a spreadsheet's buttons do. */
-const lastColor = ref<MarkColor>("red")
-const lastFill = ref<MarkColor>("yellow")
+/**
+ * What the cells selected have in common: the bold and italic buttons show pressed by it, the colour
+ * buttons' bars and menus show their colours. Kept up by the grid as the selection and the marks change.
+ */
+const formatState = computed(() => grid.value?.selectionMarks ?? null)
+
+/** A bold or italic button while the cells selected are so: pressing it takes it off. */
+const PRESSED = "bg-primary/15! text-primary-text!"
+
+/** The bar under the A or the bucket: the colour the cells selected have, empty for none, grey when they differ. */
+function colorBar(kind: "fill" | "color"): Record<string, string> {
+	const color = formatState.value?.[kind] ?? null
+
+	if (color === "mixed") {
+		return { background: "var(--app-muted)", opacity: "0.45" }
+	}
+
+	return color === null
+		? { background: "transparent", boxShadow: "inset 0 0 0 1px var(--app-divider)" }
+		: { background: hexOf(color) }
+}
+
+/**
+ * A menu entry's label, with a tick at its end when the cells selected already have it. The tick
+ * is in the label: Naive UI's dropdown draws no `extra`.
+ */
+function ticked(label: string, on: boolean): Pick<DropdownOption, "label"> {
+	return {
+		label: on
+			? () =>
+					h("span", { class: "flex w-full items-center justify-between gap-4" }, [
+						h("span", label),
+						h(AppIcon, { name: "tick", size: 14, label: "seçili", class: "flex-none text-primary-text" })
+					])
+			: label
+	}
+}
 
 function hexOf(color: MarkColor | null): string {
 	return MARK_SWATCHES.find(swatch => swatch.value === color)?.hex ?? "transparent"
@@ -2951,9 +2985,11 @@ function hexOf(color: MarkColor | null): string {
 
 /** The colours to pick, as a menu: `fill:yellow`, `color:none`. */
 function colorMenu(kind: "fill" | "color"): DropdownOption[] {
+	const current = formatState.value?.[kind] ?? null
+
 	return [
 		...MARK_SWATCHES.map(swatch => ({
-			label: swatch.label,
+			...ticked(swatch.label, current === swatch.value),
 			key: `${kind}:${swatch.value}`,
 			icon: () =>
 				h("span", {
@@ -2968,10 +3004,10 @@ function colorMenu(kind: "fill" | "color"): DropdownOption[] {
 	]
 }
 
-/** The format menu of a narrower screen: everything the format group has. */
-const formatOptions: DropdownOption[] = [
-	{ label: "Kalın (Ctrl+B)", key: "bold" },
-	{ label: "İtalik (Ctrl+I)", key: "italic" },
+/** The format menu of a narrower screen: everything the format group has, what the cells have ticked. */
+const formatOptions = computed<DropdownOption[]>(() => [
+	{ ...ticked("Kalın (Ctrl+B)", formatState.value?.bold === true), key: "bold" },
+	{ ...ticked("İtalik (Ctrl+I)", formatState.value?.italic === true), key: "italic" },
 	{ label: "Yazı rengi", key: "color", children: colorMenu("color") },
 	{ label: "Hücre rengi", key: "fill", icon: menuIcon("bucket"), children: colorMenu("fill") },
 	{ type: "divider", key: "format-line" },
@@ -2983,7 +3019,7 @@ const formatOptions: DropdownOption[] = [
 	{ label: "Ondalığı artır", key: "decimals:1" },
 	{ type: "divider", key: "clear-line" },
 	{ label: "Biçimi temizle", key: "clear", icon: menuIcon("eraser") }
-]
+])
 
 /** The alignment, one menu in the toolbar: its icon is the one the selected columns have. */
 const alignMenu = computed<DropdownOption[]>(() =>
@@ -3030,12 +3066,6 @@ function chooseColorKey(key: string | number): void {
 
 	if (!grid.value?.markSelection({ [kind]: color })) {
 		nothingSelected()
-	} else if (color) {
-		if (kind === "fill") {
-			lastFill.value = color
-		} else {
-			lastColor.value = color
-		}
 	}
 
 	grid.value?.focus()
@@ -3422,12 +3452,14 @@ interface Tool {
 	readonly menu?: DropdownOption[]
 	readonly value?: string
 	readonly disabled?: boolean
+	/** Bold or italic while the cells selected are so. */
+	readonly pressed?: boolean
 }
 
 /** A phone's format, as eight tiles. */
 const formatTiles = computed<readonly Tool[]>(() => [
-	{ key: "bold", label: "Kalın" },
-	{ key: "italic", label: "İtalik" },
+	{ key: "bold", label: "Kalın", pressed: formatState.value?.bold === true },
+	{ key: "italic", label: "İtalik", pressed: formatState.value?.italic === true },
 	{ key: "color", label: "Yazı rengi", icon: "format", menu: colorMenu("color") },
 	{ key: "fill", label: "Hücre rengi", icon: "bucket", menu: colorMenu("fill") },
 	{ key: "align", label: "Hizala", icon: alignIcon.value, menu: alignMenu.value },

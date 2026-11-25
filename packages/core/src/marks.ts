@@ -44,6 +44,19 @@ export interface MarkedCell {
 	readonly field: string
 }
 
+/**
+ * What some cells have in common, as a toolbar shows it: its bold and italic buttons pressed, and
+ * the colour each colour button stands at.
+ */
+export interface SharedMarks {
+	/** Every cell is bold: the button shows pressed, and pressing it, as `toggle`, takes bold off. */
+	readonly bold: boolean
+	readonly italic: boolean
+	/** The fill every cell has; null when none has one; "mixed" when they differ. */
+	readonly fill: MarkColor | null | "mixed"
+	readonly color: MarkColor | null | "mixed"
+}
+
 /** The marks as JSON keeps them: by row id, then by field key. */
 export type MarksData = Readonly<Record<RowId, Readonly<Record<string, CellMark>>>>
 
@@ -53,6 +66,8 @@ export interface CellMarksOptions {
 	/** Each change becomes a step of it, so Ctrl+Z takes it back in its turn with the rows' changes. */
 	readonly history?: UndoHistory
 }
+
+const NOTHING_SHARED: SharedMarks = Object.freeze({ bold: false, italic: false, fill: null, color: null })
 
 /** The marks on a sheet's cells: read by the grid, changed by the toolbar, kept by the draft. */
 export class CellMarks {
@@ -132,6 +147,32 @@ export class CellMarks {
 		const on = !cells.every(cell => this.get(cell.rowId, cell.field)?.[style] === true)
 
 		this.mark(cells, { [style]: on })
+	}
+
+	/**
+	 * What the cells given have in common: bold or italic when every one is, a colour when every one
+	 * has the same. No cells have nothing in common.
+	 */
+	shared(cells: readonly MarkedCell[]): SharedMarks {
+		if (cells.length === 0) {
+			return NOTHING_SHARED
+		}
+
+		let bold = true
+		let italic = true
+		let fill: MarkColor | null | "mixed" | undefined
+		let color: MarkColor | null | "mixed" | undefined
+
+		for (const cell of cells) {
+			const mark = this.get(cell.rowId, cell.field)
+
+			bold &&= mark?.bold === true
+			italic &&= mark?.italic === true
+			fill = fill === undefined || fill === (mark?.fill ?? null) ? (mark?.fill ?? null) : "mixed"
+			color = color === undefined || color === (mark?.color ?? null) ? (mark?.color ?? null) : "mixed"
+		}
+
+		return Object.freeze({ bold, italic, fill: fill ?? null, color: color ?? null })
 	}
 
 	/** Takes every mark off the cells given. */

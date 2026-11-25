@@ -389,12 +389,17 @@ sent to the backend. Where each look is kept is what tells them apart.
   with the draft, taken back with Ctrl+Z in its turn with the rows' changes, and `rowsMarked`
   filters a `RowView` to its rows. Give it to the grid's `marks`; Ctrl+B and Ctrl+I put bold and
   italic on what is selected, and the grid's `markSelection`, `toggleSelection` and
-  `clearSelectionMarks` are a toolbar's.
+  `clearSelectionMarks` are a toolbar's. Its `selectionMarks` says what the cells selected have in
+  common, kept up as the selection and the marks change: a toolbar shows its bold button pressed
+  when every cell is bold (pressing it then takes bold off, as `toggleSelection` does) and ticks
+  the colour the cells have; a colour the cells differ on is `"mixed"`. `CellMarks.shared(cells)`
+  works the same out for any cells.
 
   ```ts
   const marks = new CellMarks({ marks: opening.marks, history })
   const saver = new DraftSaver({ schema, store, session, marks, save })
   grid.value.markSelection({ fill: "yellow" })
+  grid.value.selectionMarks // { bold: false, italic: false, fill: "yellow", color: null }
   ```
 
 - **Colour rules** colour cells by what the row holds, for everyone who opens the schema or the
