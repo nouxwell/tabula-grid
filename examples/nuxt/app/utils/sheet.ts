@@ -38,7 +38,8 @@ import {
 	type SheetAdapters,
 	CellMarks,
 	rowsMarked,
-	type MarksData
+	type MarksData,
+	type ValueSettings
 } from "@nouxwell/tabula-core"
 import { issueText, type GridLocale } from "@nouxwell/tabula-vue"
 
@@ -322,6 +323,19 @@ export function createSheet(
 	 * "Sorunlar" go nowhere. Returns how many rows it wrote.
 	 */
 	function exportIssueRows(gridLocale: GridLocale, only?: "server"): number {
+		const table = issueTable(gridLocale, only)
+
+		if (table === null) {
+			return 0
+		}
+
+		downloadCsv(table, `${schema.module}-hatali-satirlar.csv`, VALUE_SETTINGS[locale.value])
+
+		return table.length - 1
+	}
+
+	/** The rows with issues as `exportIssueRows` writes them, its header first; null when there are none. */
+	function issueTable(gridLocale: GridLocale, only?: "server"): string[][] | null {
 		const settings = VALUE_SETTINGS[locale.value]
 		const byRow = issuesByRow(only)
 		const fields = arrangeColumns(schema.fields, columns.value).fields
@@ -334,10 +348,10 @@ export function createSheet(
 		}
 
 		if (rowIds.length === 0) {
-			return 0
+			return null
 		}
 
-		const table = exportTable({
+		return exportTable({
 			store,
 			fields,
 			rowIds,
@@ -347,10 +361,16 @@ export function createSheet(
 				{ header: "Sorunlar", text: rowId => (byRow.get(rowId) ?? []).map(words).join(" · ") }
 			]
 		})
+	}
 
-		download(toCsv(table, { delimiter: csvDelimiterFor(settings) }), `${schema.module}-hatali-satirlar.csv`)
+	/**
+	 * The rows a run would send that the user changed since the sheet was loaded: what its tab and
+	 * "Tüm sayfaları uygula" count as not yet applied.
+	 */
+	function pendingRows(): number {
+		const changed = new Set(changes.changedRows())
 
-		return rowIds.length
+		return session.unfinishedRows().filter(rowId => changed.has(rowId)).length
 	}
 
 	function dispose(): void {
@@ -395,8 +415,15 @@ export function createSheet(
 		exportCsv,
 		issueRowCount,
 		exportIssueRows,
+		issueTable,
+		pendingRows,
 		dispose
 	}
+}
+
+/** A table saved as a CSV file the browser downloads, in the delimiter its locale's Excel reads. */
+export function downloadCsv(table: readonly (readonly string[])[], name: string, settings: ValueSettings): void {
+	download(toCsv(table, { delimiter: csvDelimiterFor(settings) }), name)
 }
 
 /** Text saved as a file the browser downloads. */

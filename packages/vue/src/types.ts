@@ -47,6 +47,8 @@ export interface SheetTab {
 	readonly errors?: number
 	/** The sheet went through to the backend: a tick on its tab. */
 	readonly done?: boolean
+	/** The sheet holds changes not yet applied: a small dot before its name. */
+	readonly changed?: boolean
 }
 
 /** A way to add a sheet, offered when + is pressed: `add` is emitted with its key. */

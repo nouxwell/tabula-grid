@@ -75,24 +75,48 @@
 					<template #icon><AppIcon name="check" :size="16" /></template>
 					Kontrol et
 				</AppButton>
-				<AppTooltip :disabled="errors === 0">
-					<template #trigger>
-						<span class="inline-flex">
-							<AppButton
-								size="medium"
-								type="primary"
-								:disabled="!sheet || errors > 0"
-								:loading="phase === 'processing' || preparing"
-								@click="process"
+				<!-- Uygula, and beside it while several sheets wait: this sheet or every sheet. -->
+				<span class="inline-flex">
+					<AppTooltip :disabled="errors === 0">
+						<template #trigger>
+							<span class="inline-flex">
+								<AppButton
+									size="medium"
+									type="primary"
+									:class="applyAllOffered ? 'rounded-r-none!' : ''"
+									:disabled="!sheet || errors > 0"
+									:loading="phase === 'processing' || preparing"
+									@click="process"
+								>
+									<template #icon><AppIcon name="play" :size="16" /></template>
+									<span class="xl:hidden">Uygula</span>
+									<span class="hidden xl:inline">Değişiklikleri uygula</span>
+								</AppButton>
+							</span>
+						</template>
+						{{ blockedText }}
+					</AppTooltip>
+					<Transition name="grow">
+						<span v-if="applyAllOffered" class="ml-px inline-flex">
+							<AppDropdown
+								:options="applyOptions"
+								placement="bottom-end"
+								:theme-overrides="TWO_LINE_MENU"
+								@select="chooseApply"
 							>
-								<template #icon><AppIcon name="play" :size="16" /></template>
-								<span class="xl:hidden">Uygula</span>
-								<span class="hidden xl:inline">Değişiklikleri uygula</span>
-							</AppButton>
+								<AppButton
+									size="medium"
+									type="primary"
+									class="rounded-l-none! px-2!"
+									aria-label="Uygulama seçenekleri"
+									:disabled="!sheet || phase === 'processing'"
+								>
+									<template #icon><AppIcon name="chevronDown" :size="16" /></template>
+								</AppButton>
+							</AppDropdown>
 						</span>
-					</template>
-					{{ blockedText }}
-				</AppTooltip>
+					</Transition>
+				</span>
 				<span class="mx-1 h-[22px] w-px flex-none bg-divider" aria-hidden="true" />
 				<AppTooltip>
 					<template #trigger>
@@ -731,7 +755,26 @@
 			<AppButton size="large" class="flex-1" :disabled="!sheet" :loading="phase === 'checking'" @click="check">
 				Kontrol et
 			</AppButton>
+			<AppDropdown
+				v-if="applyAllOffered"
+				:options="applyOptions"
+				placement="top-end"
+				:theme-overrides="TWO_LINE_MENU"
+				@select="chooseApply"
+			>
+				<AppButton
+					size="large"
+					type="primary"
+					class="flex-1"
+					:disabled="!sheet"
+					:loading="phase === 'processing' || preparing"
+				>
+					Uygula
+					<AppIcon name="chevronUp" :size="16" class="ml-1" />
+				</AppButton>
+			</AppDropdown>
 			<AppButton
+				v-else
 				size="large"
 				type="primary"
 				class="flex-1"
@@ -1084,6 +1127,18 @@
 			</template>
 		</AppModal>
 
+		<ApplyAllDialog
+			v-model:show="applyAllOpen"
+			:tabs="applyTabs"
+			:open="applySheetFor"
+			:keep="keepApplied"
+			:locale="locale"
+			:value-settings="valueSettings"
+			:theme="theme"
+			:narrow="narrow"
+			@go="goToSheet"
+		/>
+
 		<AppModal v-model:show="adjustOpen" :title="adjustTitle" width="420px">
 			<AppModalScrollWrapper>
 				<form class="flex flex-col gap-2" @submit.prevent="applyAdjust">
@@ -1178,6 +1233,7 @@ import {
 	removeSheet,
 	withSheet,
 	type Workbook,
+	type WorkbookSheet,
 	arrangeColumns,
 	suggestRenames,
 	VALUE_SETTINGS,
@@ -1444,14 +1500,196 @@ const runDone = computed(
 const sheetTabs = computed<SheetTab[]>(() =>
 	(workbook.value?.sheets ?? []).map(each =>
 		each.sheetId === workbook.value?.active
-			? { id: each.sheetId, name: each.name, errors: errors.value, done: runDone.value }
+			? {
+					id: each.sheetId,
+					name: each.name,
+					errors: errors.value,
+					done: runDone.value,
+					changed: pendingNow.value > 0
+				}
 			: {
 					id: each.sheetId,
 					name: each.name,
 					errors: Number(each.meta.errors ?? 0),
-					done: each.meta.done === true
+					done: each.meta.done === true,
+					changed: Number(each.meta.pending ?? 0) > 0
 				}
 	)
+)
+
+// ---------------------------------------------------------------- every sheet at once
+
+/** The open sheet's changes not yet applied: rows a run would send that the user changed. */
+const pendingNow = computed(() => (version.value >= 0 && sheet.value ? sheet.value.pendingRows() : 0))
+
+/** The sheets with changes not yet applied, in tab order: the open one as it stands, the others as left. */
+const waitingSheets = computed(() =>
+	(workbook.value?.sheets ?? [])
+		.map(each => ({
+			id: each.sheetId,
+			name: each.name,
+			pending: each.sheetId === workbook.value?.active ? pendingNow.value : Number(each.meta.pending ?? 0)
+		}))
+		.filter(each => each.pending > 0)
+)
+
+/** "Tüm sayfaları uygula" is offered while more than one sheet waits. */
+const applyAllOffered = computed(() => waitingSheets.value.length > 1)
+const applyAllOpen = ref(false)
+const applyTabs = computed(() => (workbook.value?.sheets ?? []).map(each => ({ id: each.sheetId, name: each.name })))
+
+/** A menu whose items have a second line under their names: each item is as tall as two lines. */
+const TWO_LINE_MENU = { optionHeightMedium: "50px" } as const
+
+/** Uygula's menu: this sheet or every sheet, each with what it would send. */
+const applyOptions = computed<DropdownOption[]>(() => {
+	const total = waitingSheets.value.reduce((sum, each) => sum + each.pending, 0)
+	const lines = (title: string, detail: string) => () =>
+		h("span", { class: "flex flex-col gap-0.5 leading-tight" }, [
+			h("span", { class: "font-semibold" }, title),
+			h("span", { class: "text-xs text-muted" }, detail)
+		])
+
+	return [
+		{
+			key: "this",
+			icon: menuIcon("table"),
+			disabled: !sheet.value || errors.value > 0 || pendingNow.value === 0,
+			label: lines(
+				"Bu sayfayı uygula",
+				errors.value > 0
+					? `${currentTab.value?.name ?? ""} · önce ${errors.value} hata düzeltilmeli`
+					: `${currentTab.value?.name ?? ""} · ${pendingNow.value.toLocaleString("tr-TR")} değişen satır`
+			)
+		},
+		{
+			key: "all",
+			icon: menuIcon("views"),
+			label: lines(
+				"Tüm sayfaları uygula…",
+				`${waitingSheets.value.length} sayfada ${total.toLocaleString("tr-TR")} değişen satır`
+			)
+		},
+		{
+			type: "render",
+			key: "note",
+			render: () =>
+				h(
+					"div",
+					{ class: "mt-1 flex max-w-80 gap-2 border-t border-divider px-3 pt-2.5 pb-1.5 text-xs text-muted" },
+					"Önce bütün sayfalar denetlenir ve ne olacağı gösterilir; siz onaylamadan hiçbir şey gönderilmez."
+				)
+		}
+	]
+})
+
+function chooseApply(key: string | number): void {
+	if (key === "this") {
+		void process()
+	} else if (key === "all") {
+		applyAllOpen.value = true
+	}
+}
+
+/**
+ * A sheet of the workbook other than the open one, made to check and send it without opening it:
+ * its draft, its template, its own columns. Let go with `dispose()` when done.
+ */
+function backgroundSheet(tab: WorkbookSheet): Sheet | null {
+	if (!input.value || !rows.value) {
+		return null
+	}
+
+	return createSheet(
+		input.value,
+		rows.value,
+		locale,
+		{ columns: ref<ColumnLayout>({}), widths: ref<Readonly<Record<string, number>>>({}) },
+		{
+			sheetId: tab.sheetId,
+			kept: tab.draft,
+			save: async kept => keepWorkbook(withSheet(workbookNow(), tab.sheetId, { draft: kept })),
+			template: templates.value?.find(item => item.id === tab.template) ?? null,
+			baseline: tab.meta.blank === true ? [] : rows.value
+		}
+	)
+}
+
+/** For the window: the open sheet as it is, or another made in the background. */
+function applySheetFor(id: string): { readonly sheet: Sheet; readonly own: boolean } | null {
+	if (id === workbook.value?.active) {
+		return sheet.value ? { sheet: sheet.value, own: false } : null
+	}
+
+	const tab = workbook.value?.sheets.find(each => each.sheetId === id)
+	const made = tab ? backgroundSheet(tab) : null
+
+	return made ? { sheet: made, own: true } : null
+}
+
+/** A sheet sent in the background: its draft kept, and what its tab shows now. */
+async function keepApplied(id: string, made: Sheet): Promise<void> {
+	if (id === workbook.value?.active) {
+		return
+	}
+
+	await made.saver.save()
+
+	const tab = workbook.value?.sheets.find(each => each.sheetId === id)
+
+	if (tab) {
+		keepWorkbook(
+			withSheet(workbookNow(), id, {
+				meta: {
+					...tab.meta,
+					errors: made.session.issues.summary().errors,
+					done: made.session.state.run?.status === "succeeded" && made.session.unfinishedRows().length === 0,
+					pending: made.pendingRows()
+				}
+			})
+		)
+	}
+}
+
+/** From the window to a sheet: its rows with issues only, or one of its rows. */
+async function goToSheet(id: string, onlyIssues: boolean, rowId?: RowId): Promise<void> {
+	if (id !== workbook.value?.active) {
+		await switchTab(id)
+	}
+
+	if (onlyIssues) {
+		showIssueRows()
+	} else if (rowId !== undefined) {
+		await nextTick()
+		grid.value?.goTo(rowId)
+	} else {
+		showIssues()
+	}
+}
+
+// A tab never left in this browser has not said what waits in it: counted once, in the background.
+watch(
+	() => Boolean(workbook.value && rows.value && input.value && sheet.value),
+	ready => {
+		if (!ready) {
+			return
+		}
+
+		for (const tab of workbook.value?.sheets ?? []) {
+			if (tab.sheetId === workbook.value?.active || typeof tab.meta.pending === "number" || tab.draft === null) {
+				continue
+			}
+
+			const made = backgroundSheet(tab)
+
+			if (made) {
+				const pending = made.review ? 0 : made.pendingRows()
+
+				made.dispose()
+				keepWorkbook(withSheet(workbookNow(), tab.sheetId, { meta: { ...tab.meta, pending } }))
+			}
+		}
+	}
 )
 
 /** Tabs wait while the sheet is with the backend, or while a window asks about it. */
@@ -1462,7 +1700,8 @@ const tabsBusy = computed(
 		phase.value === "processing" ||
 		phase.value === "unknown" ||
 		preparing.value ||
-		reviewOpen.value
+		reviewOpen.value ||
+		applyAllOpen.value
 )
 
 const openTab = computed({
@@ -1492,7 +1731,9 @@ async function leaveTab(): Promise<void> {
 
 	await current.saver.save()
 	keepWorkbook(
-		withSheet(workbookNow(), tab.sheetId, { meta: { ...tab.meta, errors: errors.value, done: runDone.value } })
+		withSheet(workbookNow(), tab.sheetId, {
+			meta: { ...tab.meta, errors: errors.value, done: runDone.value, pending: pendingNow.value }
+		})
 	)
 	current.dispose()
 	sheet.value = null

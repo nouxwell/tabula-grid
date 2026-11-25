@@ -299,6 +299,7 @@ export const TABS_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		name: "Sayfanın adı",
 		errors: "{n} hata",
 		done: "İşlendi",
+		changed: "Uygulanmamış değişiklik var",
 		doubleClick: "çift tık",
 		moveLeft: "Sola taşı",
 		moveRight: "Sağa taşı"
@@ -313,6 +314,7 @@ export const TABS_TEXT: Readonly<Record<GridLocale, Readonly<Record<string, stri
 		name: "Sheet name",
 		errors: "{n} errors",
 		done: "Processed",
+		changed: "Changes not yet applied",
 		doubleClick: "double click",
 		moveLeft: "Move left",
 		moveRight: "Move right"

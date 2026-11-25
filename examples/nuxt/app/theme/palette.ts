@@ -30,6 +30,8 @@ export interface Palette {
 	readonly info: string
 	readonly success: string
 	readonly warning: string
+	/** The warning colour where it carries words: a step towards the text colour, to read at 4.5:1. */
+	readonly warningText: string
 	readonly error: string
 	readonly divider: string
 	readonly hover: string
@@ -51,6 +53,7 @@ export const PALETTE: Readonly<Record<ColorMode, Palette>> = {
 		info: "#3b6fd8",
 		success: "#00a06c",
 		warning: "#d98a00",
+		warningText: "#8a5a00",
 		error: "#c4183c",
 		divider: "#dde1e6",
 		hover: "rgba(16, 19, 24, 0.05)",
@@ -69,6 +72,7 @@ export const PALETTE: Readonly<Record<ColorMode, Palette>> = {
 		info: "#6ea0ff",
 		success: "#22b57f",
 		warning: "#f0b44c",
+		warningText: "#f0b44c",
 		error: "#ff6b81",
 		divider: "#2e333b",
 		hover: "rgba(231, 233, 236, 0.06)",

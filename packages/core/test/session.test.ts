@@ -435,6 +435,29 @@ describe("SheetSession", () => {
 			expect(process.calls).toHaveLength(1)
 		})
 
+		it("leaves out the rows it is asked to, and an error on one of them holds nothing back", async () => {
+			const { store, session, process } = setup()
+
+			store.setCell("row_2", "price", null)
+			void session.process({ leaveOut: ["row_2"] })
+
+			const call = at(process.calls, 0)
+
+			expect(call.request.rows.map(row => row.rowId)).toEqual(["row_1", "row_3"])
+
+			call.resolve({
+				status: "succeeded",
+				rows: [
+					{ rowId: "row_1", result: "succeeded" },
+					{ rowId: "row_3", result: "succeeded" }
+				]
+			})
+			await vi.waitFor(() => expect(session.state.phase).toBe("idle"))
+
+			expect(session.unfinishedRows()).toEqual(["row_2"])
+			await expect(session.process({ leaveOut: ["row_2"] })).resolves.toMatchObject({ status: "nothing" })
+		})
+
 		it("processes the unfinished rows, locks those that went through, and sends only the rest next time", async () => {
 			const { store, session, process } = setup()
 			const running = session.process()

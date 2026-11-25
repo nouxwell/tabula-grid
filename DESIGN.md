@@ -157,6 +157,23 @@ Redrawn on 2026-11-24 (canvas items 138–160, boards AK–AO): one bar, one wor
    shows there while the list stays open; at their foot "Hatalıları indir" and "Yeniden kontrol".
 7. No "Sorun yok" bar: the state is the bottom bar's button.
 
+### Every sheet at once — designs AQ to AT
+
+- **Where it starts**: while more than one sheet holds changes not yet applied (a dot on each such
+  tab), Değişiklikleri uygula has a second half, ▾, with "Bu sayfayı uygula" and "Tüm sayfaları
+  uygula…", each saying what it would send. On a phone, Uygula opens the same two.
+- **The window** (880px; a sheet of the whole screen on a phone), three steps: Denetle, Gözden
+  geçir, Uygula. Every sheet is checked first, with its own template; nothing is sent before the
+  user presses "N satırı uygula". Each sheet is a row: its state (Hazır, uyarı, Bekletilecek,
+  Atlanacak), what it would send, its preview under it. A sheet with an error is held back, with
+  "Sayfaya git"; warnings send. A product two sheets would send differently is listed with each
+  sheet's value, "değiştirdiniz" on the one the user changed; the user picks which goes, and with
+  no pick neither does.
+- **The run**: sheets one at a time in tab order, a bar for the rows sent; Durdur waits for the
+  sheet being sent and holds the rest. At the end, rows applied, refused and sheets held back;
+  "Reddedilenleri aç" opens a sheet on its refused rows; every sheet's rows with issues download as
+  one file with a Sayfa column.
+
 ### The parts, as decided
 
 | #   | Part                                                 | Where       | State              |
@@ -324,6 +341,18 @@ Redrawn on 2026-11-24 (canvas items 138–160, boards AK–AO): one bar, one wor
 | 160 | A phone's issues over the lower half (AO)            | application | done               |
 | 161 | The formula bar only while editing                   | both        | not chosen         |
 | 162 | Column letters hidden                                | package     | not chosen         |
+| 163 | Uygula's second half: this sheet or every sheet (AQ) | application | done               |
+| 164 | A dot on a tab with changes not yet applied          | package     | done               |
+| 165 | Every sheet checked before anything is sent (AR)     | application | done               |
+| 166 | Each sheet a row, its preview under it               | both        | done               |
+| 167 | A sheet with an error held back, the rest sent       | application | done               |
+| 168 | A product two sheets differ on asked about           | both        | done               |
+| 169 | Sheets sent one at a time, in tab order (AS)         | application | done               |
+| 170 | The result on each tab, a summary in the window      | application | done               |
+| 171 | Every sheet's rows with issues in one file           | application | done               |
+| 172 | The same on a phone, as a sheet of the screen (AT)   | application | done               |
+| 173 | Nothing sent while any sheet has an error            | application | not chosen         |
+| 174 | The right-hand tab wins a product, unasked           | both        | not chosen         |
 | —   | Multi-select cells, ticked in a list                 | package     | done (phase two)   |
 | —   | Saved views (personal views)                         | both        | done (phase two)   |
 | —   | Templates (the layer between schema and views)       | both        | done (phase two)   |
@@ -362,8 +391,8 @@ Every screen takes these; none uses the Naive UI component underneath directly.
   and a footer that stays.
 - **`AppDropdown`**: a menu that drops from a button, opened by a click (a finger, a mouse and the
   keyboard alike). Options may carry an `icon`.
-- **`AppSelect`**; **`LocaleSelect`** for the language: Türkçe and English, each with its flag
-  (`AppFlag`, drawn inline, so it is there with the page).
+- **`AppSelect`**. The language is a menu (`localeMenu()`), from the app bar's globe or a phone's ⋯:
+  Türkçe and English, each with its flag (`AppFlag`, drawn inline, so it is there with the page).
 - **`AppNumberAnimation`**: a number that counts to its new value, 300ms, thousands separated in
   the locale given.
 - **`AppTag`**, **`AppSwitch`**, **`AppCard`**, **`AppCollapse`** + **`AppCollapseItem`**.

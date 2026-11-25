@@ -9,7 +9,7 @@ export const LOCALES: readonly { readonly label: string; readonly value: Locale 
 	{ label: "English", value: "en" }
 ]
 
-/** The languages as a menu's options, each with its flag, for a phone's ⋯ menu. */
+/** The languages as a menu's options, each with its flag: the app bar's globe and a phone's ⋯. */
 export function localeMenu(): DropdownOption[] {
 	return LOCALES.map(({ label, value }) => ({ label, key: value, icon: () => h(AppFlag, { code: value, size: 16 }) }))
 }

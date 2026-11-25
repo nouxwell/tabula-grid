@@ -439,6 +439,13 @@ function errorsText(count: number): string {
 				@keydown="onTabKeydown($event, tab.id)"
 				@contextmenu="onContextMenu($event, tab.id)"
 			>
+				<span
+					v-if="tab.changed"
+					class="tabula-tabs-changed"
+					role="img"
+					:title="text.changed"
+					:aria-label="text.changed"
+				/>
 				<input
 					v-if="renaming === tab.id"
 					v-model="draftName"
@@ -452,7 +459,7 @@ function errorsText(count: number): string {
 					@blur="commitRename"
 					@click.stop
 				/>
-				<span v-else class="tabula-tabs-name" v-text="tab.name" />
+				<span v-if="renaming !== tab.id" class="tabula-tabs-name" v-text="tab.name" />
 				<span
 					v-if="(tab.errors ?? 0) > 0"
 					class="tabula-tabs-badge is-error"
@@ -648,6 +655,15 @@ function errorsText(count: number): string {
 .tabula-tabs-badge.is-done {
 	background: var(--tabula-success-bg);
 	color: var(--tabula-accent-text);
+}
+
+/* Changes not yet applied: a small dot in the colour a changed cell is marked in. */
+.tabula-tabs-changed {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--tabula-changed-mark);
 }
 
 .tabula-tabs-add {

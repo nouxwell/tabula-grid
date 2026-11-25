@@ -578,6 +578,7 @@ const session = new SheetSession({
 
 await session.check() // { status: "valid" | "invalid" | "failed" | …, issues }
 await session.process() // { status: "succeeded" | "partial" | "blocked" | "unknown" | …, succeeded, failed, … }
+await session.process({ leaveOut: [rowId] }) // the rest now; those rows stay for a later run
 ```
 
 A request carries the module, the schema version, the sheet's revision and its rows, each under
@@ -908,6 +909,22 @@ workbook = readWorkbook(JSON.parse(stored)) // a draft of one sheet reads as a w
 Each sheet's session takes the sheet's id as its `sheetId`, so its requests say which sheet they
 are about and an issue for another sheet is passed over. A check and a run are about one sheet.
 
+Several sheets sent one after another can disagree: two price lists both changing a product, the
+one sent last winning unseen. `sharedRecords` finds the records more than one sheet holds a row
+of, by the field that names them, and the fields their rows differ in; a run leaves a row out with
+`process({ leaveOut })` until the user says which sheet's goes.
+
+```ts
+sharedRecords(
+  [
+    { sheetId: "sheet-1", schema, store: march, rows: planned },
+    { sheetId: "sheet-2", schema, store: april }
+  ],
+  { key: "productId", settings: VALUE_SETTINGS.tr }
+)
+// [{ key: "id:9", label: "Ürün 000009", rows: [{ sheetId, rowId, values }, …], differs: ["newPrice"] }]
+```
+
 ```vue
 <TabulaSheetTabs
   v-model:active="open"
@@ -918,18 +935,22 @@ are about and an issue for another sheet is passed over. A check and a run are a
   @remove="remove"
   @move="move"
 />
-<!-- tabs: [{ id: "sheet-1", name: "Fiyat listesi", errors: 3 }, { id: "sheet-2", name: "Mart", done: true }] -->
+<!-- tabs: [{ id: "sheet-1", name: "Fiyat listesi", errors: 3, changed: true }, { id: "sheet-2", name: "Mart", done: true }] -->
 ```
 
 `TabulaSheetTabs` draws them under the sheet, as a spreadsheet does: the open one marked, each with
-its errors counted or a tick once processed, and + to add one. A double click or F2 renames a tab
+its errors counted or a tick once processed, a small dot before the name of one with changes not
+yet applied (`changed`), and + to add one. A double click or F2 renames a tab
 in place, Escape leaving it as it was; a right click, or the menu key, opens its menu: rename,
 duplicate, move left or right, delete, the last one never deleted. A tab is dragged to another
 place, a line showing where it lands and Escape putting it back, or moved with Ctrl+Shift and an
 arrow; `move(id, to)` says where, counted among the others. Arrows move between the tabs and Enter
 opens one. It only says what the user asked for; the host keeps the workbook and does it. The example keeps
 the open sheet live and the others as drafts in the workbook: opening a tab saves the one left,
-with the counts its tab shows, and opens the other from its draft, with its template.
+with the counts its tab shows, and opens the other from its draft, with its template. Its
+"Tüm sayfaları uygula" checks every sheet, the closed ones made from their drafts in the
+background, shows what each would send and asks about a product two of them differ on, then sends
+them in tab order, a sheet with an error held back.
 
 ## Saved views
 

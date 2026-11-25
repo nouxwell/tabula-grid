@@ -1044,6 +1044,19 @@ describe("TabulaGrid", () => {
 		const open = (page: Page): Promise<string> =>
 			page.locator(".tabula-tabs-tab[aria-selected='true'] .tabula-tabs-name").innerText()
 
+		it("marks a tab with changes not yet applied by a dot before its name", async () => {
+			await withPage(
+				5,
+				async page => {
+					await expect(
+						tab(page, "Mağaza").locator(".tabula-tabs-changed").getAttribute("aria-label")
+					).resolves.toBe("Uygulanmamış değişiklik var")
+					await expect(page.locator(".tabula-tabs-changed").count()).resolves.toBe(1)
+				},
+				"&tabs=1"
+			)
+		})
+
 		it("offers the ways to add a sheet when + is pressed, and adds the one chosen", async () => {
 			await withPage(
 				5,

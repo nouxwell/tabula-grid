@@ -7,6 +7,27 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+Every sheet at once (canvas items 163–172, designs AQ–AT): a workbook's sheets checked together,
+looked over, and sent one after another. The packages add; nothing that worked changes.
+
+### Added
+
+- **`sharedRecords`** finds the records more than one sheet of a workbook holds a row of, by the
+  field that names them (a lookup's id, or the value as the backend would read it), with the
+  fields their rows hold differently: a product two price lists would send differently, the one
+  sent last winning unseen.
+- **`SheetSession.process({ leaveOut })`** sends the unfinished rows but those: they stay as they
+  are for a later run, and an error on one of them holds nothing back.
+- **A tab's `changed`**: `TabulaSheetTabs` draws a small dot, in the changed cells' colour, before
+  the name of a sheet with changes not yet applied.
+- **The example's "Tüm sayfaları uygula"**, from a second half of Değişiklikleri uygula (on a phone,
+  Uygula's menu) while more than one sheet waits. It checks every sheet, the closed ones made from
+  their drafts in the background; lists each with what it would send and its preview; holds back a
+  sheet with an error and lets the rest go; asks which sheet's value goes for a product two sheets
+  differ on, sending neither until told; then sends the sheets in tab order, one at a time, with a
+  Durdur that waits for the sheet being sent. The result stays on each tab, and the rows with
+  issues of every sheet download as one file with a Sayfa column.
+
 ## [0.6.0] — 2026-11-25
 
 A new look (canvas items 138–160, designs AK–AP): colour only where it says something, the sheet

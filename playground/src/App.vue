@@ -199,7 +199,7 @@ const entry = params.get("entry") === "1"
 const sheetTabs = ref<SheetTab[]>([
 	{ id: "a", name: "Fiyat listesi", errors: 2 },
 	{ id: "b", name: "Mart", done: true },
-	{ id: "c", name: "Mağaza" }
+	{ id: "c", name: "Mağaza", changed: true }
 ])
 const openTab = ref("a")
 

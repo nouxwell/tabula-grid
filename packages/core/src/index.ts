@@ -248,6 +248,7 @@ export type {
 	PersistedSession,
 	PlannedAction,
 	PlannedChange,
+	ProcessOptions,
 	ProcessOutcome,
 	ProcessPlan,
 	RowPlan,
@@ -260,6 +261,9 @@ export type {
 	SessionState,
 	SheetSessionOptions
 } from "./session.js"
+
+export { sharedRecords } from "./shared.js"
+export type { SharedRecord, SharedRecordRow, SharedRecordsOptions, SheetRows } from "./shared.js"
 
 export { defineValueSettings, VALUE_SETTINGS } from "./values/settings.js"
 export type { ValueSettings } from "./values/settings.js"

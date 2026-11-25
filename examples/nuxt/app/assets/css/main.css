@@ -19,6 +19,7 @@
 	--color-info: var(--app-info);
 	--color-success: var(--app-success);
 	--color-warning: var(--app-warning);
+	--color-warning-text: var(--app-warning-text);
 	--color-error: var(--app-error);
 	--color-divider: var(--app-divider);
 	--radius-app: 6px;

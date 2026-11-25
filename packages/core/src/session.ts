@@ -136,6 +136,14 @@ export interface ProcessOutcome {
 	readonly blocked: number
 }
 
+export interface ProcessOptions {
+	/**
+	 * Rows not sent this time, such as a product another sheet of the workbook sends: they stay as
+	 * they are, unfinished, for a later run. An error on one of them holds nothing back.
+	 */
+	readonly leaveOut?: Iterable<RowId>
+}
+
 export interface RowResult {
 	readonly rowId: RowId
 	readonly outcome: RowOutcome
@@ -399,8 +407,9 @@ export class SheetSession {
 	 * Sends the unfinished rows to be processed, or, while the last run is `unknown`, the same
 	 * request again under the same key. Rows with an error standing, local or the backend's, hold
 	 * back the whole run: the backend checks again anyway, and a run is not the place to find out.
+	 * `leaveOut` keeps rows out of a new run; a run sent again under its key goes as it was.
 	 */
-	async process(): Promise<ProcessOutcome> {
+	async process(options: ProcessOptions = {}): Promise<ProcessOutcome> {
 		const send = this.#adapters.process
 
 		if (!send) {
@@ -414,7 +423,8 @@ export class SheetSession {
 		let request = this.#state.phase === "unknown" ? this.#pending : null
 
 		if (request === null) {
-			const rowIds = this.unfinishedRows()
+			const leftOut = new Set(options.leaveOut ?? [])
+			const rowIds = this.unfinishedRows().filter(rowId => !leftOut.has(rowId))
 
 			if (rowIds.length === 0) {
 				return outcome("nothing")
