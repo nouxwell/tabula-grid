@@ -7,6 +7,8 @@ The three packages are versioned together.
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-25
+
 Every sheet at once (canvas items 163–172, designs AQ–AT): a workbook's sheets checked together,
 looked over, and sent one after another. The packages add; nothing that worked changes.
 
@@ -641,7 +643,8 @@ taken to a backend through the application's own adapters, and kept as a draft.
   gains a `settings` getter. The `checks` cases in `conformance/values.json` are whole rows in
   which `SheetValidator` and nouxwell/tabula's `Tabula::checkRows()` must find the same issues.
 
-[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/nouxwell/tabula-grid/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/nouxwell/tabula-grid/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/nouxwell/tabula-grid/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/nouxwell/tabula-grid/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/nouxwell/tabula-grid/compare/v0.4.1...v0.5.0
