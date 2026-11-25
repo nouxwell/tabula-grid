@@ -5,7 +5,7 @@ for Vue and Nuxt. It is the browser side of [nouxwell/tabula](https://github.com
 the PHP library that defines a column once and uses that one definition to export, to build
 templates and to import.
 
-> **Status: 0.9.0.** A sheet can be drawn, navigated, typed into, copied from and pasted into;
+> **Status: 0.9.1.** A sheet can be drawn, navigated, typed into, copied from and pasted into;
 > what is typed is read the way nouxwell/tabula reads it, checked against the schema's rules as the
 > user types, taken back with undo, checked by a backend, sent to it to be processed, and kept as a
 > draft to go on with later; a lookup is picked from a searched list. Since 0.1.0 it filters,
