@@ -5,7 +5,7 @@ for Vue and Nuxt. It is the browser side of [nouxwell/tabula](https://github.com
 the PHP library that defines a column once and uses that one definition to export, to build
 templates and to import.
 
-> **Status: 0.7.1.** A sheet can be drawn, navigated, typed into, copied from and pasted into;
+> **Status: 0.8.0.** A sheet can be drawn, navigated, typed into, copied from and pasted into;
 > what is typed is read the way nouxwell/tabula reads it, checked against the schema's rules as the
 > user types, taken back with undo, checked by a backend, sent to it to be processed, and kept as a
 > draft to go on with later; a lookup is picked from a searched list. Since 0.1.0 it filters,
@@ -20,7 +20,8 @@ templates and to import.
 > rows with issues are written out to fix and import again. Since 0.6.0 colour is kept for what it
 > says, the header carries the column's letter, and the issues are a plain list with filters.
 > Since 0.7.0 every sheet of a workbook can be checked and sent at once, a product two sheets
-> differ on asked about first. Below 1.0 a minor version may change what came before;
+> differ on asked about first. Since 0.8.0 a formula reads a value from another sheet, found by the
+> row's product. Below 1.0 a minor version may change what came before;
 > [CHANGELOG.md](CHANGELOG.md) says when.
 
 ## Packages

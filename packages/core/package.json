@@ -1,6 +1,6 @@
 {
 	"name": "@nouxwell/tabula-core",
-	"version": "0.7.1",
+	"version": "0.8.0",
 	"description": "The framework-free core of Tabula Grid.",
 	"keywords": [
 		"spreadsheet",
